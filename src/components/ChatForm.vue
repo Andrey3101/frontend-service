@@ -13,13 +13,23 @@
         <div v-for="(message, index) in messages" :key="index" class="chat-message" :class="{ 'user': message.isUser }">
           {{ message.text }}
         </div>
+        <!-- Поле ввода и кнопка "Отправить" внутри сообщений -->
+        <div class="chat-input-area">
+          <v-text-field
+            v-model="newMessage"
+            placeholder="Введите сообщение"
+            @keyup.enter="sendMessage"
+            class="chat-input-field"
+          />
+          <v-btn
+            icon
+            @click="sendMessage"
+            class="chat-send-btn"
+          >
+            <v-icon>mdi-send</v-icon>
+          </v-btn>
+        </div>
       </v-card-text>
-      <v-card-actions class="chat-input">
-        <v-text-field v-model="newMessage" placeholder="Введите сообщение" @keyup.enter="sendMessage" />
-        <v-btn icon @click="sendMessage">
-          <v-icon>mdi-send</v-icon>
-        </v-btn>
-      </v-card-actions>
     </v-card>
 
     <!-- Свернутая кнопка "Чат" -->
@@ -30,7 +40,7 @@
       @click="maximizeChat"
       elevation="4"
     >
-      Чат
+      Открыть чат
       <v-icon right small>mdi-chat</v-icon>
     </v-btn>
   </div>
@@ -87,7 +97,6 @@ export default {
   flex-direction: column;
   border: 1px solid #e0e7ff;
   z-index: 1000;
-  opacity: 1; /* Стабильная видимость */
 }
 
 .chat-header {
@@ -108,6 +117,7 @@ export default {
   background: #fbfcfe;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .chat-message {
@@ -133,11 +143,33 @@ export default {
   color: #37474f;
 }
 
-.chat-input {
+.chat-input-area {
   display: flex;
-  padding: 12px;
-  border-top: 1px solid #e0e0e0;
+  align-items: center;
+  padding: 10px 0;
   background: #fff;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+}
+
+.chat-input-field {
+  flex-grow: 1;
+  margin-right: 10px;
+  font-family: 'Gilroy-Regular', sans-serif;
+}
+
+.chat-send-btn {
+  background: linear-gradient(135deg, #0288d1, #4fc3f7);
+  color: white;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  transition: transform 0.2s ease;
+}
+
+.chat-send-btn:hover {
+  transform: scale(1.1);
 }
 
 .chat-minimized {
@@ -152,7 +184,7 @@ export default {
   font-family: 'Gilroy-Medium', sans-serif;
   font-size: 1rem;
   text-transform: none;
-  transition: transform 0.2s ease; /* Оставляем только для масштабирования */
+  transition: transform 0.2s ease;
 }
 
 .chat-minimized:hover {

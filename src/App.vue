@@ -1,7 +1,7 @@
 <template>
   <v-app>
     <v-app-bar app flat color="primary" dark v-if="isMobile">
-      <v-app-bar-nav-icon @click="drawer = !drawer" />
+      <v-app-bar-nav-icon @click="toggleDrawer" />
       <v-toolbar-title>{{ currentPageTitle }}</v-toolbar-title>
       <v-spacer />
       <v-btn icon @click="toggleTheme">
@@ -58,10 +58,10 @@ export default {
       },
       set(value) {
         this.drawer = value;
+        console.log('Drawer state updated:', value); // Отладка состояния меню
       },
     },
     currentPageTitle() {
-      // Отображаем название текущей страницы на мобильных устройствах
       switch (this.$route.path) {
         case '/login': return 'Вход';
         case '/dashboard': return 'Дашборд';
@@ -76,8 +76,20 @@ export default {
   },
   created() {
     this.$nextTick(() => {
-      this.drawer = !this.isMobile;
+      this.drawer = !this.isMobile; // Устанавливаем начальное состояние меню
+      console.log('Initial drawer state:', this.drawer);
     });
+  },
+  watch: {
+    // Отслеживаем изменение ширины экрана
+    isMobile(newVal) {
+      if (newVal) {
+        this.drawer = false; // Закрываем меню при переходе в мобильный режим
+      } else {
+        this.drawer = true; // Открываем меню в десктопном режиме
+      }
+      console.log('isMobile changed:', newVal, 'Drawer:', this.drawer);
+    },
   },
   mounted() {
     if ('serviceWorker' in navigator && 'PushManager' in window) {
@@ -91,6 +103,10 @@ export default {
     }
   },
   methods: {
+    toggleDrawer() {
+      this.drawer = !this.drawer; // Переключаем состояние меню вручную
+      console.log('Toggle drawer:', this.drawer);
+    },
     onRecordingStarted() {
       console.log('Recording started');
     },
@@ -120,14 +136,13 @@ export default {
 .main-container {
   position: relative;
   padding: 20px;
+  z-index: 1; /* Основной контент ниже меню */
 }
 
 .voice-recorder-global {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  z-index: 1000;
+  z-index: 1000; /* Кнопка записи ниже чата */
 }
-
-/* Убрали .theme-toggle-mobile, так как переключатель теперь в v-app-bar */
 </style>
