@@ -1,7 +1,7 @@
 <template>
-  <div>
+  <div class="chat-wrapper">
     <!-- Развернутый чат -->
-    <v-card v-if="!isMinimized" class="chat-container">
+    <v-card v-show="!isMinimized" class="chat-container" elevation="4">
       <v-card-title class="chat-header">
         Чат
         <v-spacer />
@@ -24,12 +24,14 @@
 
     <!-- Свернутая кнопка "Чат" -->
     <v-btn
-      v-if="isMinimized"
+      v-show="isMinimized"
       color="primary"
       class="chat-minimized"
       @click="maximizeChat"
+      elevation="4"
     >
       Чат
+      <v-icon right small>mdi-chat</v-icon>
     </v-btn>
   </div>
 </template>
@@ -39,7 +41,7 @@ export default {
   props: ['suggestions'],
   data() {
     return {
-      isMinimized: false, // Состояние сворачивания
+      isMinimized: true, // Чат по умолчанию свернут
       messages: [],
       newMessage: '',
     };
@@ -49,44 +51,52 @@ export default {
       if (this.newMessage.trim()) {
         this.messages.push({ text: this.newMessage, isUser: true });
         this.newMessage = '';
-        // Здесь можно добавить логику ответа бота
       }
     },
     minimizeChat() {
       this.isMinimized = true;
+      console.log('Minimized:', this.isMinimized);
     },
     maximizeChat() {
       this.isMinimized = false;
+      console.log('Maximized:', this.isMinimized);
+      this.$nextTick(() => {
+        console.log('Chat should be visible now');
+      });
     },
   },
 };
 </script>
 
 <style scoped>
+.chat-wrapper {
+  position: relative;
+}
+
 .chat-container {
   position: fixed;
-  bottom: 20px;
+  bottom: 80px;
   right: 20px;
   width: 360px;
   max-height: 500px;
   background: #fff;
-  border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  animation: slideUp 0.5s ease-out;
-  border: 2px solid #e0e7ff;
+  border: 1px solid #e0e7ff;
+  z-index: 1000;
+  opacity: 1; /* Стабильная видимость */
 }
 
 .chat-header {
-  background: linear-gradient(90deg, #1e88e5, #64b5f6);
+  background: linear-gradient(135deg, #0288d1, #4fc3f7);
   color: white;
-  padding: 14px 20px;
+  padding: 12px 16px;
   font-family: 'Gilroy-Black', sans-serif;
-  font-size: 1.3rem;
-  text-align: center;
-  border-bottom: 3px solid #1976d2;
+  font-size: 1.2rem;
+  border-bottom: 2px solid #0277bd;
   display: flex;
   align-items: center;
 }
@@ -94,72 +104,76 @@ export default {
 .chat-messages {
   flex-grow: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 16px;
   background: #fbfcfe;
   display: flex;
   flex-direction: column;
 }
 
 .chat-message {
-  padding: 14px 18px;
-  margin: 8px 0;
+  padding: 12px 16px;
+  margin: 6px 0;
   border-radius: 12px;
   font-family: 'Gilroy-Regular', sans-serif;
-  font-size: 1rem;
-  max-width: 85%;
+  font-size: 0.95rem;
+  max-width: 80%;
   word-wrap: break-word;
-  animation: bounceIn 0.4s ease-out;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .chat-message.user {
   background: #e1f5fe;
   align-self: flex-end;
-  color: #1e88e5;
+  color: #0277bd;
 }
 
 .chat-message:not(.user) {
   background: #eceff1;
   align-self: flex-start;
-  color: #455a64;
+  color: #37474f;
 }
 
 .chat-input {
   display: flex;
-  padding: 14px;
+  padding: 12px;
   border-top: 1px solid #e0e0e0;
   background: #fff;
 }
 
 .chat-minimized {
   position: fixed;
-  bottom: 20px;
+  bottom: 80px;
   right: 20px;
-  z-index: 1000;
-  border-radius: 50px;
-  padding: 10px 20px;
-  animation: fadeIn 0.3s ease-out;
+  z-index: 2000;
+  border-radius: 30px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #0288d1, #4fc3f7);
+  color: white;
+  font-family: 'Gilroy-Medium', sans-serif;
+  font-size: 1rem;
+  text-transform: none;
+  transition: transform 0.2s ease; /* Оставляем только для масштабирования */
 }
 
-@keyframes slideUp {
-  from { transform: translateY(100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+.chat-minimized:hover {
+  transform: scale(1.05);
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@media (max-width: 600px) {
+@media (max-width: 960px) {
   .chat-container {
     width: 90%;
     right: 5%;
-    bottom: 60px;
-    max-height: 400px;
+    bottom: 90px;
   }
 
   .chat-minimized {
-    bottom: 60px;
+    bottom: 90px;
   }
+}
+
+@keyframes bounceIn {
+  0% { transform: scale(0.9); opacity: 0; }
+  60% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); }
 }
 </style>

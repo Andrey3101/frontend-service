@@ -9,10 +9,10 @@
   >
     <v-list dense>
       <!-- Заголовок и кнопка закрытия/сворачивания -->
-      <v-list-item v-if="isMobile">
+      <v-list-item v-if="isMobile" class="mobile-header">
         <v-list-item-title class="sidebar-title">Меню</v-list-item-title>
         <v-spacer />
-        <v-btn icon @click="closeMenu">
+        <v-btn icon @click="closeMenu" class="close-btn-mobile">
           <v-icon>mdi-close</v-icon>
         </v-btn>
       </v-list-item>
@@ -66,7 +66,7 @@ export default {
   props: ['value'],
   data() {
     return {
-      isCollapsed: false, // Состояние сворачивания для десктопа
+      isCollapsed: false,
     };
   },
   computed: {
@@ -83,10 +83,10 @@ export default {
   },
   methods: {
     closeMenu() {
-      this.$emit('input', false); // Закрываем меню на мобильных
+      this.$emit('input', false);
     },
     toggleCollapse() {
-      this.isCollapsed = !this.isCollapsed; // Сворачиваем/разворачиваем на десктопе
+      this.isCollapsed = !this.isCollapsed;
     },
   },
 };
@@ -110,6 +110,20 @@ export default {
 
 .v-list-item:hover .v-list-item-title {
   color: #e3f2fd;
+}
+
+.mobile-header {
+  position: sticky;
+  top: 0;
+  z-index: 2; /* Фиксируем заголовок и кнопку */
+  background: linear-gradient(180deg, #1976d2, #42a5f5);
+}
+
+.close-btn-mobile {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 3; /* Увеличиваем z-index для кнопки */
 }
 
 @media (max-width: 960px) {
