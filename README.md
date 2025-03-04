@@ -4,7 +4,9 @@ src/
 ├── api/
 │   └── index.js
 ├── assets/
-│   ├── styles.css         # Обновленные стили
+    ├── font/
+    └── Gilroy-Black.woff
+│   ├── styles.css         
 │   ├── Gilroy-Black.woff2
 │   ├── Gilroy-Regular.woff2
 │   └── Gilroy-Medium.woff2
@@ -17,17 +19,19 @@ src/
 │   ├── TaskDetail.vue
 │   └── CommentForm.vue
 ├── router/
-│   └── index.js           # Обновленный router с Reports.vue
+│   └── index.js           
 ├── store/
 │   └── index.js
+├── stores/
+│   └── auth.js
 ├── views/
 │   ├── Acts.vue
 │   ├── Dashboard.vue
 │   ├── Login.vue
 │   ├── Profile.vue
-│   ├── Tasks.vue          # Обновленная страница задач
+│   ├── Tasks.vue          
 │   ├── Users.vue
-│   └── Reports.vue        # Новая страница отчетов
+│   └── Reports.vue        
 ├── App.vue
 └── main.js
 

@@ -1,6 +1,14 @@
 <template>
   <v-app>
-    <Sidebar v-if="isAuthenticated" v-model="drawer" />
+    <v-app-bar app flat color="primary" dark v-if="isMobile">
+      <v-app-bar-nav-icon @click="drawer = !drawer" />
+      <v-toolbar-title>Мое приложение</v-toolbar-title>
+      <v-spacer />
+      <v-btn icon @click="toggleTheme">
+        <v-icon>{{ $vuetify.theme.dark ? 'mdi-white-balance-sunny' : 'mdi-moon-waxing-crescent' }}</v-icon>
+      </v-btn>
+    </v-app-bar>
+    <Sidebar v-model="drawer" />
     <v-main>
       <v-container fluid class="main-container">
         <VoiceRecorderForm
@@ -22,23 +30,41 @@
 </template>
 
 <script>
-import Sidebar from './components/Sidebar.vue';
+import Sidebar from './components/SidebarForm.vue';
 import VoiceRecorderForm from './components/VoiceRecorderForm.vue';
-import Chat from './components/Chat.vue';
+import Chat from './components/ChatForm.vue';
 import { processVoice } from './api';
+import { useAuthStore } from './stores/auth';
 
 export default {
   components: { Sidebar, VoiceRecorderForm, Chat },
   data() {
     return {
-      drawer: true,
+      drawer: null,
       suggestions: [],
     };
   },
   computed: {
     isAuthenticated() {
-      return !!this.$store.state.token;
+      const authStore = useAuthStore();
+      return authStore.isAuthenticated;
     },
+    isMobile() {
+      return this.$vuetify?.breakpoint?.smAndDown ?? false;
+    },
+    drawerState: {
+      get() {
+        return this.drawer !== null ? this.drawer : !this.isMobile;
+      },
+      set(value) {
+        this.drawer = value;
+      },
+    },
+  },
+  created() {
+    this.$nextTick(() => {
+      this.drawer = !this.isMobile;
+    });
   },
   mounted() {
     if ('serviceWorker' in navigator && 'PushManager' in window) {
@@ -70,6 +96,9 @@ export default {
         console.error('Ошибка обработки предложения:', error);
       }
     },
+    toggleTheme() {
+      this.$vuetify.theme.dark = !this.$vuetify.theme.dark;
+    },
   },
 };
 </script>
@@ -86,4 +115,6 @@ export default {
   right: 20px;
   z-index: 1000;
 }
+
+/* Убрали .theme-toggle-mobile, так как переключатель теперь в v-app-bar и Sidebar */
 </style>

@@ -5,7 +5,7 @@ import Profile from '../views/ProfileForm.vue';
 import Tasks from '../views/TasksList.vue';
 import Acts from '../views/ActsList.vue';
 import Users from '../views/UsersList.vue';
-import Reports from '../views/ReportsList.vue';
+import Reports from '../views/ReportList.vue';
 import TaskDetail from '../components/TaskDetail.vue';
 
 const routes = [

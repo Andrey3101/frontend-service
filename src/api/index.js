@@ -194,3 +194,12 @@ export async function getReports() {
   const response = await fetchWithCsrf(`${BASE_URL}/reports`);
   return response.json();
 }
+
+export async function updateEmployeeOrder(orderData) {
+    const response = await fetchWithCsrf(`${BASE_URL}/employees/order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(orderData),
+    });
+    return response.json();
+  }
