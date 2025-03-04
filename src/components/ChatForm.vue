@@ -1,107 +1,165 @@
 <template>
-  <div class="chat-container" v-if="isVisible">
-    <div class="chat-header">Чат</div>
-    <div class="chat-messages" ref="messagesContainer">
-      <div v-for="(message, index) in messages" :key="index" :class="['chat-message', message.type]">
-        {{ message.text }}
-      </div>
-    </div>
-    <div class="chat-suggestions" v-if="suggestions.length > 0">
-      <v-list dense>
-        <v-list-item v-for="(sug, index) in suggestions" :key="index" @click="handleSuggestion(sug)">
-          <v-list-item-title>{{ sug.text }}</v-list-item-title>
-        </v-list-item>
-      </v-list>
-    </div>
-    <div class="chat-input">
-      <v-text-field
-        v-model="inputText"
-        class="chat-input-field"
-        placeholder="Введите команду..."
-        @keyup.enter="sendMessage"
-        dense
-        outlined
-      />
-      <v-btn color="primary" @click="sendMessage" small>Отправить</v-btn>
-    </div>
+  <div>
+    <!-- Развернутый чат -->
+    <v-card v-if="!isMinimized" class="chat-container">
+      <v-card-title class="chat-header">
+        Чат
+        <v-spacer />
+        <v-btn icon @click="minimizeChat">
+          <v-icon>mdi-close</v-icon>
+        </v-btn>
+      </v-card-title>
+      <v-card-text class="chat-messages">
+        <div v-for="(message, index) in messages" :key="index" class="chat-message" :class="{ 'user': message.isUser }">
+          {{ message.text }}
+        </div>
+      </v-card-text>
+      <v-card-actions class="chat-input">
+        <v-text-field v-model="newMessage" placeholder="Введите сообщение" @keyup.enter="sendMessage" />
+        <v-btn icon @click="sendMessage">
+          <v-icon>mdi-send</v-icon>
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+
+    <!-- Свернутая кнопка "Чат" -->
+    <v-btn
+      v-if="isMinimized"
+      color="primary"
+      class="chat-minimized"
+      @click="maximizeChat"
+    >
+      Чат
+    </v-btn>
   </div>
 </template>
 
 <script>
 export default {
-  props: {
-    suggestions: {
-      type: Array,
-      default: () => [],
-    },
-  },
+  props: ['suggestions'],
   data() {
     return {
+      isMinimized: false, // Состояние сворачивания
       messages: [],
-      inputText: '',
-      defaultSuggestions: [
-        { text: 'Создать задачу', action: { type: 'create_task' } },
-        { text: 'Составить отчет', action: { type: 'generate_report' } },
-        { text: 'Показать задачи', action: { type: 'show_tasks' } },
-        { text: 'Обновить профиль', action: { type: 'update_profile' } },
-      ],
+      newMessage: '',
     };
   },
-  computed: {
-    isVisible() {
-      return this.messages.length > 0 || this.suggestions.length > 0;
-    },
-  },
-  watch: {
-    suggestions(newVal) {
-      if (newVal.length > 0) {
-        this.messages = [{ text: 'Выберите действие или введите команду:', type: 'bot' }];
-      } else if (this.messages.length === 0) {
-        this.messages = [{ text: 'Введите команду или используйте голос:', type: 'bot' }];
-      }
-    },
-    messages() {
-      this.$nextTick(() => {
-        const container = this.$refs.messagesContainer;
-        container.scrollTop = container.scrollHeight;
-      });
-    },
-  },
   methods: {
-    handleSuggestion(suggestion) {
-      this.messages.push({ text: suggestion.text, type: 'user' });
-      this.$emit('suggestion-selected', suggestion);
-      this.messages.push({ text: `Выполняю: ${suggestion.text}`, type: 'bot' });
-    },
     sendMessage() {
-      if (!this.inputText.trim()) return;
-      this.messages.push({ text: this.inputText, type: 'user' });
-      this.processCommand(this.inputText);
-      this.inputText = '';
-    },
-    processCommand(command) {
-      const lowerCommand = command.toLowerCase();
-      let response = 'Команда не распознана. Попробуйте снова.';
-      if (lowerCommand.includes('создать задачу')) {
-        this.$emit('suggestion-selected', { text: 'Создать задачу', action: { type: 'create_task' } });
-        response = 'Задача создается...';
-      } else if (lowerCommand.includes('составить отчет')) {
-        this.$emit('suggestion-selected', { text: 'Составить отчет', action: { type: 'generate_report' } });
-        response = 'Отчет составляется...';
-      } else if (lowerCommand.includes('показать задачи')) {
-        this.$emit('suggestion-selected', { text: 'Показать задачи', action: { type: 'show_tasks' } });
-        response = 'Загружаю задачи...';
-      } else if (lowerCommand.includes('обновить профиль')) {
-        this.$emit('suggestion-selected', { text: 'Обновить профиль', action: { type: 'update_profile' } });
-        response = 'Обновляю профиль...';
+      if (this.newMessage.trim()) {
+        this.messages.push({ text: this.newMessage, isUser: true });
+        this.newMessage = '';
+        // Здесь можно добавить логику ответа бота
       }
-      this.messages.push({ text: response, type: 'bot' });
     },
-  },
-  mounted() {
-    if (this.suggestions.length === 0) {
-      this.messages = [{ text: 'Введите команду или используйте голос:', type: 'bot' }];
-    }
+    minimizeChat() {
+      this.isMinimized = true;
+    },
+    maximizeChat() {
+      this.isMinimized = false;
+    },
   },
 };
 </script>
+
+<style scoped>
+.chat-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 360px;
+  max-height: 500px;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.5s ease-out;
+  border: 2px solid #e0e7ff;
+}
+
+.chat-header {
+  background: linear-gradient(90deg, #1e88e5, #64b5f6);
+  color: white;
+  padding: 14px 20px;
+  font-family: 'Gilroy-Black', sans-serif;
+  font-size: 1.3rem;
+  text-align: center;
+  border-bottom: 3px solid #1976d2;
+  display: flex;
+  align-items: center;
+}
+
+.chat-messages {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: #fbfcfe;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-message {
+  padding: 14px 18px;
+  margin: 8px 0;
+  border-radius: 12px;
+  font-family: 'Gilroy-Regular', sans-serif;
+  font-size: 1rem;
+  max-width: 85%;
+  word-wrap: break-word;
+  animation: bounceIn 0.4s ease-out;
+}
+
+.chat-message.user {
+  background: #e1f5fe;
+  align-self: flex-end;
+  color: #1e88e5;
+}
+
+.chat-message:not(.user) {
+  background: #eceff1;
+  align-self: flex-start;
+  color: #455a64;
+}
+
+.chat-input {
+  display: flex;
+  padding: 14px;
+  border-top: 1px solid #e0e0e0;
+  background: #fff;
+}
+
+.chat-minimized {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  border-radius: 50px;
+  padding: 10px 20px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 600px) {
+  .chat-container {
+    width: 90%;
+    right: 5%;
+    bottom: 60px;
+    max-height: 400px;
+  }
+
+  .chat-minimized {
+    bottom: 60px;
+  }
+}
+</style>

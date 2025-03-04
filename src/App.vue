@@ -2,7 +2,7 @@
   <v-app>
     <v-app-bar app flat color="primary" dark v-if="isMobile">
       <v-app-bar-nav-icon @click="drawer = !drawer" />
-      <v-toolbar-title>Мое приложение</v-toolbar-title>
+      <v-toolbar-title>{{ currentPageTitle }}</v-toolbar-title>
       <v-spacer />
       <v-btn icon @click="toggleTheme">
         <v-icon>{{ $vuetify.theme.dark ? 'mdi-white-balance-sunny' : 'mdi-moon-waxing-crescent' }}</v-icon>
@@ -60,6 +60,19 @@ export default {
         this.drawer = value;
       },
     },
+    currentPageTitle() {
+      // Отображаем название текущей страницы на мобильных устройствах
+      switch (this.$route.path) {
+        case '/login': return 'Вход';
+        case '/dashboard': return 'Дашборд';
+        case '/tasks': return 'Задачи';
+        case '/users': return 'Пользователи';
+        case '/acts': return 'Акты';
+        case '/reports': return 'Отчеты';
+        case '/profile': return 'Профиль';
+        default: return 'Мое приложение';
+      }
+    },
   },
   created() {
     this.$nextTick(() => {
@@ -116,5 +129,5 @@ export default {
   z-index: 1000;
 }
 
-/* Убрали .theme-toggle-mobile, так как переключатель теперь в v-app-bar и Sidebar */
+/* Убрали .theme-toggle-mobile, так как переключатель теперь в v-app-bar */
 </style>
