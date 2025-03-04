@@ -1,24 +1,21 @@
-# frontend-service
+my-vue-app/
+├── node_modules/       # Зависимости проекта
+├── public/            # Статические файлы
+│   ├── index.html     # Главный HTML-файл
+│   └── favicon.ico
+├── src/               # Исходный код
+│   ├── assets/        # Ресурсы (изображения, стили)
+│   ├── components/    # Компоненты Vue
+│   │   └── App.vue    # Главный компонент
+│   ├── main.js        # Точка входа
+├── package.json       # Конфигурация проекта и зависимости
+└── README.md
+- `src/main.js`: Инициализирует Vue и подключает главный компонент.
+- `src/App.vue`: Главный компонент с шаблоном, логикой и стилями.
+- `public/index.html`: Шаблон, куда монтируется приложение.
 
-## Project setup
-```
-npm install
-```
-
-### Compiles and hot-reloads for development
-```
-npm run serve
-```
-
-### Compiles and minifies for production
-```
-npm run build
-```
-
-### Lints and fixes files
-```
-npm run lint
-```
-
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
+#### Шаг 3: Запуск проекта
+1. Открыть папу проекта
+   cd frontend-service
+2. Запустите локальный сервер разработки
+   npm run serve
