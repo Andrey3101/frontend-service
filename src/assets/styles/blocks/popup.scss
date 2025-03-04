@@ -1,0 +1,183 @@
+.popup-edit {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 525px;
+    padding: 0px;
+    background: $c-color1;
+    box-shadow: 0px 3px 6px -4px rgba(0, 0, 0, 0.12), 0px 6px 16px rgba(0, 0, 0, 0.08), 0px 9px 28px 8px rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+  }
+  
+  .popup-edit__header {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    height: 52px;
+    padding: 12px 24px;
+    background: $c-color1;
+    box-shadow: inset 0px -1px 0px $c-color21;
+  }
+  
+  .popup-edit__header-graphics {
+    display: flex;
+    align-items: center;
+    margin-right: 30px;
+  }
+  
+  .popup-edit__logo {
+    max-width: 28px;
+    height: 28px;
+    margin-right: 8px;
+    background: $c-color3;
+    border-radius: 9px;
+  
+    img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+  }
+  
+  .popup-edit__project-name {
+    font-style: normal;
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 22px;
+    color: $c-color2;
+  }
+  
+  .popup-edit__close {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+  }
+  
+  .popup-edit__status-block,
+  .popup-edit__manager-block,
+  .popup-edit__team-block {
+    display: flex;
+    width: 100%;
+    padding: 24px 32px 18px 24px;
+  
+    p {
+      margin-top: 7.5px;
+      min-width: 130px;
+      margin-right: 12px;
+      font-style: normal;
+      font-weight: 500;
+      font-size: 14px;
+      line-height: 17px;
+      color: $c-color2;
+    }
+  
+    .el-input__inner {
+      height: 32px;
+    }
+  }
+  
+  .popup-edit__team-block {
+    flex-direction: column;
+    padding: 0 32px 24px 24px;
+  
+    .el-autocomplete {
+      width: 100%;
+    }
+  }
+  
+  .popup-edit__team-block-edit,
+  .popup-edit__team-block-content {
+    display: flex;
+    width: 100%;
+  }
+  
+  .popup-edit__team-block-content {
+    justify-content: flex-end;
+  }
+  
+  .popup-edit__team-block-list {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: calc(100% - 142px);
+  }
+  
+  .popup-edit__team-block-item {
+    display: flex;
+    padding: 16px 0 2px;
+    border-bottom: 1px solid $c-color18;
+  
+    &:last-of-type {
+      border-bottom: none;
+    }
+  }
+  
+  .popup-edit__team-block-delete {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    cursor: pointer;
+  
+    svg {
+      width: 11px;
+      height: 11px;
+      object-fit: contain;
+      color: $c-color2;
+    }
+  }
+  
+  .popup-edit__team-block-fullname {
+    display: flex;
+    flex-direction: column;
+  
+    b {
+      font-style: normal;
+      font-weight: 700;
+      font-size: 14px;
+      line-height: 18px;
+      color: $c-color2;
+    }
+  
+    p {
+      font-style: normal;
+      font-weight: 400;
+      font-size: 12px;
+      line-height: 18px;
+      color: $c-color4;
+    }
+  }
+  
+  
+  
+  .popup-edit__button-list {
+    display: flex;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: flex-end;
+    width: 100%;
+    height: 52px;
+    padding: 10px 24px;
+    background: $c-color1;
+    box-shadow: inset 0px 1px 0px $c-color21;
+  }
+  
+  .popup-edit__button-cancel,
+  .popup-edit__button-edit {
+    max-width: 108px;
+  
+    &.btn-el {
+      height: 32px;
+    }
+  }
+  
+  .popup-edit__button-cancel {
+    max-width: 90px;
+    margin-right: 12px;
+  }
+  
