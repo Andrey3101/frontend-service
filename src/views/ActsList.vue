@@ -1,49 +1,60 @@
 <template>
-  <v-container :fluid="$vuetify.breakpoint.xs">
-    <h1 class="text-h5 mb-4">Акты</h1>
-    <v-list :dense="$vuetify.breakpoint.xs">
-<v-list-item v-for="act in acts" :key="act.id" @click="updateAct(act.id)">
-        <v-list-item-content>
-          <v-list-item-title>Акт ID: {{ act.id }}</v-list-item-title>
-          <v-list-item-subtitle>
-            {{ $vuetify.breakpoint.xs ? act.type : `Тип: ${act.type}` }}
-          </v-list-item-subtitle>
-        </v-list-item-content>
-      </v-list-item>
-    </v-list>
+  <v-container>
+    <v-row>
+      <v-col>
+        <h1>Акты</h1>
+        <v-list>
+          <v-list-item v-for="act in acts" :key="act.id" @click="handleUpdateAct(act.id)">
+            <v-list-item-content>
+              <v-list-item-title>Акт ID: {{ act.id }}</v-list-item-title>
+              <v-list-item-subtitle v-if="isMobile">
+                {{ act.type }}
+              </v-list-item-subtitle>
+              <v-list-item-subtitle v-else>
+                Тип: {{ act.type }}
+              </v-list-item-subtitle>
+            </v-list-item-content>
+          </v-list-item>
+        </v-list>
+      </v-col>
+    </v-row>
   </v-container>
 </template>
 
 <script>
-import axios from 'axios';
-import { useAuthStore } from '@/store';
+import { getActs, updateAct } from '../api';
 
 export default {
-  data: () => ({
-    acts: []
-  }),
+  data() {
+    return {
+      acts: [],
+    };
+  },
+  computed: {
+    isMobile() {
+      return this.$vuetify.breakpoint.smAndDown;
+    },
+  },
   async created() {
-    const authStore = useAuthStore();
-    const response = await axios.get('http://localhost:8000/acts', {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    });
-    this.acts = response.data || [];
+    const data = await getActs();
+    this.acts = data || [];
   },
   methods: {
-    async updateAct(actId) {
-      const newType = prompt('Новый тип акта:');
+    async handleUpdateAct(actId) {
+      const newType = prompt('Введите новый тип акта:');
       if (newType) {
-        const authStore = useAuthStore();
-        await axios.put(`http://localhost:8000/acts/${actId}`, { type: newType }, {
-          headers: { Authorization: `Bearer ${authStore.token}` }
-        });
-        this.$root.showSnackbar('Акт обновлён', 'success');
-        const response = await axios.get('http://localhost:8000/acts', {
-          headers: { Authorization: `Bearer ${authStore.token}` }
-        });
-        this.acts = response.data || [];
+        const data = await updateAct(actId, { type: newType });
+        alert(JSON.stringify(data, null, 2));
+        const newActs = await getActs();
+        this.acts = newActs || [];
       }
-    }
-  }
+    },
+  },
 };
 </script>
+
+<style scoped>
+h1 {
+  margin-bottom: 20px;
+}
+</style>

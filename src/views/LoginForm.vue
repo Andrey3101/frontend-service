@@ -1,38 +1,38 @@
 <template>
-  <div class="login">
-    <h1>Вход</h1>
-    <input v-model="email" placeholder="Email" type="email" />
-    <input v-model="password" placeholder="Пароль" type="password" />
-    <button @click="login">Войти</button>
-    <p v-if="error">{{ error }}</p>
-  </div>
+  <v-container class="login-container">
+    <v-row justify="center">
+      <v-col cols="12" sm="6">
+        <v-card>
+          <v-card-title>Вход</v-card-title>
+          <v-card-text>
+            <v-text-field v-model="email" label="Email" />
+            <v-text-field v-model="password" label="Пароль" type="password" />
+            <v-btn color="primary" @click="handleLogin">Войти</v-btn>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+  </v-container>
 </template>
 
 <script>
-import { useAuthStore } from '../stores/auth';
-import { useRouter } from 'vue-router';
+import { login } from '../api';
 
 export default {
-  name: 'LoginForm',
-  setup() {
-    const authStore = useAuthStore();
-    const router = useRouter();
-    return { authStore, router };
-  },
   data() {
     return {
       email: '',
       password: '',
-      error: '',
     };
   },
   methods: {
-    async login() {
+    async handleLogin() {
       try {
-        await this.authStore.login(this.email, this.password);
-        this.router.push('/tasks');
-      } catch (err) {
-        this.error = err.message;
+        const data = await login(this.email, this.password);
+        this.$store.dispatch('login', data.token);
+        this.$router.push('/dashboard');
+      } catch (error) {
+        alert('Ошибка входа: ' + error.message);
       }
     },
   },
@@ -40,18 +40,9 @@ export default {
 </script>
 
 <style scoped>
-.login {
+.login-container {
   max-width: 400px;
   margin: 0 auto;
   padding: 20px;
-}
-input {
-  display: block;
-  width: 100%;
-  margin: 10px 0;
-  padding: 8px;
-}
-button {
-  padding: 8px 16px;
 }
 </style>

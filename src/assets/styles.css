@@ -1,0 +1,165 @@
+@font-face {
+    font-family: 'Gilroy-Black';
+    src: url('./Gilroy-Black.woff2') format('woff2');
+    font-weight: 900;
+    font-style: normal;
+  }
+  
+  @font-face {
+    font-family: 'Gilroy-Regular';
+    src: url('./Gilroy-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+  }
+  
+  @font-face {
+    font-family: 'Gilroy-Medium';
+    src: url('./Gilroy-Medium.woff2') format('woff2');
+    font-weight: 500;
+    font-style: normal;
+  }
+  
+  body {
+    margin: 0;
+    font-family: 'Gilroy-Regular', 'Roboto', sans-serif;
+    background: linear-gradient(135deg, #e8eef4 0%, #f5f7fa 100%);
+    color: #333;
+  }
+  
+  h1 {
+    font-family: 'Gilroy-Black', sans-serif;
+    font-size: 2rem;
+    color: #1976d2;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    animation: fadeInDown 0.5s ease-out;
+  }
+  
+  .v-card {
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    background: #fff;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  
+  .v-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  }
+  
+  .v-btn {
+    border-radius: 8px;
+    text-transform: none;
+    font-family: 'Gilroy-Medium', sans-serif;
+    letter-spacing: 0.5px;
+    transition: background 0.3s ease, transform 0.2s ease;
+  }
+  
+  .v-btn:hover {
+    transform: scale(1.05);
+  }
+  
+  .v-list-item-title {
+    font-family: 'Gilroy-Medium', sans-serif;
+    color: #444;
+    font-size: 1rem;
+  }
+  
+  .v-list-item-subtitle {
+    font-family: 'Gilroy-Regular', sans-serif;
+    color: #777;
+    font-size: 0.85rem;
+  }
+  
+  .record-btn {
+    padding: 10px 20px;
+    font-size: 1.1rem;
+    background: linear-gradient(90deg, #1976d2, #42a5f5);
+    color: white;
+    animation: pulse 2s infinite;
+  }
+  
+  .chat-container {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 300px;
+    max-height: 400px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    overflow-y: auto;
+    animation: fadeIn 0.5s ease-out;
+  }
+  
+  .chat-message {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    font-family: 'Gilroy-Regular', sans-serif;
+  }
+  
+  .chat-message.user {
+    background: #e3f2fd;
+    text-align: right;
+  }
+  
+  .chat-message.bot {
+    background: #f5f5f5;
+    text-align: left;
+  }
+  
+  /* Анимации */
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+  
+  /* Мобильная адаптация */
+  @media (max-width: 600px) {
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 15px;
+    }
+  
+    .v-card {
+      margin-bottom: 10px;
+    }
+  
+    .record-btn {
+      padding: 8px 16px;
+      font-size: 0.9rem;
+    }
+  
+    .chat-container {
+      width: 90%;
+      right: 5%;
+      bottom: 60px;
+      max-height: 300px;
+    }
+  
+    .main-container {
+      padding: 10px;
+    }
+  }

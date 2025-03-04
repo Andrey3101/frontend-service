@@ -1,65 +1,66 @@
 <template>
-  <v-container :fluid="$vuetify.breakpoint.xs">
-    <h1 class="text-h5 mb-4">Пользователи</h1>
+  <v-container>
     <v-row>
-      <v-col cols="12" sm="5">
-        <v-text-field v-model="userId" label="ID пользователя" outlined dense />
-      </v-col>
-      <v-col cols="12" sm="5">
-        <v-text-field v-model="phoneNumber" label="Новый номер" outlined dense />
-      </v-col>
-      <v-col cols="12" sm="2" class="d-flex align-center">
-        <v-btn color="primary" @click="updateUser" block :small="$vuetify.breakpoint.xs">
-          Обновить
-        </v-btn>
+      <v-col>
+        <h1>Пользователи</h1>
+        <v-text-field v-model="userId" label="ID пользователя" />
+        <v-text-field v-model="phoneNumber" label="Новый номер телефона" />
+        <v-btn color="primary" @click="handleUpdateUser">Обновить пользователя</v-btn>
+        <v-list>
+          <v-list-item v-for="user in users" :key="user.user_id">
+            <v-list-item-content>
+              <v-list-item-title>ID: {{ user.user_id }}</v-list-item-title>
+              <v-list-item-subtitle v-if="isMobile">
+                {{ user.role }}
+              </v-list-item-subtitle>
+              <v-list-item-subtitle v-else>
+                Роль: {{ user.role }}
+              </v-list-item-subtitle>
+            </v-list-item-content>
+          </v-list-item>
+        </v-list>
       </v-col>
     </v-row>
-    <v-list :dense="$vuetify.breakpoint.xs">
-      <v-list-item v-for="user in users" :key="user.user_id">
-        <v-list-item-content>
-          <v-list-item-title>ID: {{ user.user_id }}</v-list-item-title>
-          <v-list-item-subtitle>
-            {{ $vuetify.breakpoint.xs ? user.role : `Роль: ${user.role}` }}
-          </v-list-item-subtitle>
-        </v-list-item-content>
-      </v-list-item>
-    </v-list>
   </v-container>
 </template>
 
 <script>
-import axios from 'axios';
-import { useAuthStore } from '@/store';
+import { getUsers, updateUser } from '../api';
 
 export default {
-  data: () => ({
-    users: [],
-    userId: '',
-    phoneNumber: ''
-  }),
+  data() {
+    return {
+      users: [],
+      userId: '',
+      phoneNumber: '',
+    };
+  },
+  computed: {
+    isMobile() {
+      return this.$vuetify.breakpoint.smAndDown;
+    },
+  },
   async created() {
-    const authStore = useAuthStore();
-    const response = await axios.get('http://localhost:8000/users', {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    });
-    this.users = response.data || [];
+    const data = await getUsers();
+    this.users = data || [];
   },
   methods: {
-    async updateUser() {
+    async handleUpdateUser() {
       if (this.userId && this.phoneNumber) {
-        const authStore = useAuthStore();
-        await axios.put(`http://localhost:8000/users/${this.userId}`, { phone_number: this.phoneNumber }, {
-          headers: { Authorization: `Bearer ${authStore.token}` }
-        });
-        this.$root.showSnackbar('Пользователь обновлён', 'success');
-        const response = await axios.get('http://localhost:8000/users', {
-          headers: { Authorization: `Bearer ${authStore.token}` }
-        });
-        this.users = response.data || [];
+        const data = await updateUser(this.userId, { phone_number: this.phoneNumber });
+        alert(JSON.stringify(data, null, 2));
+        const newUsers = await getUsers();
+        this.users = newUsers || [];
         this.userId = '';
         this.phoneNumber = '';
       }
-    }
-  }
+    },
+  },
 };
 </script>
+
+<style scoped>
+h1 {
+  margin-bottom: 20px;
+}
+</style>

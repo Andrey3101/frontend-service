@@ -1,60 +1,85 @@
 <template>
   <v-app>
-    <v-app-bar app color="primary" dark>
-      <v-toolbar-title>AI Task Manager</v-toolbar-title>
-      <v-spacer></v-spacer>
-      <v-btn v-if="isAuthenticated" to="/dashboard" text>Дашборд</v-btn>
-      <v-btn v-if="isAuthenticated" to="/tasks" text>Задачи</v-btn>
-      <v-btn v-if="canViewActs" to="/acts" text>Акты</v-btn>
-      <v-btn v-if="canViewUsers" to="/users" text>Пользователи</v-btn>
-      <v-btn v-if="isAuthenticated" to="/voice" text>Голос</v-btn>
-      <v-btn v-if="isAuthenticated" to="/profile" text>Профиль</v-btn>
-      <v-btn v-if="isAuthenticated" @click="logout" text>Выйти</v-btn>
-      <v-btn v-else to="/login" text>Войти</v-btn>
-    </v-app-bar>
+    <sidebar v-if="isAuthenticated" v-model="drawer" />
     <v-main>
-      <v-container fluid>
-        <router-view></router-view>
+      <v-container fluid class="main-container">
+        <VoiceRecorderForm
+          v-if="isAuthenticated && $route.path !== '/login'"
+          @recording-started="onRecordingStarted"
+          @recording-stopped="onRecordingStopped"
+          @suggestions-updated="onSuggestionsUpdated"
+          class="voice-recorder-global"
+        />
+        <router-view />
+        <Chat
+          v-if="isAuthenticated && $route.path !== '/login' && suggestions.length > 0"
+          :suggestions="suggestions"
+          @suggestion-selected="handleSuggestion"
+        />
       </v-container>
     </v-main>
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" bottom>
-      {{ snackbar.message }}
-      <v-btn text @click="snackbar.show = false">Закрыть</v-btn>
-    </v-snackbar>
   </v-app>
 </template>
 
 <script>
-import { useAuthStore } from '@/store';
+import Sidebar from './components/Sidebar.vue';
+import VoiceRecorderForm from './components/VoiceRecorderForm.vue';
+import Chat from './components/Chat.vue';
+import { processVoice } from './api';
 
 export default {
-  name: 'App',
-  data: () => ({
-    snackbar: { show: false, message: '', color: 'success' }
-  }),
-  setup() {
-    const authStore = useAuthStore();
+  components: { Sidebar, VoiceRecorderForm, Chat },
+  data() {
     return {
-      isAuthenticated: authStore.isAuthenticated,
-      role: authStore.role,
-      canViewActs: ['manager', 'admin', 'super_admin'].includes(authStore.role),
-      canViewUsers: ['manager', 'admin', 'super_admin'].includes(authStore.role),
-      logout: () => {
-        authStore.logout();
-        this.$router.push('/login');
-      }
+      drawer: true,
+      suggestions: [],
     };
   },
-  methods: {
-    showSnackbar(message, color = 'success') {
-      this.snackbar = { show: true, message, color };
+  computed: {
+    isAuthenticated() {
+      return !!this.$store.state.token;
+    },
+  },
+  mounted() {
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then((reg) => {
+          reg.pushManager.subscribe({ userVisibleOnly: true })
+            .then((sub) => console.log('Push subscription:', sub))
+            .catch((err) => console.error('Push subscription failed:', err));
+        })
+        .catch((err) => console.error('Service Worker registration failed:', err));
     }
-  }
+  },
+  methods: {
+    onRecordingStarted() {
+      console.log('Recording started');
+    },
+    onRecordingStopped() {
+      console.log('Recording stopped');
+    },
+    onSuggestionsUpdated(suggestions) {
+      this.suggestions = suggestions.length > 0 ? suggestions : this.defaultSuggestions;
+    },
+    async handleSuggestion(suggestion) {
+      const response = await processVoice('', 'webm', suggestion.action);
+      alert('Задача выполнена: ' + suggestion.text);
+      this.suggestions = [];
+    },
+  },
 };
 </script>
 
-<style>
-.v-main {
-  background: #f5f5f5;
+<style scoped>
+.main-container {
+  position: relative;
+  padding: 20px;
+}
+
+.voice-recorder-global {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
 }
 </style>
