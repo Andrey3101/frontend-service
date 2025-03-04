@@ -4,7 +4,7 @@ src/
 ├── api/
 │   └── index.js
 ├── assets/
-│   ├── styles.css
+│   ├── styles.css         # Обновленные стили
 │   ├── Gilroy-Black.woff2
 │   ├── Gilroy-Regular.woff2
 │   └── Gilroy-Medium.woff2
@@ -13,9 +13,11 @@ src/
 │   ├── DroppableWrapper.vue
 │   ├── Sidebar.vue
 │   ├── VoiceRecorderForm.vue
-│   └── Chat.vue           # Новый компонент чата
+│   ├── Chat.vue
+│   ├── TaskDetail.vue
+│   └── CommentForm.vue
 ├── router/
-│   └── index.js
+│   └── index.js           # Обновленный router с Reports.vue
 ├── store/
 │   └── index.js
 ├── views/
@@ -23,8 +25,9 @@ src/
 │   ├── Dashboard.vue
 │   ├── Login.vue
 │   ├── Profile.vue
-│   ├── Tasks.vue
-│   └── Users.vue         # Удален VoiceRecorder.vue
+│   ├── Tasks.vue          # Обновленная страница задач
+│   ├── Users.vue
+│   └── Reports.vue        # Новая страница отчетов
 ├── App.vue
 └── main.js
 

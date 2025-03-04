@@ -7,7 +7,7 @@
           <DroppableWrapper droppable-id="employees">
             <v-row>
               <DraggableItem v-for="emp in employeeLoad" :key="emp.user_id" :id="emp.user_id">
-                <v-card class="employee-card" v-animate-onscroll="'fadeIn'">
+                <v-card class="employee-card" v-animate-onscroll="'fadeInUp'">
                   <v-card-text>{{ emp.user_id }}: {{ emp.task_count }} задач</v-card-text>
                 </v-card>
               </DraggableItem>
@@ -69,12 +69,16 @@ export default {
 <style scoped>
 .dashboard-container {
   padding: 20px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 16px;
+  animation: fadeIn 0.5s ease-out;
 }
 
 .employee-card {
   background: linear-gradient(135deg, #ffffff 0%, #f0f4f8 100%);
   padding: 15px;
   font-family: 'Gilroy-Medium', sans-serif;
+  border-left: 4px solid #1976d2;
 }
 
 @media (max-width: 600px) {

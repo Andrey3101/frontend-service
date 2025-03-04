@@ -1,18 +1,28 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import Login from '../views/Login.vue';
-import Dashboard from '../views/Dashboard.vue';
-import Profile from '../views/Profile.vue';
-import Tasks from '../views/Tasks.vue';
-import Acts from '../views/Acts.vue';
-import Users from '../views/Users.vue';
+import Login from '../views/LoginForm.vue';
+import Dashboard from '../views/DashboardPage.vue';
+import Profile from '../views/ProfileForm.vue';
+import Tasks from '../views/TasksList.vue';
+import Acts from '../views/ActsList.vue';
+import Users from '../views/UsersList.vue';
+import Reports from '../views/ReportsList.vue';
+import TaskDetail from '../components/TaskDetail.vue';
 
 const routes = [
   { path: '/login', component: Login },
+  { 
+    path: '/tasks', 
+    component: Tasks,
+    meta: { requiresAuth: true },
+    children: [
+      { path: ':taskId', component: TaskDetail, name: 'TaskDetail' }
+    ]
+  },
   { path: '/dashboard', component: Dashboard, meta: { requiresAuth: true } },
   { path: '/profile', component: Profile, meta: { requiresAuth: true } },
-  { path: '/tasks', component: Tasks, meta: { requiresAuth: true } },
   { path: '/acts', component: Acts, meta: { requiresAuth: true } },
   { path: '/users', component: Users, meta: { requiresAuth: true } },
+  { path: '/reports', component: Reports, meta: { requiresAuth: true } },
   { path: '/', redirect: '/login' },
 ];
 

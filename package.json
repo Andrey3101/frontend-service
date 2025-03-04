@@ -8,12 +8,16 @@
     "lint": "vue-cli-service lint"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@tanstack/vue-query": "^5.67.1",
     "axios": "^1.8.1",
     "core-js": "^3.8.3",
+    "jspdf": "^3.0.0",
     "pinia": "^3.0.1",
     "vue": "^3.2.13",
     "vue3-animate-onscroll": "^1.0.6",
-    "vuetify": "^3.7.14"
+    "vuetify": "^3.7.14",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@babel/core": "^7.12.16",

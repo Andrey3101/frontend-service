@@ -1,6 +1,6 @@
 <template>
   <v-app>
-    <sidebar v-if="isAuthenticated" v-model="drawer" />
+    <Sidebar v-if="isAuthenticated" v-model="drawer" />
     <v-main>
       <v-container fluid class="main-container">
         <VoiceRecorderForm
@@ -12,7 +12,7 @@
         />
         <router-view />
         <Chat
-          v-if="isAuthenticated && $route.path !== '/login' && suggestions.length > 0"
+          v-if="isAuthenticated && $route.path !== '/login'"
           :suggestions="suggestions"
           @suggestion-selected="handleSuggestion"
         />
@@ -59,12 +59,16 @@ export default {
       console.log('Recording stopped');
     },
     onSuggestionsUpdated(suggestions) {
-      this.suggestions = suggestions.length > 0 ? suggestions : this.defaultSuggestions;
+      this.suggestions = suggestions;
     },
     async handleSuggestion(suggestion) {
-      const response = await processVoice('', 'webm', suggestion.action);
-      alert('Задача выполнена: ' + suggestion.text);
-      this.suggestions = [];
+      try {
+        const response = await processVoice('', 'webm', suggestion.action);
+        console.log('API response:', response);
+        this.suggestions = [];
+      } catch (error) {
+        console.error('Ошибка обработки предложения:', error);
+      }
     },
   },
 };
