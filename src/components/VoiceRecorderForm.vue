@@ -1,23 +1,39 @@
 <template>
   <div>
+    <v-snackbar
+      v-model="showError"
+      color="error"
+      :timeout="5000"
+      top
+      centered
+      class="mic-error-snackbar"
+      aria-label="Ошибка доступа к микрофону"
+    >
+      Доступ к микрофону не получен
+    </v-snackbar>
     <v-btn
       color="secondary"
       class="voice-recorder-btn"
+      :class="{ recording: isRecording }"
       @click="startRecording"
       elevation="4"
-      v-if="!showError"
+      v-if="!isRecording"
+      aria-label="Начать запись голоса"
     >
       Начать запись
       <v-icon right small>mdi-microphone</v-icon>
     </v-btn>
-    <v-alert
-      v-if="showError"
-      type="error"
-      dense
-      class="mic-error"
+    <v-btn
+      color="secondary"
+      class="voice-recorder-btn"
+      @click="stopRecording"
+      elevation="4"
+      v-else
+      aria-label="Остановить запись голоса"
     >
-      Доступ к микрофону не получен
-    </v-alert>
+      Остановить запись
+      <v-icon right small>mdi-stop</v-icon>
+    </v-btn>
   </div>
 </template>
 
@@ -70,20 +86,37 @@ export default {
   transform: scale(1.05);
 }
 
-.mic-error {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 2500;
-  font-family: 'Gilroy-Regular', sans-serif;
-  max-width: 300px;
+/* Анимация пульсации во время записи */
+.voice-recorder-btn.recording {
+  animation: pulse 1s infinite;
 }
 
-@media (max-width: 960px) {
-  .voice-recorder-btn,
-  .mic-error {
-    bottom: 180px; /* Увеличиваем расстояние для мобильного меню */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.mic-error-snackbar {
+  z-index: 3000;
+  font-family: 'Gilroy-Regular', sans-serif;
+}
+
+/* Адаптация для планшетной версии (600px–959px) */
+@media (min-width: 600px) and (max-width: 959px) {
+  .voice-recorder-btn {
+    bottom: 220px;
     right: 5%;
+  }
+}
+
+/* Адаптация для мобильной версии (< 600px) */
+@media (max-width: 599px) {
+  .voice-recorder-btn {
+    bottom: 90px;
+    right: 5%;
+    font-size: 0.9rem;
+    padding: 6px 12px;
   }
 }
 </style>

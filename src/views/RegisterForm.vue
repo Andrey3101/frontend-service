@@ -2,16 +2,24 @@
   <v-container class="register-container">
     <v-row justify="center" align="center" class="fill-height">
       <v-col cols="12" sm="8" md="6" lg="4" class="register-col">
+        <v-snackbar v-model="showError" color="error" :timeout="5000" top centered>
+          Ошибка регистрации: проверьте данные
+        </v-snackbar>
+        <v-snackbar v-model="showSuccess" color="success" :timeout="3000" top centered>
+          Успешная регистрация! Перенаправляем...
+        </v-snackbar>
         <v-card class="register-card" elevation="8">
           <v-card-title class="register-title">Регистрация</v-card-title>
           <v-card-text>
-            <v-form @submit.prevent="register">
+            <v-form @submit.prevent="register" ref="form" v-model="valid">
               <v-text-field
                 v-model="name"
                 label="Имя"
                 required
                 prepend-icon="mdi-account"
                 class="input-field"
+                :rules="[rules.required]"
+                aria-label="Введите ваше имя"
               />
               <v-text-field
                 v-model="email"
@@ -20,21 +28,50 @@
                 required
                 prepend-icon="mdi-email"
                 class="input-field"
+                :rules="[rules.required, rules.email]"
+                aria-label="Введите ваш email"
+              />
+              <v-text-field
+                v-model="phone"
+                label="Телефон"
+                prepend-icon="mdi-phone"
+                class="input-field"
+                :rules="[rules.required, rules.phone]"
+                :input-mask="phoneMask"
+                @focus="phoneMask = ''"
+                @blur="phoneMask = '+7(###) ###-##-##'"
+                placeholder="+7(ххх) ххх-хх-хх"
+                aria-label="Введите ваш номер телефона в формате +7(ххх) ххх-хх-хх"
               />
               <v-text-field
                 v-model="password"
+                :type="showPassword ? 'text' : 'password'"
                 label="Пароль"
-                type="password"
                 required
                 prepend-icon="mdi-lock"
+                append-icon="mdi-eye"
+                @click:append="showPassword = !showPassword"
                 class="input-field"
+                :rules="[rules.required, rules.minLength]"
+                aria-label="Введите ваш пароль"
               />
-              <v-btn type="submit" color="primary" block class="register-btn">Зарегистрироваться</v-btn>
+              <v-btn
+                type="submit"
+                color="primary"
+                block
+                class="register-btn"
+                :disabled="!valid"
+                :loading="loading"
+                aria-label="Зарегистрироваться"
+              >
+                Зарегистрироваться
+              </v-btn>
               <v-btn
                 text
                 block
                 class="login-btn"
                 @click="$router.push('/login')"
+                aria-label="Перейти ко входу"
               >
                 Уже есть аккаунт? Войти
               </v-btn>
@@ -53,19 +90,47 @@ export default {
   name: 'RegisterForm',
   data() {
     return {
+      valid: false,
       name: '',
       email: '',
+      phone: '',
       password: '',
+      showPassword: false,
+      phoneMask: '+7(###) ###-##-##',
+      loading: false,
+      showError: false,
+      showSuccess: false,
+      rules: {
+        required: value => !!value || 'Это поле обязательно',
+        email: value => {
+          const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          return pattern.test(value) || 'Неверный формат email';
+        },
+        phone: value => {
+          const cleaned = value.replace(/\D/g, '');
+          return (cleaned.length === 11 && cleaned.startsWith('7')) || 'Номер должен быть в формате +7(ххх) ххх-хх-хх';
+        },
+        minLength: value => value.length >= 6 || 'Пароль должен содержать минимум 6 символов',
+      },
     };
   },
   methods: {
     async register() {
-      const authStore = useAuthStore();
-      try {
-        await authStore.register(this.name, this.email, this.password);
-        this.$router.push('/dashboard');
-      } catch (error) {
-        console.error('Ошибка регистрации:', error);
+      if (this.$refs.form.validate()) {
+        this.loading = true;
+        const authStore = useAuthStore();
+        try {
+          await authStore.register(this.name, this.email, this.password, this.phone);
+          this.showSuccess = true;
+          setTimeout(() => {
+            this.$router.push('/dashboard');
+          }, 1500);
+        } catch (error) {
+          this.showError = true;
+          console.error('Ошибка регистрации:', error);
+        } finally {
+          this.loading = false;
+        }
       }
     },
   },
@@ -87,7 +152,7 @@ export default {
 }
 
 .register-card {
-  padding: 20px;
+  padding: 24px;
   border-radius: 16px;
   background: #ffffff;
   width: 100%;
@@ -101,47 +166,61 @@ export default {
 }
 
 .input-field {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   font-family: 'Gilroy-Regular', sans-serif;
 }
 
 .register-btn {
   font-family: 'Gilroy-Medium', sans-serif;
   margin-top: 16px;
+  background: linear-gradient(135deg, #1976d2, #42a5f5);
+  color: white;
+  transition: transform 0.2s ease;
+}
+
+.register-btn:hover {
+  transform: scale(1.02);
 }
 
 .login-btn {
   font-family: 'Gilroy-Medium', sans-serif;
-  color: #1976d2;
-  margin-top: 8px;
+  margin-top: 12px;
+  color: #1565c0;
+  background: #e3f2fd;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.login-btn:hover {
+  background: #bbdefb;
 }
 
 /* Адаптация для десктопа */
 @media (min-width: 960px) {
   .register-card {
     width: 100%;
-    max-width: 900px; /* Растянуто в 2.5 раза */
+    max-width: 900px;
   }
 }
 
 /* Адаптация для мобильных устройств (320px) */
 @media (max-width: 320px) {
   .register-card {
-    padding: 12px; /* Уменьшаем отступы */
-    max-width: 280px; /* Уменьшаем ширину */
+    padding: 16px;
+    max-width: 280px;
   }
   .register-title {
-    font-size: 1.4rem; /* Уменьшаем заголовок */
+    font-size: 1.6rem;
   }
   .input-field {
-    margin-bottom: 12px; /* Уменьшаем отступы */
-    font-size: 0.9rem; /* Уменьшаем шрифт */
+    margin-bottom: 16px;
+    font-size: 1rem;
   }
   .register-btn,
   .login-btn {
-    font-size: 0.9rem; /* Уменьшаем шрифт кнопок */
-    padding: 8px 12px; /* Уменьшаем размер кнопок */
-    margin-top: 8px; /* Уменьшаем отступы */
+    font-size: 1rem;
+    padding: 10px 14px;
+    margin-top: 12px;
   }
 }
 </style>

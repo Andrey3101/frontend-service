@@ -8,21 +8,70 @@
         <span class="user-phone">{{ user.phone }}</span>
       </div>
 
-      <!-- Центральное меню (только для десктопа) -->
-      <v-spacer v-if="!isMobile" />
-      <v-toolbar-items v-if="!isMobile" class="desktop-menu">
-        <v-btn text to="/dashboard">Дашборд</v-btn>
-        <v-btn text to="/tasks">Задачи</v-btn>
-        <v-btn text to="/reports">Отчеты</v-btn>
-        <v-btn text to="/acts">Акты</v-btn>
-        <v-btn text to="/profile">Профиль</v-btn>
-      </v-toolbar-items>
-      <v-spacer v-if="!isMobile" />
+      <!-- Центральное меню: прокрутка для мобильных, обычное для десктопа и планшета -->
+      <v-spacer v-if="!isMobileOnly" />
+      <div class="menu-wrapper">
+        <!-- Прокручиваемое меню для мобильной версии -->
+        <div v-if="isMobileOnly" class="menu-scroll">
+          <div class="menu-scroll-inner">
+            <v-btn text to="/dashboard" class="menu-item" aria-label="Перейти к дашборду">
+              <v-icon left small>mdi-view-dashboard</v-icon>
+              Дашборд
+            </v-btn>
+            <v-btn text to="/tasks" class="menu-item" aria-label="Перейти к задачам">
+              <v-icon left small>mdi-checkbox-marked-circle</v-icon>
+              Задачи
+            </v-btn>
+            <v-btn text to="/reports" class="menu-item" aria-label="Перейти к отчётам">
+              <v-icon left small>mdi-chart-bar</v-icon>
+              Отчеты
+            </v-btn>
+            <v-btn text to="/acts" class="menu-item" aria-label="Перейти к актам">
+              <v-icon left small>mdi-file-document</v-icon>
+              Акты
+            </v-btn>
+            <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
+              <v-icon left small>mdi-account</v-icon>
+              Профиль
+            </v-btn>
+          </div>
+        </div>
+        <!-- Обычное меню для десктопа и планшета -->
+        <div v-else class="desktop-menu">
+          <v-btn text to="/dashboard" class="menu-item" aria-label="Перейти к дашборду">
+            <v-icon left small>mdi-view-dashboard</v-icon>
+            Дашборд
+          </v-btn>
+          <v-btn text to="/tasks" class="menu-item" aria-label="Перейти к задачам">
+            <v-icon left small>mdi-checkbox-marked-circle</v-icon>
+            Задачи
+          </v-btn>
+          <v-btn text to="/reports" class="menu-item" aria-label="Перейти к отчётам">
+            <v-icon left small>mdi-chart-bar</v-icon>
+            Отчеты
+          </v-btn>
+          <v-btn text to="/acts" class="menu-item" aria-label="Перейти к актам">
+            <v-icon left small>mdi-file-document</v-icon>
+            Акты
+          </v-btn>
+          <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
+            <v-icon left small>mdi-account</v-icon>
+            Профиль
+          </v-btn>
+        </div>
+      </div>
+      <v-spacer v-if="!isMobileOnly" />
 
       <!-- Правая часть: уведомления -->
       <v-menu offset-y>
         <template v-slot:activator="{ on, attrs }">
-          <v-btn icon v-bind="attrs" v-on="on" class="notification-btn">
+          <v-btn
+            icon
+            v-bind="attrs"
+            v-on="on"
+            class="notification-btn"
+            aria-label="Открыть уведомления"
+          >
             <v-icon>mdi-bell</v-icon>
             <v-badge v-if="notifications.length" color="red" :content="notifications.length" overlap />
           </v-btn>
@@ -37,27 +86,6 @@
         </v-list>
       </v-menu>
     </v-app-bar>
-
-    <!-- Мобильное меню (вертикальное под head) -->
-    <v-container v-if="isMobile" class="mobile-menu" fluid>
-      <v-row class="mobile-menu-row" no-gutters>
-        <v-col cols="12">
-          <v-btn text to="/dashboard" block class="mobile-menu-item">Дашборд</v-btn>
-        </v-col>
-        <v-col cols="12">
-          <v-btn text to="/tasks" block class="mobile-menu-item">Задачи</v-btn>
-        </v-col>
-        <v-col cols="12">
-          <v-btn text to="/reports" block class="mobile-menu-item">Отчеты</v-btn>
-        </v-col>
-        <v-col cols="12">
-          <v-btn text to="/acts" block class="mobile-menu-item">Акты</v-btn>
-        </v-col>
-        <v-col cols="12">
-          <v-btn text to="/profile" block class="mobile-menu-item">Профиль</v-btn>
-        </v-col>
-      </v-row>
-    </v-container>
   </div>
 </template>
 
@@ -76,19 +104,24 @@ export default {
     };
   },
   computed: {
-    isMobile() {
-      const mobile = this.$vuetify?.breakpoint?.smAndDown ?? false;
-      console.log('isMobile:', mobile, 'Width:', this.$vuetify?.breakpoint?.width); // Отладка
+    isMobileOnly() {
+      const mobile = this.$vuetify?.breakpoint?.xsOnly ?? window.innerWidth < 600;
+      console.log('isMobileOnly:', mobile, 'Width:', this.$vuetify?.breakpoint?.width || window.innerWidth);
       return mobile;
     },
+    isTablet() {
+      const tablet = (this.$vuetify?.breakpoint?.smOnly ?? (window.innerWidth >= 600 && window.innerWidth < 960));
+      console.log('isTablet:', tablet);
+      return tablet;
+    },
     isDesktop() {
-      const desktop = this.$vuetify?.breakpoint?.mdAndUp ?? true;
-      console.log('isDesktop:', desktop); // Отладка
+      const desktop = this.$vuetify?.breakpoint?.mdAndUp ?? window.innerWidth >= 960;
+      console.log('isDesktop:', desktop);
       return desktop;
     },
   },
   mounted() {
-    console.log('SidebarForm mounted, isMobile:', this.isMobile); // Отладка при монтировании
+    console.log('SidebarForm mounted, isMobileOnly:', this.isMobileOnly, 'isTablet:', this.isTablet);
   },
 };
 </script>
@@ -99,6 +132,7 @@ export default {
   flex-direction: column;
   align-items: flex-start;
   padding-left: 16px;
+  min-width: 150px;
 }
 
 .user-name {
@@ -110,69 +144,109 @@ export default {
   font-family: 'Gilroy-Light', sans-serif;
   font-size: 0.9rem;
   opacity: 0.8;
+  white-space: nowrap;
 }
 
-.desktop-menu .v-btn {
+/* Стили для десктопного и планшетного меню */
+.desktop-menu {
+  display: flex;
+  align-items: center;
+}
+
+/* Общие стили для пунктов меню */
+.menu-item {
   font-family: 'Gilroy-Medium', sans-serif;
   font-size: 1rem;
   color: white;
   margin: 0 8px;
+  transition: color 0.2s ease;
 }
 
-.desktop-menu .v-btn:hover {
+.menu-item:hover {
   color: #e3f2fd;
 }
 
-.notification-btn {
-  margin-right: 16px;
-}
-
-.mobile-menu {
-  display: block !important;
-  position: sticky;
-  top: 64px; /* Высота v-app-bar по умолчанию */
-  z-index: 1000;
-  background: linear-gradient(180deg, #1976d2, #42a5f5);
-  padding: 10px 0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.mobile-menu-row {
+/* Стили для прокрутки в мобильной версии */
+.menu-wrapper {
   display: flex;
-  flex-direction: column;
   align-items: center;
 }
 
-.mobile-menu-item {
-  font-family: 'Gilroy-Medium', sans-serif;
-  font-size: 1rem;
-  color: white;
-  text-transform: none;
-  margin: 4px 0;
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  width: 100%;
-  max-width: 200px;
+.menu-scroll {
+  width: 200px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.mobile-menu-item:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: #e3f2fd;
+.menu-scroll-inner {
+  display: flex;
+  white-space: nowrap;
+  min-width: max-content;
 }
 
-@media (max-width: 960px) {
+/* Увеличиваем ширину меню, чтобы прокрутка сработала */
+@media (max-width: 599px) {
+  .menu-scroll {
+    width: 200px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  .menu-scroll-inner {
+    display: flex;
+    white-space: nowrap;
+  }
+  .menu-scroll .menu-item {
+    font-size: 0.8rem;
+    margin: 0 2px;
+    padding: 0 8px;
+    flex: 0 0 auto;
+    min-width: 80px;
+  }
+  .notification-btn {
+    margin-right: 16px;
+    width: 45px;
+    height: 45px;
+  }
+}
+
+.menu-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.menu-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 2px;
+}
+
+.notification-btn {
+  margin-right: 24px;
+}
+
+/* Адаптация для мобильных и планшетных устройств */
+@media (max-width: 959px) {
   .user-info {
     padding-left: 8px;
+    min-width: 120px;
   }
   .user-name {
     font-size: 1rem;
   }
   .user-phone {
     font-size: 0.8rem;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: initial;
   }
   .notification-btn {
-    margin-right: 8px;
+    margin-right: 16px;
+  }
+}
+
+/* Стили для десктопной и планшетной версий */
+@media (min-width: 600px) {
+  .desktop-menu .menu-item {
+    font-size: 1rem;
+    margin: 0 8px;
   }
 }
 </style>

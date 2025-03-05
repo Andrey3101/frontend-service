@@ -9,6 +9,7 @@ import * as directives from 'vuetify/directives';
 import { VueQueryPlugin } from '@tanstack/vue-query';
 import VueAnimateOnScroll from 'vue3-animate-onscroll';
 import './assets/styles.css';
+import VueTheMask from 'vue-the-mask'; // Импортируем v-mask
 
 const vuetify = createVuetify({
   components,
@@ -28,4 +29,5 @@ app.use(createPinia());
 app.use(vuetify);
 app.use(VueQueryPlugin);
 app.use(VueAnimateOnScroll);
+app.use(VueTheMask);
 app.mount('#app');

@@ -7,28 +7,26 @@ export const useAuthStore = defineStore('auth', {
     phone: localStorage.getItem('phone') || '',
   }),
   actions: {
-    async login(email, password) {
-      // Пример простой авторизации
-      if (email && password) {
+    async login(email, password, phone) {
+      if (email && password && phone) {
         localStorage.setItem('token', 'fake-token');
         localStorage.setItem('userName', 'Иванов Иван');
-        localStorage.setItem('phone', '+7 (999) 123-45-67');
+        localStorage.setItem('phone', phone);
         this.isAuthenticated = true;
         this.userName = 'Иванов Иван';
-        this.phone = '+7 (999) 123-45-67';
+        this.phone = phone;
       } else {
         throw new Error('Неверные данные');
       }
     },
-    async register(name, email, password) {
-      // Пример простой регистрации
-      if (name && email && password) {
+    async register(name, email, password, phone) {
+      if (name && email && password && phone) {
         localStorage.setItem('token', 'fake-token');
         localStorage.setItem('userName', name);
-        localStorage.setItem('phone', '+7 (999) 123-45-67'); // Можно добавить поле в форму
+        localStorage.setItem('phone', phone);
         this.isAuthenticated = true;
         this.userName = name;
-        this.phone = '+7 (999) 123-45-67';
+        this.phone = phone;
       } else {
         throw new Error('Неверные данные');
       }
@@ -40,6 +38,15 @@ export const useAuthStore = defineStore('auth', {
       this.isAuthenticated = false;
       this.userName = '';
       this.phone = '';
+    },
+    setTestToken() {
+      localStorage.setItem('token', 'test-token');
+      localStorage.setItem('userName', 'Тестовый Пользователь');
+      localStorage.setItem('phone', '+7 (999) 000-00-00');
+      this.isAuthenticated = true;
+      this.userName = 'Тестовый Пользователь';
+      this.phone = '+7 (999) 000-00-00';
+      console.log('Тестовый токен установлен через auth store');
     },
   },
 });
