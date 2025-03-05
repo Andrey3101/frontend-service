@@ -1,18 +1,10 @@
 <template>
   <v-app>
-    <v-app-bar app flat color="primary" dark v-if="isMobile">
-      <v-app-bar-nav-icon @click="toggleDrawer" />
-      <v-toolbar-title>{{ currentPageTitle }}</v-toolbar-title>
-      <v-spacer />
-      <v-btn icon @click="toggleTheme">
-        <v-icon>{{ $vuetify.theme.dark ? 'mdi-white-balance-sunny' : 'mdi-moon-waxing-crescent' }}</v-icon>
-      </v-btn>
-    </v-app-bar>
-    <Sidebar v-model="drawer" />
+    <Sidebar />
     <v-main>
       <v-container fluid class="main-container">
+        <!-- Временно убираем условие для теста -->
         <VoiceRecorderForm
-          v-if="isAuthenticated && $route.path !== '/login'"
           @recording-started="onRecordingStarted"
           @recording-stopped="onRecordingStopped"
           @suggestions-updated="onSuggestionsUpdated"
@@ -20,7 +12,6 @@
         />
         <router-view />
         <Chat
-          v-if="isAuthenticated && $route.path !== '/login'"
           :suggestions="suggestions"
           @suggestion-selected="handleSuggestion"
         />
@@ -32,7 +23,7 @@
 <script>
 import Sidebar from './components/SidebarForm.vue';
 import VoiceRecorderForm from './components/VoiceRecorderForm.vue';
-import Chat from './components/ChatForm.vue';
+import Chat from './components/ChatForm.vue'; // Исправлен импорт
 import { processVoice } from './api';
 import { useAuthStore } from './stores/auth';
 
@@ -40,7 +31,6 @@ export default {
   components: { Sidebar, VoiceRecorderForm, Chat },
   data() {
     return {
-      drawer: null,
       suggestions: [],
     };
   },
@@ -51,44 +41,6 @@ export default {
     },
     isMobile() {
       return this.$vuetify?.breakpoint?.smAndDown ?? false;
-    },
-    drawerState: {
-      get() {
-        return this.drawer !== null ? this.drawer : !this.isMobile;
-      },
-      set(value) {
-        this.drawer = value;
-        console.log('Drawer state updated:', value); // Отладка состояния меню
-      },
-    },
-    currentPageTitle() {
-      switch (this.$route.path) {
-        case '/login': return 'Вход';
-        case '/dashboard': return 'Дашборд';
-        case '/tasks': return 'Задачи';
-        case '/users': return 'Пользователи';
-        case '/acts': return 'Акты';
-        case '/reports': return 'Отчеты';
-        case '/profile': return 'Профиль';
-        default: return 'Мое приложение';
-      }
-    },
-  },
-  created() {
-    this.$nextTick(() => {
-      this.drawer = !this.isMobile; // Устанавливаем начальное состояние меню
-      console.log('Initial drawer state:', this.drawer);
-    });
-  },
-  watch: {
-    // Отслеживаем изменение ширины экрана
-    isMobile(newVal) {
-      if (newVal) {
-        this.drawer = false; // Закрываем меню при переходе в мобильный режим
-      } else {
-        this.drawer = true; // Открываем меню в десктопном режиме
-      }
-      console.log('isMobile changed:', newVal, 'Drawer:', this.drawer);
     },
   },
   mounted() {
@@ -103,10 +55,6 @@ export default {
     }
   },
   methods: {
-    toggleDrawer() {
-      this.drawer = !this.drawer; // Переключаем состояние меню вручную
-      console.log('Toggle drawer:', this.drawer);
-    },
     onRecordingStarted() {
       console.log('Recording started');
     },
@@ -125,9 +73,6 @@ export default {
         console.error('Ошибка обработки предложения:', error);
       }
     },
-    toggleTheme() {
-      this.$vuetify.theme.dark = !this.$vuetify.theme.dark;
-    },
   },
 };
 </script>
@@ -136,13 +81,13 @@ export default {
 .main-container {
   position: relative;
   padding: 20px;
-  z-index: 1; /* Основной контент ниже меню */
+  z-index: 1;
 }
 
 .voice-recorder-global {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  z-index: 1000; /* Кнопка записи ниже чата */
+  z-index: 1000;
 }
 </style>

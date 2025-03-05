@@ -1,6 +1,5 @@
 <template>
   <div class="chat-wrapper">
-    <!-- Развернутый чат -->
     <v-card v-show="!isMinimized" class="chat-container" elevation="4">
       <v-card-title class="chat-header">
         Чат
@@ -13,7 +12,6 @@
         <div v-for="(message, index) in messages" :key="index" class="chat-message" :class="{ 'user': message.isUser }">
           {{ message.text }}
         </div>
-        <!-- Поле ввода и кнопка "Отправить" внутри сообщений -->
         <div class="chat-input-area">
           <v-text-field
             v-model="newMessage"
@@ -31,8 +29,6 @@
         </div>
       </v-card-text>
     </v-card>
-
-    <!-- Свернутая кнопка "Чат" -->
     <v-btn
       v-show="isMinimized"
       color="primary"
@@ -40,7 +36,7 @@
       @click="maximizeChat"
       elevation="4"
     >
-      Открыть чат
+      Чат
       <v-icon right small>mdi-chat</v-icon>
     </v-btn>
   </div>
@@ -51,7 +47,7 @@ export default {
   props: ['suggestions'],
   data() {
     return {
-      isMinimized: true, // Чат по умолчанию свернут
+      isMinimized: true,
       messages: [],
       newMessage: '',
     };
@@ -65,14 +61,9 @@ export default {
     },
     minimizeChat() {
       this.isMinimized = true;
-      console.log('Minimized:', this.isMinimized);
     },
     maximizeChat() {
       this.isMinimized = false;
-      console.log('Maximized:', this.isMinimized);
-      this.$nextTick(() => {
-        console.log('Chat should be visible now');
-      });
     },
   },
 };
@@ -96,7 +87,7 @@ export default {
   display: flex;
   flex-direction: column;
   border: 1px solid #e0e7ff;
-  z-index: 1000;
+  z-index: 5000;
 }
 
 .chat-header {
@@ -117,7 +108,6 @@ export default {
   background: #fbfcfe;
   display: flex;
   flex-direction: column;
-  position: relative;
 }
 
 .chat-message {
@@ -176,7 +166,7 @@ export default {
   position: fixed;
   bottom: 80px;
   right: 20px;
-  z-index: 2000;
+  z-index: 5000;
   border-radius: 30px;
   padding: 8px 16px;
   background: linear-gradient(135deg, #0288d1, #4fc3f7);
@@ -193,19 +183,11 @@ export default {
 
 @media (max-width: 960px) {
   .chat-container {
-    width: 90%;
+    bottom: 250px; /* Увеличиваем расстояние для мобильного меню */
     right: 5%;
-    bottom: 90px;
   }
-
   .chat-minimized {
-    bottom: 90px;
+    bottom: 250px; /* Увеличиваем расстояние для мобильного меню */
   }
-}
-
-@keyframes bounceIn {
-  0% { transform: scale(0.9); opacity: 0; }
-  60% { transform: scale(1.05); opacity: 1; }
-  100% { transform: scale(1); }
 }
 </style>

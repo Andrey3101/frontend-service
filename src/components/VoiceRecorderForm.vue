@@ -1,61 +1,89 @@
 <template>
-  <v-btn color="primary" class="record-btn" @click="recording ? stopRecording() : startRecording()">
-    {{ recording ? 'Остановить запись' : 'Начать запись' }}
-  </v-btn>
+  <div>
+    <v-btn
+      color="secondary"
+      class="voice-recorder-btn"
+      @click="startRecording"
+      elevation="4"
+      v-if="!showError"
+    >
+      Начать запись
+      <v-icon right small>mdi-microphone</v-icon>
+    </v-btn>
+    <v-alert
+      v-if="showError"
+      type="error"
+      dense
+      class="mic-error"
+    >
+      Доступ к микрофону не получен
+    </v-alert>
+  </div>
 </template>
 
 <script>
-import { processVoice } from '../api';
-
 export default {
-  emits: ['recording-started', 'recording-stopped', 'suggestions-updated'],
   data() {
     return {
-      recording: false,
-      mediaRecorder: null,
+      isRecording: false,
+      showError: false,
     };
   },
   methods: {
     async startRecording() {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      this.mediaRecorder = new MediaRecorder(stream);
-      const chunks = [];
-      this.mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
-      this.mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        const audioBase64 = await this.blobToBase64(blob);
-        const response = await processVoice(audioBase64, 'webm');
-        this.$emit('recording-stopped');
-        if (response.action?.status === 'predictive') {
-          this.$emit('suggestions-updated', response.action.suggestions);
-        } else {
-          alert('Задача создана');
-        }
-      };
-      this.mediaRecorder.start();
-      this.recording = true;
-      this.$emit('recording-started');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        this.isRecording = true;
+        this.showError = false;
+        this.$emit('recording-started');
+        console.log('Microphone access granted:', stream);
+      } catch (error) {
+        this.showError = true;
+        console.error('Microphone access denied:', error);
+      }
     },
     stopRecording() {
-      this.mediaRecorder.stop();
-      this.recording = false;
-    },
-    blobToBase64(blob) {
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result.split(',')[1]);
-        reader.readAsDataURL(blob);
-      });
+      this.isRecording = false;
+      this.$emit('recording-stopped');
     },
   },
 };
 </script>
 
 <style scoped>
-.record-btn {
-  padding: 10px 20px;
-  font-size: 1.1rem;
-  background: linear-gradient(90deg, #1976d2, #42a5f5);
+.voice-recorder-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2500;
+  border-radius: 30px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #ff5722, #ff8a65);
   color: white;
+  font-family: 'Gilroy-Medium', sans-serif;
+  font-size: 1rem;
+  text-transform: none;
+  transition: transform 0.2s ease;
+}
+
+.voice-recorder-btn:hover {
+  transform: scale(1.05);
+}
+
+.mic-error {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2500;
+  font-family: 'Gilroy-Regular', sans-serif;
+  max-width: 300px;
+}
+
+@media (max-width: 960px) {
+  .voice-recorder-btn,
+  .mic-error {
+    bottom: 180px; /* Увеличиваем расстояние для мобильного меню */
+    right: 5%;
+  }
 }
 </style>
