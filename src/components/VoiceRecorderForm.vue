@@ -105,7 +105,7 @@ export default {
 /* Адаптация для планшетной версии (600px–959px) */
 @media (min-width: 600px) and (max-width: 959px) {
   .voice-recorder-btn {
-    bottom: 220px;
+    bottom: 80px;
     right: 5%;
   }
 }

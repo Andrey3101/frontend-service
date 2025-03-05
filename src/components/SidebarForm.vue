@@ -8,7 +8,7 @@
         <span class="user-phone">{{ user.phone }}</span>
       </div>
 
-      <!-- Центральное меню: прокрутка для мобильных, обычное для десктопа и планшета -->
+      <!-- Центральное меню: прокрутка для мобильных, планшетов и десктопа -->
       <v-spacer v-if="!isMobileOnly" />
       <div class="menu-wrapper">
         <!-- Прокручиваемое меню для мобильной версии -->
@@ -36,28 +36,30 @@
             </v-btn>
           </div>
         </div>
-        <!-- Обычное меню для десктопа и планшета -->
+        <!-- Прокручиваемое меню для планшета и десктопа -->
         <div v-else class="desktop-menu">
-          <v-btn text to="/dashboard" class="menu-item" aria-label="Перейти к дашборду">
-            <v-icon left small>mdi-view-dashboard</v-icon>
-            Дашборд
-          </v-btn>
-          <v-btn text to="/tasks" class="menu-item" aria-label="Перейти к задачам">
-            <v-icon left small>mdi-checkbox-marked-circle</v-icon>
-            Задачи
-          </v-btn>
-          <v-btn text to="/reports" class="menu-item" aria-label="Перейти к отчётам">
-            <v-icon left small>mdi-chart-bar</v-icon>
-            Отчеты
-          </v-btn>
-          <v-btn text to="/acts" class="menu-item" aria-label="Перейти к актам">
-            <v-icon left small>mdi-file-document</v-icon>
-            Акты
-          </v-btn>
-          <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
-            <v-icon left small>mdi-account</v-icon>
-            Профиль
-          </v-btn>
+          <div class="desktop-menu-inner">
+            <v-btn text to="/dashboard" class="menu-item" aria-label="Перейти к дашборду">
+              <v-icon left small>mdi-view-dashboard</v-icon>
+              Дашборд
+            </v-btn>
+            <v-btn text to="/tasks" class="menu-item" aria-label="Перейти к задачам">
+              <v-icon left small>mdi-checkbox-marked-circle</v-icon>
+              Задачи
+            </v-btn>
+            <v-btn text to="/reports" class="menu-item" aria-label="Перейти к отчётам">
+              <v-icon left small>mdi-chart-bar</v-icon>
+              Отчеты
+            </v-btn>
+            <v-btn text to="/acts" class="menu-item" aria-label="Перейти к актам">
+              <v-icon left small>mdi-file-document</v-icon>
+              Акты
+            </v-btn>
+            <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
+              <v-icon left small>mdi-account</v-icon>
+              Профиль
+            </v-btn>
+          </div>
         </div>
       </div>
       <v-spacer v-if="!isMobileOnly" />
@@ -149,8 +151,14 @@ export default {
 
 /* Стили для десктопного и планшетного меню */
 .desktop-menu {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.desktop-menu-inner {
   display: flex;
-  align-items: center;
+  white-space: nowrap;
+  min-width: max-content;
 }
 
 /* Общие стили для пунктов меню */
@@ -170,6 +178,7 @@ export default {
 .menu-wrapper {
   display: flex;
   align-items: center;
+  position: relative;
 }
 
 .menu-scroll {
@@ -209,6 +218,62 @@ export default {
   }
 }
 
+@media (max-width: 430px) {
+  .menu-scroll {
+    width: 260px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  notification-btn {
+    margin-right: auto;
+    margin-left: 3px;
+  }
+}
+
+@media (max-width: 414px) {
+  .menu-scroll {
+    width: 240px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+}
+
+@media (max-width: 390px) {
+  .menu-scroll {
+    width: 220px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  notification-btn {
+    margin-right: 3px;
+    margin-left: 3px;
+  }
+}
+
+@media (max-width: 375px) {
+  .menu-scroll {
+    width: 190px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  notification-btn {
+    margin-right: auto;
+    margin-left: 3px;
+  }
+}
+
+@media (max-width: 320px) {
+  .menu-scroll {
+    width: 155px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  notification-btn {
+    margin-right: 2px;
+    margin-left: 2px;
+  }
+}
+
 .menu-scroll::-webkit-scrollbar {
   height: 4px;
 }
@@ -218,8 +283,48 @@ export default {
   border-radius: 2px;
 }
 
-.notification-btn {
-  margin-right: 24px;
+/* Стили для планшетной версии (600px–959px) */
+@media (min-width: 600px) and (max-width: 959px) {
+  .desktop-menu {
+    width: 450px; /* Фиксированная ширина для прокрутки */
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  .desktop-menu-inner {
+    display: flex;
+    white-space: nowrap;
+  }
+  .desktop-menu .menu-item {
+    font-size: 0.9rem;
+    margin: 0 4px;
+    flex: 0 0 auto;
+    min-width: 80px;
+  }
+  .desktop-menu::-webkit-scrollbar {
+    height: 4px;
+  }
+  .desktop-menu::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 2px;
+  }
+  .notification-btn {
+    position: absolute; /* Фиксируем кнопку */
+    right: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-right: 24;
+  }
+}
+
+/* Стили для десктопной версии (≥ 960px) */
+@media (min-width: 960px) {
+  .desktop-menu .menu-item {
+    font-size: 1rem;
+    margin: 0 8px;
+  }
+  .notification-btn {
+    margin-right: 24px;
+  }
 }
 
 /* Адаптация для мобильных и планшетных устройств */
@@ -238,15 +343,13 @@ export default {
     text-overflow: initial;
   }
   .notification-btn {
-    margin-right: 16px;
+    margin-right: 24px;
+    margin-left: auto;
   }
+  /* Переопределение стиля для кнопки "Нотификации" */
+  .v-btn--icon.v-btn--density-default {
+    width: calc(var(--v-btn-height) + 5px) !important; 
+    height: calc(var(--v-btn-height) + 5px) !important; 
 }
-
-/* Стили для десктопной и планшетной версий */
-@media (min-width: 600px) {
-  .desktop-menu .menu-item {
-    font-size: 1rem;
-    margin: 0 8px;
-  }
 }
 </style>

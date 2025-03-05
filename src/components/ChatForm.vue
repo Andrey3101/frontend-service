@@ -4,14 +4,22 @@
       <v-card-title class="chat-header">
         Чат
         <v-spacer />
-        <v-btn icon @click="minimizeChat" class="minimize-btn">
+        <v-btn icon @click="minimizeChat" class="minimize-btn" aria-label="Свернуть чат">
           <v-icon>mdi-close</v-icon>
         </v-btn>
       </v-card-title>
       <v-card-text class="chat-messages">
-        <div v-for="(message, index) in messages" :key="index" class="chat-message" :class="{ 'user': message.isUser }">
-          {{ message.text }}
-        </div>
+        <transition-group name="message" tag="div">
+          <div
+            v-for="(message, index) in messages"
+            :key="index"
+            class="chat-message"
+            :class="{ 'user': message.isUser }"
+          >
+            <span class="message-text">{{ message.text }}</span>
+            <span class="message-timestamp">{{ message.timestamp }}</span>
+          </div>
+        </transition-group>
         <div class="chat-input-wrapper">
           <div class="chat-input-area">
             <v-text-field
@@ -21,11 +29,13 @@
               class="chat-input-field"
               dense
               hide-details
+              aria-label="Введите сообщение в чат"
             />
             <v-btn
               icon
               @click="sendMessage"
               class="chat-send-btn"
+              aria-label="Отправить сообщение"
             >
               <v-icon>mdi-send</v-icon>
             </v-btn>
@@ -39,6 +49,7 @@
       class="chat-minimized"
       @click="maximizeChat"
       elevation="4"
+      aria-label="Открыть чат"
     >
       Чат
       <v-icon right small>mdi-chat</v-icon>
@@ -59,8 +70,13 @@ export default {
   methods: {
     sendMessage() {
       if (this.newMessage.trim()) {
-        this.messages.push({ text: this.newMessage, isUser: true });
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        this.messages.push({ text: this.newMessage, isUser: true, timestamp });
         this.newMessage = '';
+        this.$nextTick(() => {
+          const container = this.$el.querySelector('.chat-messages');
+          container.scrollTop = container.scrollHeight;
+        });
       }
     },
     minimizeChat() {
@@ -83,7 +99,7 @@ export default {
   bottom: 80px;
   right: 20px;
   width: 360px;
-  max-height: 750px; /* Увеличиваем в 1.5 раза (было 500px) */
+  max-height: 750px;
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
@@ -99,25 +115,25 @@ export default {
   color: white;
   padding: 12px 16px;
   font-family: 'Gilroy-Black', sans-serif;
-  font-size: 1.1rem; /* Уменьшаем шрифт заголовка */
+  font-size: 1.2rem;
   border-bottom: 2px solid #0277bd;
   display: flex;
   align-items: center;
 }
 
 .minimize-btn {
-  width: 6px; /* Уменьшаем ещё (было 12px) */
+  width: 6px;
   height: 6px;
 }
 
 .chat-messages {
   flex-grow: 1;
-  overflow-y: auto; /* Включаем скрол для сообщений */
+  overflow-y: auto;
   padding: 16px;
   background: #fbfcfe;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 140px;
 }
 
 .chat-message {
@@ -129,6 +145,8 @@ export default {
   max-width: 80%;
   word-wrap: break-word;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
 }
 
 .chat-message.user {
@@ -141,6 +159,13 @@ export default {
   background: #eceff1;
   align-self: flex-start;
   color: #37474f;
+}
+
+.message-timestamp {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  margin-top: 4px;
+  align-self: flex-end;
 }
 
 .chat-input-wrapper {
@@ -162,7 +187,7 @@ export default {
 
 .chat-input-field {
   flex-grow: 1;
-  margin-right: 10px; /* Сохраняем расстояние */
+  margin-right: 10px;
   font-family: 'Gilroy-Regular', sans-serif;
 }
 
@@ -198,29 +223,41 @@ export default {
   transform: scale(1.05);
 }
 
+/* Анимация появления сообщений */
+.message-enter-active,
+.message-leave-active {
+  transition: all 0.3s ease;
+}
+
+.message-enter-from,
+.message-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
 /* Адаптация для планшетной версии (600px–959px) */
 @media (min-width: 600px) and (max-width: 959px) {
   .chat-container {
-    bottom: 280px;
+    bottom: 140px; /* Опускаем ниже (было 320px) */
     right: 5%;
     width: 300px;
-    max-height: 600px; /* Увеличиваем в 1.5 раза (было 400px) */
+    max-height: 400px;
   }
   .chat-minimized {
-    bottom: 280px;
+    bottom: 140px; /* Опускаем ниже (было 320px) */
     right: 5%;
   }
   .chat-header {
-    font-size: 1rem; /* Уменьшаем шрифт заголовка */
-    padding: 10px 14px;
+    font-size: 1rem;
+    padding: 4px 14px;
   }
   .minimize-btn {
-    width: 3.5px; /* Уменьшаем ещё (было 7px) */
+    width: 3.5px;
     height: 3.5px;
   }
   .chat-messages {
     padding: 14px;
-    gap: 10px;
+    gap: 90px;
   }
   .chat-message {
     font-size: 1rem;
@@ -228,7 +265,7 @@ export default {
   }
   .chat-input-field {
     font-size: 0.9rem;
-    height: 36px;
+    height: 53px;
   }
   .chat-send-btn {
     width: 34px;
@@ -242,28 +279,32 @@ export default {
 /* Адаптация для мобильной версии (< 600px) */
 @media (max-width: 599px) {
   .chat-container {
-    bottom: 150px;
+    bottom: 160px; /* Опускаем ниже (было 150px) */
     right: 5%;
     width: 260px;
-    max-height: 525px; /* Увеличиваем в 1.5 раза (было 350px) */
+    max-height: 525px;
+  }
+  .v-btn--icon.v-btn--density-default {
+    width: calc(var(--v-btn-height) + 5px) !important; 
+    height: calc(var(--v-btn-height) + 5px) !important; 
   }
   .chat-minimized {
-    bottom: 150px;
+    bottom: 160px; /* Опускаем ниже (было 150px) */
     right: 5%;
     font-size: 0.9rem;
     padding: 6px 12px;
   }
   .chat-header {
-    font-size: 0.9rem; /* Уменьшаем шрифт заголовка */
-    padding: 8px 12px;
+    font-size: 0.9rem;
+    padding: 5px 12px;
   }
   .minimize-btn {
-    width: 2.5px; /* Уменьшаем ещё (было 5px) */
+    width: 2.5px;
     height: 2.5px;
   }
   .chat-messages {
     padding: 12px;
-    gap: 8px;
+    gap: 80px;
   }
   .chat-message {
     font-size: 0.95rem;
@@ -271,18 +312,19 @@ export default {
   }
   .chat-input-field {
     font-size: 0.85rem;
-    height: 32px;
-    padding-top: 0;
+    height: 50px;
+    padding-top: 100;
     padding-bottom: 0;
     margin-top: 0;
     margin-bottom: 0;
+    margin-right: 5px;
   }
   .chat-send-btn {
     width: 30px;
     height: 30px;
   }
   .chat-input-area {
-    max-width: 220px;
+    max-width: 230px;
   }
 }
 </style>
