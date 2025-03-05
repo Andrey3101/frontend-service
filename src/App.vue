@@ -1,17 +1,19 @@
 <template>
   <v-app>
-    <Sidebar />
+    <!-- Меню и кнопки отображаются только после авторизации и не на страницах входа/регистрации -->
+    <Sidebar v-if="isAuthenticated && !$route.path.includes('/login') && !$route.path.includes('/register')" />
     <v-main>
       <v-container fluid class="main-container">
-        <!-- Временно убираем условие для теста -->
+        <router-view />
         <VoiceRecorderForm
+          v-if="isAuthenticated && !$route.path.includes('/login') && !$route.path.includes('/register')"
           @recording-started="onRecordingStarted"
           @recording-stopped="onRecordingStopped"
           @suggestions-updated="onSuggestionsUpdated"
           class="voice-recorder-global"
         />
-        <router-view />
         <Chat
+          v-if="isAuthenticated && !$route.path.includes('/login') && !$route.path.includes('/register')"
           :suggestions="suggestions"
           @suggestion-selected="handleSuggestion"
         />
@@ -23,7 +25,7 @@
 <script>
 import Sidebar from './components/SidebarForm.vue';
 import VoiceRecorderForm from './components/VoiceRecorderForm.vue';
-import Chat from './components/ChatForm.vue'; // Исправлен импорт
+import Chat from './components/ChatForm.vue';
 import { processVoice } from './api';
 import { useAuthStore } from './stores/auth';
 
@@ -38,9 +40,6 @@ export default {
     isAuthenticated() {
       const authStore = useAuthStore();
       return authStore.isAuthenticated;
-    },
-    isMobile() {
-      return this.$vuetify?.breakpoint?.smAndDown ?? false;
     },
   },
   mounted() {
