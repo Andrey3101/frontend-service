@@ -21,7 +21,7 @@
       aria-label="Начать запись голоса"
     >
       Начать запись
-      <v-icon right small>mdi-microphone</v-icon>
+      <img src ="@/assets/sidebaricon/microfone.svg" class="custom-icon" alt="Microfone">
     </v-btn>
     <v-btn
       color="secondary"
@@ -32,7 +32,7 @@
       aria-label="Остановить запись голоса"
     >
       Остановить запись
-      <v-icon right small>mdi-stop</v-icon>
+      <img src ="@/assets/sidebaricon/stop.svg" class="custom-icon" alt="Stop">
     </v-btn>
   </div>
 </template>

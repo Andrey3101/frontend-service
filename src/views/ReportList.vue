@@ -3,12 +3,42 @@
     <v-row>
       <v-col>
         <h1 class="page-title">Отчеты</h1>
+
+        <!-- Фильтр -->
+        <v-text-field
+          v-model="searchQuery"
+          label="Поиск по ID или дате"
+          outlined
+          dense
+          clearable
+          prepend-inner-icon="mdi-magnify"
+          class="search-field"
+        />
+
+        <!-- Кнопки -->
         <v-btn color="primary" @click="showGenerateForm = true" class="create-btn elevation-2">
           <v-icon left>mdi-plus</v-icon> Сгенерировать отчет
         </v-btn>
+        <v-btn-toggle v-model="exportFormat" mandatory class="export-toggle">
+          <v-btn value="pdf" color="primary" class="export-btn" @click="exportToPDF">
+            <v-icon left>mdi-file-pdf-box</v-icon> PDF
+          </v-btn>
+          <v-btn value="xlsx" color="primary" class="export-btn" @click="exportToExcel">
+            <v-icon left>mdi-file-excel</v-icon> XLSX
+          </v-btn>
+        </v-btn-toggle>
+
+        <!-- Индикатор загрузки -->
+        <v-progress-linear
+          v-if="loading"
+          indeterminate
+          color="blue"
+          class="loading-bar"
+        />
+
         <v-data-table
           :headers="headers"
-          :items="reports"
+          :items="filteredReports"
           item-key="id"
           class="reports-table elevation-1"
           :items-per-page="10"
@@ -91,17 +121,22 @@
 
 <script>
 import { getReports, generateReport, getUsers } from '../api';
+import jsPDF from 'jspdf';
+import * as XLSX from 'xlsx';
 
 export default {
   data() {
     return {
       reports: [],
       users: [],
+      loading: false,
+      searchQuery: '',
       showGenerateForm: false,
       showReport: false,
       showError: false,
       errorMessage: '',
       selectedReport: null,
+      exportFormat: 'pdf',
       reportFilter: {
         status: 'Все',
         assignee: 'Все',
@@ -116,28 +151,46 @@ export default {
       periods: ['Неделя', 'Месяц', 'Квартал'],
     };
   },
+  computed: {
+    filteredReports() {
+      if (!this.searchQuery) return this.reports;
+      const query = this.searchQuery.toLowerCase();
+      return this.reports.filter(
+        (report) =>
+          report.id.toString().includes(query) ||
+          report.created_at.toLowerCase().includes(query)
+      );
+    },
+  },
   async created() {
     await this.fetchReports();
     await this.fetchUsers();
   },
   methods: {
     async fetchReports() {
+      this.loading = true;
       try {
         const data = await getReports();
         this.reports = data || [];
       } catch (error) {
         this.showErrorDialog('Не удалось загрузить отчеты: ' + error.message);
+      } finally {
+        this.loading = false;
       }
     },
     async fetchUsers() {
+      this.loading = true;
       try {
         const data = await getUsers();
         this.users = data || [];
       } catch (error) {
         this.showErrorDialog('Не удалось загрузить пользователей: ' + error.message);
+      } finally {
+        this.loading = false;
       }
     },
     async generateReport() {
+      this.loading = true;
       try {
         const filters = { ...this.reportFilter };
         if (filters.status === 'Все') delete filters.status;
@@ -147,6 +200,8 @@ export default {
         this.showGenerateForm = false;
       } catch (error) {
         this.showErrorDialog('Не удалось сгенерировать отчет: ' + error.message);
+      } finally {
+        this.loading = false;
       }
     },
     viewReport(report) {
@@ -156,6 +211,28 @@ export default {
     showErrorDialog(message) {
       this.errorMessage = message;
       this.showError = true;
+    },
+    exportToPDF() {
+      const doc = new jsPDF();
+      doc.setFont('helvetica');
+      doc.setFontSize(12);
+      doc.text('Список отчетов', 10, 10);
+      this.filteredReports.forEach((report, index) => {
+        const y = 20 + index * 10;
+        doc.text(`ID: ${report.id} | Дата: ${report.created_at}`, 10, y);
+      });
+      doc.save('reports.pdf');
+    },
+    exportToExcel() {
+      const worksheet = XLSX.utils.json_to_sheet(
+        this.filteredReports.map((report) => ({
+          'ID': report.id,
+          'Дата создания': report.created_at,
+        }))
+      );
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Reports');
+      XLSX.writeFile(workbook, 'reports.xlsx');
     },
   },
 };
@@ -176,11 +253,18 @@ export default {
   margin-bottom: 20px;
 }
 
+.search-field {
+  max-width: 400px;
+  margin-bottom: 20px;
+  font-family: 'Gilroy-Regular', sans-serif;
+}
+
 .create-btn {
   font-family: 'Gilroy-Medium', sans-serif;
   text-transform: none;
   border-radius: 8px;
   padding: 10px 20px;
+  margin-right: 16px;
   margin-bottom: 20px;
   transition: transform 0.2s ease;
 }
@@ -189,20 +273,30 @@ export default {
   transform: translateY(-2px);
 }
 
+.export-toggle {
+  margin-bottom: 20px;
+}
+
+.export-btn {
+  font-family: 'Gilroy-Medium', sans-serif;
+  text-transform: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  transition: transform 0.2s ease;
+}
+
+.export-btn:hover {
+  transform: translateY(-2px);
+}
+
+.loading-bar {
+  margin-bottom: 20px;
+}
+
 .reports-table {
   background: #ffffff;
   border-radius: 8px;
   overflow: hidden;
-}
-
-.reports-table pre {
-  white-space: pre-wrap;
-  font-family: 'Gilroy-Regular', sans-serif;
-  font-size: 1rem;
-  color: #2c3e50;
-  background: #f0f4f8;
-  padding: 16px;
-  border-radius: 8px;
 }
 
 .action-btn {
@@ -279,12 +373,12 @@ export default {
   .page-title {
     font-size: 1.5rem;
   }
-  .create-btn {
+  .create-btn, .export-btn {
     width: 100%;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
   }
-  .dialog-title {
-    font-size: 1.25rem;
+  .search-field {
+    max-width: 100%;
   }
 }
 </style>
