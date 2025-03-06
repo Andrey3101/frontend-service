@@ -37,7 +37,7 @@
               class="chat-send-btn"
               aria-label="Отправить сообщение"
             >
-              <img src ="@/assets/sidebaricon/send_icon.svg" class="custom-icon" alt="Send">
+              <img src ="@/assets/sidebaricon/sendmessage.svg" class="custom-icon" alt="Send">
             </v-btn>
           </div>
         </div>
@@ -52,7 +52,7 @@
       aria-label="Открыть чат"
     >
       Чат
-      <v-icon right small>mdi-chat</v-icon>
+      <img src ="@/assets/sidebaricon/chat.svg" class="custom-icon" alt="Chat">
     </v-btn>
   </div>
 </template>
