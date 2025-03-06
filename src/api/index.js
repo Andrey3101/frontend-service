@@ -203,3 +203,8 @@ export async function updateEmployeeOrder(orderData) {
     });
     return response.json();
   }
+  
+  export async function getTasks() {
+    const response = await fetchWithCsrf(`${BASE_URL}/tasks/stats`);
+    return response.json();
+  }
