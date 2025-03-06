@@ -5,7 +5,7 @@
         Чат
         <v-spacer />
         <v-btn icon @click="minimizeChat" class="minimize-btn" aria-label="Свернуть чат">
-          <v-icon>mdi-close</v-icon>
+          img src ="@/assets/sidebaricon/down.svg" class="custom-icon" alt="Down">
         </v-btn>
       </v-card-title>
       <v-card-text class="chat-messages">

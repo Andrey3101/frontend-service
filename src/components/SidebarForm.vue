@@ -161,6 +161,13 @@ export default {
   min-width: max-content;
 }
 
+.custom-icon {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  margin-right: 8px;
+}
+
 /* Общие стили для пунктов меню */
 .menu-item {
   font-family: 'Gilroy-Medium', sans-serif;
