@@ -15,23 +15,23 @@
         <div v-if="isMobileOnly" class="menu-scroll">
           <div class="menu-scroll-inner">
             <v-btn text to="/dashboard" class="menu-item" aria-label="Перейти к дашборду">
-              <v-icon left small>mdi-view-dashboard</v-icon>
+              <img src ="@/assets/sidebaricon/dashboards.svg" class="custom-icon" alt="Dashboard">
               Дашборд
             </v-btn>
             <v-btn text to="/tasks" class="menu-item" aria-label="Перейти к задачам">
-              <v-icon left small>mdi-checkbox-marked-circle</v-icon>
+              <img src ="@/assets/sidebaricon/tasks.svg" class="custom-icon" alt="Tasks">
               Задачи
             </v-btn>
             <v-btn text to="/reports" class="menu-item" aria-label="Перейти к отчётам">
-              <v-icon left small>mdi-chart-bar</v-icon>
+              <img src ="@/assets/sidebaricon/reports.svg" class="custom-icon" alt="Reports">
               Отчеты
             </v-btn>
             <v-btn text to="/acts" class="menu-item" aria-label="Перейти к актам">
-              <v-icon left small>mdi-file-document</v-icon>
+              <img src ="@/assets/sidebaricon/acts.svg" class="custom-icon" alt="Acts">
               Акты
             </v-btn>
             <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
-              <v-icon left small>mdi-account</v-icon>
+              <img src ="@/assets/sidebaricon/profile.svg" class="custom-icon" alt="Profile">
               Профиль
             </v-btn>
           </div>
@@ -40,23 +40,23 @@
         <div v-else class="desktop-menu">
           <div class="desktop-menu-inner">
             <v-btn text to="/dashboard" class="menu-item" aria-label="Перейти к дашборду">
-              <v-icon left small>mdi-view-dashboard</v-icon>
+              <img src ="@/assets/sidebaricon/dashboards.svg" class="custom-icon" alt="Dashboard">
               Дашборд
             </v-btn>
             <v-btn text to="/tasks" class="menu-item" aria-label="Перейти к задачам">
-              <v-icon left small>mdi-checkbox-marked-circle</v-icon>
+              <img src ="@/assets/sidebaricon/tasks.svg" class="custom-icon" alt="Tasks">
               Задачи
             </v-btn>
             <v-btn text to="/reports" class="menu-item" aria-label="Перейти к отчётам">
-              <v-icon left small>mdi-chart-bar</v-icon>
+              <img src ="@/assets/sidebaricon/reports.svg" class="custom-icon" alt="Reports">
               Отчеты
             </v-btn>
             <v-btn text to="/acts" class="menu-item" aria-label="Перейти к актам">
-              <v-icon left small>mdi-file-document</v-icon>
+              <img src ="@/assets/sidebaricon/acts.svg" class="custom-icon" alt="Acts">
               Акты
             </v-btn>
             <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
-              <v-icon left small>mdi-account</v-icon>
+              <img src ="@/assets/sidebaricon/profile.svg" class="custom-icon" alt="Profile">
               Профиль
             </v-btn>
           </div>
@@ -74,7 +74,7 @@
             class="notification-btn"
             aria-label="Открыть уведомления"
           >
-            <v-icon>mdi-bell</v-icon>
+            <img src ="@/assets/sidebaricon/notification.svg" class="custom-icon" alt="Notification">
             <v-badge v-if="notifications.length" color="red" :content="notifications.length" overlap />
           </v-btn>
         </template>
