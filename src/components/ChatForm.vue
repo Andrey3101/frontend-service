@@ -206,7 +206,7 @@ export default {
 
 .chat-minimized {
   position: fixed;
-  bottom: 80px;
+  bottom: 70px;
   right: 20px;
   z-index: 5000;
   border-radius: 30px;
@@ -217,6 +217,9 @@ export default {
   font-size: 1rem;
   text-transform: none;
   transition: transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .chat-minimized:hover {
