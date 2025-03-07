@@ -1,15 +1,34 @@
 <template>
-  <div>
+  <div class="comment-form">
     <v-textarea
       v-model="commentText"
       label="Комментарий"
       outlined
+      dense
+      rows="3"
       class="comment-textarea"
+      :rules="[v => !!v.trim() || 'Комментарий не может быть пустым']"
     />
-    <v-btn color="primary" @click="saveComment" :disabled="!commentText.trim()">
-      {{ editMode ? 'Сохранить' : 'Добавить' }}
-    </v-btn>
-    <v-btn color="grey" text @click="cancel" v-if="editMode">Отмена</v-btn>
+    <div class="button-group">
+      <v-btn
+        color="primary"
+        class="action-btn"
+        @click="saveComment"
+        :disabled="!commentText.trim()"
+        :loading="loading"
+      >
+        {{ editMode ? 'Сохранить' : 'Добавить' }}
+      </v-btn>
+      <v-btn
+        v-if="editMode"
+        color="grey"
+        text
+        class="cancel-btn"
+        @click="cancel"
+      >
+        Отмена
+      </v-btn>
+    </div>
   </div>
 </template>
 
@@ -30,6 +49,7 @@ export default {
   data() {
     return {
       commentText: '',
+      loading: false,
     };
   },
   computed: {
@@ -44,6 +64,7 @@ export default {
   },
   methods: {
     async saveComment() {
+      this.loading = true;
       try {
         if (this.editMode) {
           await updateComment(this.taskId, this.comment.id, this.commentText);
@@ -54,6 +75,8 @@ export default {
         this.$emit('comment-saved');
       } catch (error) {
         this.$emit('error', 'Не удалось сохранить комментарий: ' + error.message);
+      } finally {
+        this.loading = false;
       }
     },
     cancel() {
@@ -65,7 +88,48 @@ export default {
 </script>
 
 <style scoped>
+.comment-form {
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
 .comment-textarea {
-  margin-bottom: 10px;
+  font-family: 'Gilroy-Regular', sans-serif;
+  margin-bottom: 16px;
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+}
+
+.action-btn {
+  font-family: 'Gilroy-Medium', sans-serif;
+  text-transform: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  transition: transform 0.2s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+}
+
+.cancel-btn {
+  font-family: 'Gilroy-Regular', sans-serif;
+  text-transform: none;
+  border-radius: 8px;
+}
+
+@media (max-width: 600px) {
+  .button-group {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .action-btn, .cancel-btn {
+    width: 100%;
+  }
 }
 </style>

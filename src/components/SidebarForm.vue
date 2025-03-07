@@ -30,6 +30,10 @@
               <img src ="@/assets/sidebaricon/acts.svg" class="custom-icon" alt="Acts">
               Акты
             </v-btn>
+            <v-btn text to="/users" class="menu-item" aria-label="Пользователи">
+              <img src ="@/assets/sidebaricon/users.svg" class="custom-icon" alt="Users">
+              Пользователи
+            </v-btn>
             <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
               <img src ="@/assets/sidebaricon/profile.svg" class="custom-icon" alt="Profile">
               Профиль
@@ -54,6 +58,10 @@
             <v-btn text to="/acts" class="menu-item" aria-label="Перейти к актам">
               <img src ="@/assets/sidebaricon/acts.svg" class="custom-icon" alt="Acts">
               Акты
+            </v-btn>
+            <v-btn text to="/users" class="menu-item" aria-label="Пользователи">
+              <img src ="@/assets/sidebaricon/users.svg" class="custom-icon" alt="Users">
+              Пользователи
             </v-btn>
             <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
               <img src ="@/assets/sidebaricon/profile.svg" class="custom-icon" alt="Profile">

@@ -1,266 +1,318 @@
 <template>
-  <v-container class="task-detail-container">
+  <v-container class="acts-detail-container">
     <v-row>
-      <v-col cols="12" md="8">
-        <h2>{{ task.title }}</h2>
-        <v-textarea
-          v-model="task.description"
-          label="Описание"
-          outlined
-          readonly
-          class="task-description"
+      <v-col>
+        <h1 class="detail-title">Детали акта</h1>
+
+        <v-progress-circular
+          v-if="loading"
+          indeterminate
+          color="primary"
+          size="50"
+          class="loading-spinner"
         />
-        <v-list class="comments-list">
-          <v-list-item v-for="comment in task.comments" :key="comment.id">
-            <v-list-item-content>
-              <v-list-item-title>{{ comment.text }}</v-list-item-title>
-              <v-list-item-subtitle>
-                Автор: {{ comment.author }} | {{ comment.created_at }}
-              </v-list-item-subtitle>
-            </v-list-item-content>
-            <v-list-item-action>
-              <v-btn icon class="edit" @click="editComment(comment)">
-                <v-icon>mdi-pencil</v-icon>
-              </v-btn>
-              <v-btn icon class="delete" @click="confirmDeleteComment(comment.id)">
-                <v-icon>mdi-delete</v-icon>
-              </v-btn>
-            </v-list-item-action>
-          </v-list-item>
-        </v-list>
-        <CommentForm
-          :task-id="task.task_id"
-          :comment="editCommentData"
-          @comment-saved="fetchTask"
-          @cancel="editCommentData = null"
-        />
-      </v-col>
-      <v-col cols="12" md="4" class="task-info">
-        <v-card>
-          <v-card-title>Информация о задаче</v-card-title>
-          <v-card-text>
-            <p><strong>Создатель:</strong> {{ task.creator }}</p>
-            <p><strong>Исполнитель:</strong> {{ task.assignee }}</p>
-            <p><strong>Приоритет:</strong> {{ task.priority }}</p>
-            <p><strong>Статус:</strong> {{ task.status }}</p>
-            <p><strong>Срок:</strong> {{ task.due_date }}</p>
+        <v-alert v-else-if="error" type="error" dense class="error-alert">
+          {{ error }}
+        </v-alert>
+
+        <v-card v-else elevation="4" class="detail-card animate__animated animate__fadeInUp">
+          <v-card-title class="card-title">
+            Акт #{{ act.id }}
+            <v-spacer />
+            <v-chip :color="statusColor(act.status)" small class="status-chip">
+              {{ act.status }}
+            </v-chip>
+          </v-card-title>
+          <v-card-text class="card-content">
+            <v-row>
+              <v-col cols="12" sm="6">
+                <p><strong>Название:</strong> {{ act.title || 'Не указано' }}</p>
+                <p><strong>Дата создания:</strong> {{ formatDate(act.created_at) }}</p>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <p><strong>Статус:</strong> {{ act.status || 'Не определён' }}</p>
+                <p><strong>Ответственный:</strong> {{ act.responsible || 'Не назначен' }}</p>
+              </v-col>
+            </v-row>
+            <v-divider class="content-divider" v-if="act.description" />
+            <p v-if="act.description" class="act-description"><strong>Описание:</strong> {{ act.description }}</p>
           </v-card-text>
-          <v-card-actions>
-            <v-btn color="primary" @click="editTask">Редактировать</v-btn>
-            <v-btn color="delete" @click="confirmDeleteTask">Удалить</v-btn>
+          <v-card-actions class="card-actions">
+            <v-btn color="primary" outlined @click="$router.push('/acts')" class="action-btn">
+              <v-icon left>mdi-arrow-left</v-icon> Назад
+            </v-btn>
+            <v-spacer />
+            <v-btn color="blue" text @click="exportToPDF" class="action-btn">
+              <v-icon left>mdi-file-pdf-box</v-icon> PDF
+            </v-btn>
+            <v-btn color="green" text @click="exportToExcel" class="action-btn">
+              <v-icon left>mdi-file-excel</v-icon> XLSX
+            </v-btn>
+            <v-btn color="blue" text @click="showEditModal = true" class="action-btn">
+              <v-icon left>mdi-pencil</v-icon> Редактировать
+            </v-btn>
           </v-card-actions>
         </v-card>
+
+        <!-- Модальное окно редактирования -->
+        <edit-modal
+          v-model="showEditModal"
+          title="Редактировать акт"
+          :is-valid="!!editData.title"
+          @save="confirmSave"
+        >
+          <v-text-field
+            v-model="editData.title"
+            label="Название"
+            outlined
+            dense
+            class="input-field"
+          />
+          <v-select
+            v-model="editData.status"
+            :items="['Новый', 'В работе', 'Завершён']"
+            label="Статус"
+            outlined
+            dense
+            class="input-field"
+          />
+          <v-text-field
+            v-model="editData.responsible"
+            label="Ответственный"
+            outlined
+            dense
+            class="input-field"
+          />
+          <v-textarea
+            v-model="editData.description"
+            label="Описание"
+            outlined
+            dense
+            rows="3"
+            class="input-field"
+          />
+        </edit-modal>
+
+        <!-- Диалог подтверждения -->
+        <v-dialog v-model="showConfirmDialog" max-width="400">
+          <v-card>
+            <v-card-title class="headline">Подтверждение</v-card-title>
+            <v-card-text>Вы уверены, что хотите сохранить изменения в акте?</v-card-text>
+            <v-card-actions>
+              <v-spacer />
+              <v-btn color="grey" text @click="showConfirmDialog = false">Отмена</v-btn>
+              <v-btn color="primary" @click="saveAct">Сохранить</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
       </v-col>
     </v-row>
-    <!-- Диалог редактирования задачи -->
-    <v-dialog v-model="showEditTaskForm" max-width="600px">
-      <v-card>
-        <v-card-title>Редактирование задачи</v-card-title>
-        <v-card-text>
-          <v-text-field v-model="editTaskData.title" label="Название" outlined :rules="[v => !!v || 'Введите название']" />
-          <v-textarea v-model="editTaskData.description" label="Описание" outlined />
-          <v-select v-model="editTaskData.priority" :items="priorities" label="Приоритет" outlined :rules="[v => !!v || 'Выберите приоритет']" />
-          <v-select v-model="editTaskData.status" :items="statuses" label="Статус" outlined :rules="[v => !!v || 'Выберите статус']" />
-          <v-autocomplete
-            v-model="editTaskData.assignee"
-            :items="users"
-            item-text="email"
-            item-value="email"
-            label="Исполнитель"
-            outlined
-            :rules="assigneeRules"
-          />
-          <v-text-field v-model="editTaskData.due_date" label="Срок (YYYY-MM-DD)" outlined :rules="dateRules" />
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn color="grey" text @click="showEditTaskForm = false">Отмена</v-btn>
-          <v-btn color="primary" @click="updateTask" :disabled="!isEditFormValid">Сохранить</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-    <!-- Подтверждение удаления задачи -->
-    <v-dialog v-model="showDeleteTaskConfirm" max-width="400px">
-      <v-card>
-        <v-card-title class="delete-confirm-title">Удаление задачи</v-card-title>
-        <v-card-text>Вы уверены, что хотите удалить задачу?</v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn color="grey" text @click="showDeleteTaskConfirm = false">Отмена</v-btn>
-          <v-btn color="delete" @click="deleteTask">Удалить</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-    <!-- Подтверждение удаления комментария -->
-    <v-dialog v-model="showDeleteCommentConfirm" max-width="400px">
-      <v-card>
-        <v-card-title class="delete-confirm-title">Удаление комментария</v-card-title>
-        <v-card-text>Вы уверены, что хотите удалить комментарий?</v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn color="grey" text @click="showDeleteCommentConfirm = false">Отмена</v-btn>
-          <v-btn color="delete" @click="deleteComment">Удалить</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-    <!-- Окно ошибки -->
-    <v-dialog v-model="showError" max-width="400px">
-      <v-card class="error-dialog-card">
-        <v-card-title class="error-dialog-title">Ошибка</v-card-title>
-        <v-card-text class="error-dialog-text">{{ errorMessage }}</v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn color="grey" text @click="showError = false">Закрыть</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
   </v-container>
 </template>
 
 <script>
-import { getTask, updateTask, deleteTask, deleteComment, getUsers } from '../api';
-import CommentForm from './CommentForm.vue';
+import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
+import { getAct, updateAct } from '../api';
+import EditModal from './EditModal.vue';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import dayjs from 'dayjs';
 
 export default {
-  components: { CommentForm },
-  data() {
-    return {
-      task: {},
-      users: [],
-      editTaskData: null,
-      editCommentData: null,
-      deleteCommentId: null,
-      showEditTaskForm: false,
-      showDeleteTaskConfirm: false,
-      showDeleteCommentConfirm: false,
-      showError: false,
-      errorMessage: '',
-      priorities: ['Низкий', 'Средний', 'Высокий'],
-      statuses: ['Новая', 'В работе', 'Завершена', 'Отменена'],
-      dateRules: [
-        v => !v || /^\d{4}-\d{2}-\d{2}$/.test(v) || 'Дата должна быть в формате YYYY-MM-DD',
-      ],
-      assigneeRules: [
-        v => !!v || 'Выберите исполнителя',
-        v => this.users.some(user => user.email === v) || 'Исполнитель должен быть в списке пользователей',
-      ],
+  components: { EditModal },
+  setup() {
+    const route = useRoute();
+    const act = ref(null);
+    const loading = ref(true);
+    const error = ref(null);
+    const showEditModal = ref(false);
+    const showConfirmDialog = ref(false);
+    const editData = ref({});
+
+    onMounted(async () => {
+      await fetchAct();
+    });
+
+    const fetchAct = async () => {
+      loading.value = true;
+      try {
+        act.value = await getAct(route.params.id);
+        editData.value = { ...act.value };
+      } catch (err) {
+        error.value = err.message || 'Не удалось загрузить акт';
+      } finally {
+        loading.value = false;
+      }
     };
-  },
-  computed: {
-    isEditFormValid() {
-      return (
-        !!this.editTaskData?.title &&
-        this.dateRules.every(rule => rule(this.editTaskData?.due_date || '') === true) &&
-        !!this.editTaskData?.priority &&
-        !!this.editTaskData?.status &&
-        this.assigneeRules.every(rule => rule(this.editTaskData?.assignee) === true)
-      );
-    },
-  },
-  async created() {
-    await this.fetchTask();
-    await this.fetchUsers();
-  },
-  methods: {
-    async fetchTask() {
-      try {
-        const data = await getTask(this.$route.params.taskId);
-        this.task = data;
-      } catch (error) {
-        this.showErrorDialog('Не удалось загрузить задачу: ' + error.message);
+
+    const formatDate = (date) => {
+      return date ? dayjs(date).format('DD.MM.YYYY HH:mm') : 'Не указано';
+    };
+
+    const statusColor = (status) => {
+      switch (status?.toLowerCase()) {
+        case 'новый': return 'blue';
+        case 'в работе': return 'orange';
+        case 'завершён': return 'green';
+        default: return 'grey';
       }
-    },
-    async fetchUsers() {
-      try {
-        const data = await getUsers();
-        this.users = data || [];
-      } catch (error) {
-        this.showErrorDialog('Не удалось загрузить пользователей: ' + error.message);
-      }
-    },
-    editTask() {
-      this.editTaskData = { ...this.task };
-      this.showEditTaskForm = true;
-    },
-    async updateTask() {
-      if (!this.isEditFormValid) return;
-      try {
-        await updateTask(this.task.task_id, this.editTaskData);
-        await this.fetchTask();
-        this.showEditTaskForm = false;
-      } catch (error) {
-        this.showErrorDialog('Не удалось обновить задачу: ' + error.message);
-      }
-    },
-    confirmDeleteTask() {
-      this.showDeleteTaskConfirm = true;
-    },
-    async deleteTask() {
-      try {
-        await deleteTask(this.task.task_id);
-        this.showDeleteTaskConfirm = false;
-        this.$router.push('/tasks');
-      } catch (error) {
-        this.showErrorDialog('Не удалось удалить задачу: ' + error.message);
-      }
-    },
-    editComment(comment) {
-      this.editCommentData = { ...comment };
-    },
-    confirmDeleteComment(commentId) {
-      this.deleteCommentId = commentId;
-      this.showDeleteCommentConfirm = true;
-    },
-    async deleteComment() {
-      try {
-        await deleteComment(this.task.task_id, this.deleteCommentId);
-        await this.fetchTask();
-        this.showDeleteCommentConfirm = false;
-        this.deleteCommentId = null;
-      } catch (error) {
-        this.showErrorDialog('Не удалось удалить комментарий: ' + error.message);
-      }
-    },
-    showErrorDialog(message) {
-      this.errorMessage = message;
-      this.showError = true;
-    },
+    };
+
+    const confirmSave = () => {
+      if (!editData.value.title) return;
+      showConfirmDialog.value = true;
+    };
+
+    const saveAct = async () => {
+      await updateAct(route.params.id, editData.value);
+      await fetchAct();
+      showEditModal.value = false;
+      showConfirmDialog.value = false;
+    };
+
+    const exportToPDF = () => {
+      const doc = new jsPDF();
+      doc.setFont('helvetica');
+      doc.setFontSize(14);
+      doc.text(`Акт #${act.value.id}`, 10, 10);
+
+      doc.autoTable({
+        startY: 20,
+        head: [['Поле', 'Значение']],
+        body: [
+          ['Название', act.value.title || 'Не указано'],
+          ['Дата создания', formatDate(act.value.created_at)],
+          ['Статус', act.value.status || 'Не определён'],
+          ['Ответственный', act.value.responsible || 'Не назначен'],
+          ['Описание', act.value.description || 'Отсутствует'],
+        ],
+        styles: { font: 'helvetica', fontSize: 10, cellPadding: 2, overflow: 'linebreak' },
+        headStyles: { fillColor: [25, 118, 210], textColor: [255, 255, 255] },
+        alternateRowStyles: { fillColor: [240, 244, 248] },
+        columnStyles: { 1: { cellWidth: 120 } }, // Увеличена ширина для длинного текста
+      });
+
+      doc.save(`act_${act.value.id}.pdf`);
+    };
+
+    const exportToExcel = () => {
+      const data = [{
+        'ID': act.value.id,
+        'Название': act.value.title || 'Не указано',
+        'Дата создания': formatDate(act.value.created_at),
+        'Статус': act.value.status || 'Не определён',
+        'Ответственный': act.value.responsible || 'Не назначен',
+        'Описание': act.value.description || 'Отсутствует',
+      }];
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Act');
+      XLSX.writeFile(workbook, `act_${act.value.id}.xlsx`);
+    };
+
+    return { act, loading, error, showEditModal, showConfirmDialog, editData, formatDate, statusColor, confirmSave, saveAct, exportToPDF, exportToExcel };
   },
 };
 </script>
 
 <style scoped>
-.task-detail-container {
-  padding: 20px;
+.acts-detail-container {
+  padding: 24px;
+  background: #f5f7fa;
+  min-height: 100vh;
 }
 
-.task-description {
-  margin-bottom: 20px;
+.detail-title {
+  font-family: 'Gilroy-ExtraBold', sans-serif;
+  font-size: 2.25rem;
+  color: #1976d2;
+  margin-bottom: 24px;
+  text-align: center;
 }
 
-.comments-list {
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  margin-bottom: 20px;
+.loading-spinner {
+  display: block;
+  margin: 40px auto;
 }
 
-.task-info {
-  padding: 0;
+.error-alert {
+  font-family: 'Gilroy-Regular', sans-serif;
+  border-radius: 8px;
+  margin: 20px 0;
 }
 
-.task-info .v-card {
-  height: 100%;
+.detail-card {
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  padding: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
-.delete-confirm-title {
-  font-family: 'Gilroy-Black', sans-serif;
-  color: #e53935;
+.card-title {
+  font-family: 'Gilroy-Bold', sans-serif;
+  font-size: 1.75rem;
+  color: #1976d2;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+}
+
+.status-chip {
+  font-family: 'Gilroy-Medium', sans-serif;
+  color: white;
+}
+
+.card-content p {
+  font-family: 'Gilroy-Regular', sans-serif;
+  font-size: 1.1rem;
+  color: #2c3e50;
+  margin: 12px 0;
+}
+
+.card-content strong {
+  font-family: 'Gilroy-Medium', sans-serif;
+  color: #34495e;
+}
+
+.content-divider {
+  margin: 16px 0;
+}
+
+.act-description {
+  background: #f0f4f8;
+  padding: 16px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+}
+
+.card-actions {
+  padding: 16px 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.action-btn {
+  font-family: 'Gilroy-Medium', sans-serif;
+  text-transform: none;
+  border-radius: 8px;
+  transition: transform 0.2s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
 }
 
 @media (max-width: 600px) {
-  .task-detail-container {
-    padding: 10px;
+  .detail-title {
+    font-size: 1.75rem;
+  }
+  .card-title {
+    font-size: 1.5rem;
+  }
+  .card-content p {
+    font-size: 1rem;
   }
 }
 </style>

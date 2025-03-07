@@ -4,27 +4,9 @@
       <v-col>
         <h1 class="detail-title">Детали пользователя</h1>
 
-        <!-- Индикатор загрузки -->
-        <v-progress-circular
-          v-if="loading"
-          indeterminate
-          color="primary"
-          size="50"
-          class="loading-spinner"
-        />
+        <v-progress-circular v-if="loading" indeterminate color="primary" size="50" class="loading-spinner" />
+        <v-alert v-else-if="error" type="error" dense class="error-alert">{{ error }}</v-alert>
 
-        <!-- Ошибка -->
-        <v-alert
-          v-else-if="error"
-          type="error"
-          dense
-          class="error-alert"
-          icon="mdi-alert-circle"
-        >
-          {{ error }}
-        </v-alert>
-
-        <!-- Карточка пользователя -->
         <v-card v-else elevation="4" class="detail-card animate__animated animate__fadeInUp">
           <v-card-title class="card-title">
             Пользователь #{{ user.id }}
@@ -46,20 +28,54 @@
             </v-row>
           </v-card-text>
           <v-card-actions class="card-actions">
-            <v-btn
-              color="primary"
-              outlined
-              class="action-btn"
-              @click="$router.push('/users')"
-            >
-              <v-icon left>mdi-arrow-left</v-icon> Назад к пользователям
+            <v-btn color="primary" outlined @click="$router.push('/users')" class="action-btn">
+              <v-icon left>mdi-arrow-left</v-icon> Назад
             </v-btn>
             <v-spacer />
-            <v-btn color="blue" text @click="editUser" class="action-btn">
+            <v-btn color="blue" text @click="showEditModal = true" class="action-btn">
               <v-icon left>mdi-pencil</v-icon> Редактировать
             </v-btn>
           </v-card-actions>
         </v-card>
+
+        <!-- Модальное окно редактирования -->
+        <edit-modal
+          v-model="showEditModal"
+          title="Редактировать пользователя"
+          :is-valid="!!editData.email"
+          @save="saveUser"
+        >
+          <v-text-field
+            v-model="editData.name"
+            label="Имя"
+            outlined
+            dense
+            class="input-field"
+          />
+          <v-text-field
+            v-model="editData.email"
+            label="Email"
+            outlined
+            dense
+            class="input-field"
+            :rules="[v => !!v || 'Email обязателен']"
+          />
+          <v-text-field
+            v-model="editData.phone"
+            label="Телефон"
+            outlined
+            dense
+            class="input-field"
+          />
+          <v-select
+            v-model="editData.role"
+            :items="['user', 'manager', 'admin']"
+            label="Роль"
+            outlined
+            dense
+            class="input-field"
+          />
+        </edit-modal>
       </v-col>
     </v-row>
   </v-container>
@@ -67,29 +83,37 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { getUsers } from '../api';
+import { useRoute } from 'vue-router';
+import { getUsers, updateUser } from '../api';
+import EditModal from './EditModal.vue';
 
 export default {
-  name: 'UsersDetail',
+  components: { EditModal },
   setup() {
     const route = useRoute();
-    const router = useRouter();
     const user = ref(null);
     const loading = ref(true);
     const error = ref(null);
+    const showEditModal = ref(false);
+    const editData = ref({});
 
     onMounted(async () => {
+      await fetchUser();
+    });
+
+    const fetchUser = async () => {
+      loading.value = true;
       try {
         const users = await getUsers();
         user.value = users.find((u) => u.id === Number(route.params.id));
         if (!user.value) throw new Error('Пользователь не найден');
+        editData.value = { ...user.value };
       } catch (err) {
         error.value = err.message || 'Не удалось загрузить пользователя';
       } finally {
         loading.value = false;
       }
-    });
+    };
 
     const roleColor = (role) => {
       switch (role?.toLowerCase()) {
@@ -100,11 +124,12 @@ export default {
       }
     };
 
-    const editUser = () => {
-      router.push(`/users/${route.params.id}/edit`); // Предполагается маршрут для редактирования
+    const saveUser = async () => {
+      await updateUser(route.params.id, editData.value);
+      await fetchUser();
     };
 
-    return { user, loading, error, roleColor, editUser };
+    return { user, loading, error, showEditModal, editData, roleColor, saveUser };
   },
 };
 </script>

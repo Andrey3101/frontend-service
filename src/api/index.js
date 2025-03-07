@@ -71,6 +71,15 @@ export async function updateTask(taskId, updates) {
   return response.json();
 }
 
+export async function updateReport(reportId, updates) {
+  const response = await fetchWithCsrf(`${BASE_URL}/reports/${reportId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+  return response.json();
+}
+
 export async function deleteTask(taskId) {
   const response = await fetchWithCsrf(`${BASE_URL}/tasks/${taskId}`, {
     method: 'DELETE',

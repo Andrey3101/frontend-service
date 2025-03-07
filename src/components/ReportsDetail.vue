@@ -4,27 +4,9 @@
       <v-col>
         <h1 class="detail-title">Детали отчёта</h1>
 
-        <!-- Индикатор загрузки -->
-        <v-progress-circular
-          v-if="loading"
-          indeterminate
-          color="primary"
-          size="50"
-          class="loading-spinner"
-        />
+        <v-progress-circular v-if="loading" indeterminate color="primary" size="50" class="loading-spinner" />
+        <v-alert v-else-if="error" type="error" dense class="error-alert">{{ error }}</v-alert>
 
-        <!-- Ошибка -->
-        <v-alert
-          v-else-if="error"
-          type="error"
-          dense
-          class="error-alert"
-          icon="mdi-alert-circle"
-        >
-          {{ error }}
-        </v-alert>
-
-        <!-- Карточка отчёта -->
         <v-card v-else elevation="4" class="detail-card animate__animated animate__fadeInUp">
           <v-card-title class="card-title">
             Отчёт #{{ report.id }}
@@ -48,20 +30,73 @@
             <p class="report-body"><strong>Содержимое:</strong> {{ report.content || 'Отсутствует' }}</p>
           </v-card-text>
           <v-card-actions class="card-actions">
-            <v-btn
-              color="primary"
-              outlined
-              class="action-btn"
-              @click="$router.push('/reports')"
-            >
-              <v-icon left>mdi-arrow-left</v-icon> Назад к отчётам
+            <v-btn color="primary" outlined @click="$router.push('/reports')" class="action-btn">
+              <v-icon left>mdi-arrow-left</v-icon> Назад
             </v-btn>
             <v-spacer />
-            <v-btn color="blue" text @click="editReport" class="action-btn">
+            <v-btn color="blue" text @click="exportToPDF" class="action-btn">
+              <v-icon left>mdi-file-pdf-box</v-icon> PDF
+            </v-btn>
+            <v-btn color="green" text @click="exportToExcel" class="action-btn">
+              <v-icon left>mdi-file-excel</v-icon> XLSX
+            </v-btn>
+            <v-btn color="blue" text @click="showEditModal = true" class="action-btn">
               <v-icon left>mdi-pencil</v-icon> Редактировать
             </v-btn>
           </v-card-actions>
         </v-card>
+
+        <!-- Модальное окно редактирования -->
+        <edit-modal
+          v-model="showEditModal"
+          title="Редактировать отчёт"
+          :is-valid="!!editData.title"
+          @save="confirmSave"
+        >
+          <v-text-field
+            v-model="editData.title"
+            label="Название"
+            outlined
+            dense
+            class="input-field"
+          />
+          <v-select
+            v-model="editData.status"
+            :items="['Новый', 'В работе', 'Завершён']"
+            label="Статус"
+            outlined
+            dense
+            class="input-field"
+          />
+          <v-text-field
+            v-model="editData.author"
+            label="Автор"
+            outlined
+            dense
+            class="input-field"
+          />
+          <v-textarea
+            v-model="editData.content"
+            label="Содержимое"
+            outlined
+            dense
+            rows="4"
+            class="input-field"
+          />
+        </edit-modal>
+
+        <!-- Диалог подтверждения -->
+        <v-dialog v-model="showConfirmDialog" max-width="400">
+          <v-card>
+            <v-card-title class="headline">Подтверждение</v-card-title>
+            <v-card-text>Вы уверены, что хотите сохранить изменения в отчёте?</v-card-text>
+            <v-card-actions>
+              <v-spacer />
+              <v-btn color="grey" text @click="showConfirmDialog = false">Отмена</v-btn>
+              <v-btn color="primary" @click="saveReport">Сохранить</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
       </v-col>
     </v-row>
   </v-container>
@@ -69,30 +104,42 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { getReports } from '../api';
+import { useRoute } from 'vue-router';
+import { getReports, updateReport } from '../api';
+import EditModal from './EditModal.vue';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
 
 export default {
-  name: 'ReportsDetail',
+  components: { EditModal },
   setup() {
     const route = useRoute();
-    const router = useRouter();
     const report = ref(null);
     const loading = ref(true);
     const error = ref(null);
+    const showEditModal = ref(false);
+    const showConfirmDialog = ref(false);
+    const editData = ref({});
 
     onMounted(async () => {
+      await fetchReport();
+    });
+
+    const fetchReport = async () => {
+      loading.value = true;
       try {
         const reports = await getReports();
         report.value = reports.find((r) => r.id === Number(route.params.id));
         if (!report.value) throw new Error('Отчёт не найден');
+        editData.value = { ...report.value };
       } catch (err) {
         error.value = err.message || 'Не удалось загрузить отчёт';
       } finally {
         loading.value = false;
       }
-    });
+    };
 
     const formatDate = (date) => {
       return date ? dayjs(date).format('DD.MM.YYYY HH:mm') : 'Не указано';
@@ -107,11 +154,59 @@ export default {
       }
     };
 
-    const editReport = () => {
-      router.push(`/reports/${route.params.id}/edit`); // Предполагается маршрут для редактирования
+    const confirmSave = () => {
+      if (!editData.value.title) return;
+      showConfirmDialog.value = true;
     };
 
-    return { report, loading, error, formatDate, statusColor, editReport };
+    const saveReport = async () => {
+      await updateReport(route.params.id, editData.value);
+      await fetchReport();
+      showEditModal.value = false;
+      showConfirmDialog.value = false;
+    };
+
+    const exportToPDF = () => {
+      const doc = new jsPDF();
+      doc.setFont('helvetica');
+      doc.setFontSize(14);
+      doc.text(`Отчёт #${report.value.id}`, 10, 10);
+
+      doc.autoTable({
+        startY: 20,
+        head: [['Поле', 'Значение']],
+        body: [
+          ['Название', report.value.title || 'Не указано'],
+          ['Дата создания', formatDate(report.value.created_at)],
+          ['Статус', report.value.status || 'Не определён'],
+          ['Автор', report.value.author || 'Не указан'],
+          ['Содержимое', report.value.content || 'Отсутствует'],
+        ],
+        styles: { font: 'helvetica', fontSize: 10, cellPadding: 2, overflow: 'linebreak' },
+        headStyles: { fillColor: [25, 118, 210], textColor: [255, 255, 255] },
+        alternateRowStyles: { fillColor: [240, 244, 248] },
+        columnStyles: { 1: { cellWidth: 120 } }, // Увеличена ширина для длинного текста
+      });
+
+      doc.save(`report_${report.value.id}.pdf`);
+    };
+
+    const exportToExcel = () => {
+      const data = [{
+        'ID': report.value.id,
+        'Название': report.value.title || 'Не указано',
+        'Дата создания': formatDate(report.value.created_at),
+        'Статус': report.value.status || 'Не определён',
+        'Автор': report.value.author || 'Не указан',
+        'Содержимое': report.value.content || 'Отсутствует',
+      }];
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Report');
+      XLSX.writeFile(workbook, `report_${report.value.id}.xlsx`);
+    };
+
+    return { report, loading, error, showEditModal, showConfirmDialog, editData, formatDate, statusColor, confirmSave, saveReport, exportToPDF, exportToExcel };
   },
 };
 </script>
