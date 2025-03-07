@@ -150,6 +150,12 @@ export default {
   font-size: 1.2rem;
 }
 
+/* Переопределение положения бейджа */
+.notification-btn .v-badge__badge {
+  top: 10px; /* Смещаем цифру вниз (увеличьте значение для большего смещения) */
+  right: 0; /* Сохраняем положение справа */
+}
+
 .user-phone {
   font-family: 'Gilroy-Light', sans-serif;
   font-size: 0.9rem;
