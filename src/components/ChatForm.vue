@@ -58,6 +58,7 @@
 </template>
 
 <script>
+import { processText } from '@/api/index.js';
 export default {
   props: ['suggestions'],
   data() {
@@ -68,10 +69,21 @@ export default {
     };
   },
   methods: {
-    sendMessage() {
+    async sendMessage() {
       if (this.newMessage.trim()) {
         const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         this.messages.push({ text: this.newMessage, isUser: true, timestamp });
+        
+        try {
+          const response = await processText(this.newMessage);
+          const aiMessage = response.action?.status === "queued" 
+            ? "Команда принята в обработку" 
+            : response.error || "Ошибка обработки";
+          this.messages.push({ text: aiMessage, isUser: false, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+        } catch (error) {
+          this.messages.push({ text: `Ошибка: ${error.message}`, isUser: false, timestamp });
+        }
+        
         this.newMessage = '';
         this.$nextTick(() => {
           const container = this.$el.querySelector('.chat-messages');

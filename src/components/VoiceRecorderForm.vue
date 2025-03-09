@@ -38,29 +38,63 @@
 </template>
 
 <script>
+import { processVoice } from '@/api/index.js';
+
 export default {
   data() {
     return {
       isRecording: false,
       showError: false,
+      mediaRecorder: null,
+      audioChunks: [],
     };
   },
   methods: {
     async startRecording() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        this.mediaRecorder = new MediaRecorder(stream);
+        this.audioChunks = [];
+        this.mediaRecorder.ondataavailable = (event) => {
+          this.audioChunks.push(event.data);
+        };
+        this.mediaRecorder.onstop = this.handleStop;
+        this.mediaRecorder.start();
         this.isRecording = true;
         this.showError = false;
         this.$emit('recording-started');
-        console.log('Microphone access granted:', stream);
+        console.log('Recording started:', stream);
       } catch (error) {
         this.showError = true;
         console.error('Microphone access denied:', error);
       }
     },
     stopRecording() {
-      this.isRecording = false;
-      this.$emit('recording-stopped');
+      if (this.mediaRecorder && this.isRecording) {
+        this.mediaRecorder.stop();
+        this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        this.isRecording = false;
+        this.$emit('recording-stopped');
+      }
+    },
+    async handleStop() {
+      const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+      const audioBase64 = await this.blobToBase64(audioBlob);
+      try {
+        const response = await processVoice(audioBase64, 'webm');
+        this.$emit('voice-processed', response);
+      } catch (error) {
+        console.error('Voice processing failed:', error);
+        this.$emit('voice-error', error.message);
+      }
+    },
+    blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]); // Убираем "data:audio/webm;base64,"
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
     },
   },
 };

@@ -1,11 +1,12 @@
-const TasksURL = "http://localhost:8000";
-const DocumentURL = "http://localhost:8000";
-const AUTHURL = "http://localhost:8000";
-const AISERVICE = "http://localhost:8000";
+// api/index.js
+const TasksURL = "http://localhost:8000"; // Проверить порт Tasks-service
+const DocumentURL = "http://localhost:5001"; // Исправлено для Documents-service
+const AUTHURL = "http://localhost:8000"; // Порт Auth-service (FastAPI по умолчанию 8000)
+const AISERVICE = "http://localhost:8002"; // Проверить порт AI-service
 let csrfToken = localStorage.getItem('csrf_token') || '';
 
 export async function login(email, password) {
-  const response = await fetch(`${AUTHURL}/auth/login`, {
+  const response = await fetch(`${AUTHURL}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -14,6 +15,7 @@ export async function login(email, password) {
   const data = await response.json();
   localStorage.setItem('token', data.token);
   localStorage.setItem('csrf_token', data.csrf_token);
+  localStorage.setItem('user_id', data.user_id);
   csrfToken = data.csrf_token;
   return data;
 }
@@ -30,12 +32,18 @@ async function fetchWithCsrf(url, options = {}) {
 }
 
 export async function getDashboard() {
-  const response = await fetchWithCsrf(`http://localhost:8001/report?period=week`);
+  const response = await fetchWithCsrf(`${DocumentURL}/report?period=week`); // Исправлено на DocumentURL
   return response.json();
 }
 
+export function connectWebSocket(userId) {
+  const token = localStorage.getItem('token');
+  const ws = new WebSocket(`${NOTIFICATIONURL.replace('http', 'ws')}/notifications/ws/${userId}?token=${token}`);
+  return ws;
+}
+
 export async function getProfile() {
-  const response = await fetchWithCsrf(`${AUTHURL}/auth/profile`);
+  const response = await fetchWithCsrf(`${AUTHURL}/profile`);
   return response.json();
 }
 
@@ -43,7 +51,7 @@ export async function updateProfile(profile) {
   if (profile.inn && !/^\d{10}$|^\d{12}$/.test(profile.inn)) {
     throw new Error("ИНН должен содержать 10 или 12 цифр");
   }
-  const response = await fetchWithCsrf(`${AUTHURL}/auth/profile`, {
+  const response = await fetchWithCsrf(`${AUTHURL}/profile`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(profile),
@@ -169,10 +177,10 @@ export async function checkEmailUnique(email) {
 }
 
 export async function createUser(email, password, role) {
-  const response = await fetchWithCsrf(`${AUTHURL}/users`, {
+  const response = await fetchWithCsrf(`${AUTHURL}/register`, { // Исправлено на /register
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, role }),
+    body: JSON.stringify({ email, password, role, company_name: "Default Company" }), // Добавлено обязательное поле
   });
   return response.json();
 }
@@ -208,15 +216,15 @@ export async function getReports() {
 }
 
 export async function updateEmployeeOrder(orderData) {
-    const response = await fetchWithCsrf(`${AUTHURL}/employees/order`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(orderData),
-    });
-    return response.json();
-  }
-  
-  export async function getTasks() {
-    const response = await fetchWithCsrf(`${TasksURL}/tasks/stats`);
-    return response.json();
-  }
+  const response = await fetchWithCsrf(`${AUTHURL}/employees/order`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(orderData),
+  });
+  return response.json();
+}
+
+export async function getTasks() {
+  const response = await fetchWithCsrf(`${TasksURL}/tasks/stats`);
+  return response.json();
+}
