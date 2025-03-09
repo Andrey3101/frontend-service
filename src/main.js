@@ -9,7 +9,7 @@ import * as directives from 'vuetify/directives';
 import { VueQueryPlugin } from '@tanstack/vue-query';
 import VueAnimateOnScroll from 'vue3-animate-onscroll';
 import './assets/styles.css';
-import VueTheMask from 'vue-the-mask'; // Импортируем v-mask
+import VueTheMask from 'vue-the-mask';
 
 const vuetify = createVuetify({
   components,

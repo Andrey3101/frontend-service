@@ -1,17 +1,12 @@
 <template>
   <div>
-    <!-- Верхняя панель (head) -->
     <v-app-bar app flat color="primary" dark>
-      <!-- Левая часть: ФИ и телефон -->
       <div class="user-info" v-if="user">
         <span class="user-name">{{ user.name }}</span>
         <span class="user-phone">{{ user.phone }}</span>
       </div>
-
-      <!-- Центральное меню: прокрутка для мобильных, планшетов и десктопа -->
       <v-spacer v-if="!isMobileOnly" />
       <div class="menu-wrapper">
-        <!-- Прокручиваемое меню для мобильной версии -->
         <div v-if="isMobileOnly" class="menu-scroll">
           <div class="menu-scroll-inner">
             <v-btn text to="/dashboard" class="menu-item" aria-label="Перейти к дашборду">
@@ -40,7 +35,6 @@
             </v-btn>
           </div>
         </div>
-        <!-- Прокручиваемое меню для планшета и десктопа -->
         <div v-else class="desktop-menu">
           <div class="desktop-menu-inner">
             <v-btn text to="/dashboard" class="menu-item" aria-label="Перейти к дашборду">
@@ -71,8 +65,6 @@
         </div>
       </div>
       <v-spacer v-if="!isMobileOnly" />
-
-      <!-- Правая часть: уведомления -->
       <v-menu offset-y>
         <template v-slot:activator="{ on, attrs }">
           <v-btn
@@ -145,7 +137,7 @@ export default {
   },
   async mounted() {
     try {
-      this.user = await getProfile(); // Получаем данные пользователя
+      this.user = await getProfile();
       const storedNotifications = localStorage.getItem('notifications');
       if (storedNotifications) {
         this.notifications = JSON.parse(storedNotifications);
@@ -153,10 +145,10 @@ export default {
       this.connectToNotifications();
     } catch (error) {
       console.error('Failed to load profile:', error);
-      this.user = { name: 'Иванов Иван', phone: '+7 (999) 123-45-67' }; // Заглушка
+      this.user = { name: 'Иванов Иван', phone: '+7 (999) 123-45-67' };
     }
   },
-  beforeDestroy() {
+  beforeUnmount() {
     if (this.ws) {
       this.ws.close();
     }
@@ -183,6 +175,8 @@ export default {
           this.notifications.shift();
         }
         this.wsError = false;
+        this.playNotificationSound();
+        this.showToast(data.message);
       };
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
@@ -196,6 +190,13 @@ export default {
           this.connectToNotifications();
         }, 2000);
       };
+    },
+    playNotificationSound() {
+      const audio = new Audio(require('@/assets/sounds/notification.mp3')); // Динамический импорт
+      audio.play().catch(err => console.error('Audio error:', err));
+    },
+    showToast(message) {
+      this.$toast.info(message, { timeout: 5000 }); // Используем vue-toastification
     },
     clearNotifications() {
       this.notifications = [];

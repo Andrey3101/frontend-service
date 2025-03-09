@@ -3,6 +3,7 @@ const TasksURL = "http://localhost:8000"; // Проверить порт Tasks-s
 const DocumentURL = "http://localhost:5001"; // Исправлено для Documents-service
 const AUTHURL = "http://localhost:8000"; // Порт Auth-service (FastAPI по умолчанию 8000)
 const AISERVICE = "http://localhost:8002"; // Проверить порт AI-service
+const NOTIFICATIONURL = "http://localhost:8003";
 let csrfToken = localStorage.getItem('csrf_token') || '';
 
 export async function login(email, password) {
