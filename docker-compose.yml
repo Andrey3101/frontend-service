@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - backend  # Если есть бэкенд
+    environment:
+      - CHOKIDAR_USEPOLLING=true  # Для работы watch в Docker
+
+  # Пример бэкенда (можно удалить, если не нужен)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"

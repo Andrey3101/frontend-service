@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import LoginForm from '../views/LoginForm.vue'; // Обновлено имя
-import RegisterForm from '../views/RegisterForm.vue'; // Обновлено имя
+import LoginForm from '../views/LoginForm.vue';
+import RegisterForm from '../views/RegisterForm.vue';
 import Dashboard from '../views/DashboardPage.vue';
 import Tasks from '../views/TasksList.vue';
 import Users from '../views/UsersList.vue';
