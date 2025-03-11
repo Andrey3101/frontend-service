@@ -33,6 +33,10 @@
               <img src="@/assets/sidebaricon/profile.svg" class="custom-icon" alt="Profile">
               Профиль
             </v-btn>
+            <v-btn text to="/tax-calculator" class="menu-item" aria-label="Калькулятор налогов">
+              <img src="@/assets/sidebaricon/calculator.svg" class="custom-icon" alt="Calculator">
+              Калькулятор налогов
+            </v-btn>
           </div>
         </div>
         <div v-else class="desktop-menu">
@@ -60,6 +64,10 @@
             <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
               <img src="@/assets/sidebaricon/profile.svg" class="custom-icon" alt="Profile">
               Профиль
+            </v-btn>
+            <v-btn text to="/tax-calculator" class="menu-item" aria-label="Калькулятор налогов">
+              <img src="@/assets/sidebaricon/calculator.svg" class="custom-icon" alt="Calculator">
+              Калькулятор налогов
             </v-btn>
           </div>
         </div>
@@ -192,11 +200,11 @@ export default {
       };
     },
     playNotificationSound() {
-      const audio = new Audio(require('@/assets/sounds/notification.mp3')); // Динамический импорт
+      const audio = new Audio('/sounds/notification.mp3'); // Используем public/sounds
       audio.play().catch(err => console.error('Audio error:', err));
     },
     showToast(message) {
-      this.$toast.info(message, { timeout: 5000 }); // Используем vue-toastification
+      this.$toast.info(message, { timeout: 5000 });
     },
     clearNotifications() {
       this.notifications = [];

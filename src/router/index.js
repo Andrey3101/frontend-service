@@ -10,6 +10,7 @@ import Profile from '../views/ProfileForm.vue';
 import ActsDetail from '../components/ActsDetail.vue';
 import UsersDetail from '../components/UsersDetail.vue';
 import ReportsDetail from '../components/ReportsDetail.vue';
+import TaxCalculator from '@/components/TaxCalculator.vue';
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -19,6 +20,12 @@ const routes = [
     path: '/dashboard', 
     component: Dashboard, 
     meta: { requiresAuth: true } 
+  },
+  { 
+    path: '/tax-calculator', 
+    name: 'TaxCalculator', 
+    component: TaxCalculator,
+    meta: { requiresAuth: true }
   },
   { 
     path: '/tasks', 
