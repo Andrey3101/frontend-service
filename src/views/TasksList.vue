@@ -28,6 +28,10 @@
             />
           </v-col>
         </v-row>
+        <v-progress-linear v-if="loading" indeterminate color="blue" class="loading-bar" />
+        <v-alert v-if="error" type="error" dense class="error-alert">
+          {{ error }}
+        </v-alert>
         <v-data-table
           :headers="headers"
           :items="filteredTasks"
@@ -108,22 +112,10 @@
             <v-card-actions>
               <v-spacer />
               <v-btn color="grey" text @click="showDeleteConfirm = false">Отмена</v-btn>
-              <v-btn color="delete" @click="deleteTask">Удалить</v-btn>
+              <v-btn color="red" @click="deleteTask">Удалить</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
-        <!-- Окно ошибки -->
-        <v-dialog v-model="showError" max-width="400px">
-          <v-card class="error-dialog-card">
-            <v-card-title class="error-dialog-title">Ошибка</v-card-title>
-            <v-card-text class="error-dialog-text">{{ errorMessage }}</v-card-text>
-            <v-card-actions>
-              <v-spacer />
-              <v-btn color="grey" text @click="showError = false">Закрыть</v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-        <router-view />
       </v-col>
     </v-row>
   </v-container>
@@ -137,11 +129,11 @@ export default {
     return {
       tasks: [],
       users: [],
+      loading: false,
+      error: null,
       showCreateForm: false,
       showEditForm: false,
       showDeleteConfirm: false,
-      showError: false,
-      errorMessage: '',
       deleteTaskId: null,
       statusFilter: 'Все',
       assigneeFilter: 'Все',
@@ -199,30 +191,42 @@ export default {
   },
   methods: {
     async fetchTasks() {
+      this.loading = true;
+      this.error = null;
       try {
         const data = await getMyTasks();
         this.tasks = Array.isArray(data?.tasks) ? data.tasks : [];
       } catch (error) {
-        this.showErrorDialog('Не удалось загрузить задачи: ' + error.message);
+        this.error = error.message || 'Не удалось загрузить задачи';
+      } finally {
+        this.loading = false;
       }
     },
     async fetchUsers() {
+      this.loading = true;
+      this.error = null;
       try {
         const data = await getUsers();
         this.users = Array.isArray(data) ? data : [];
       } catch (error) {
-        this.showErrorDialog('Не удалось загрузить пользователей: ' + error.message);
+        this.error = error.message || 'Не удалось загрузить пользователей';
+      } finally {
+        this.loading = false;
       }
     },
     async createTask() {
       if (!this.isCreateFormValid) return;
+      this.loading = true;
+      this.error = null;
       try {
         await createTask(this.newTask);
         await this.fetchTasks();
         this.showCreateForm = false;
         this.newTask = { title: '', description: '', priority: 'Средний', status: 'Новая', assignee: '', due_date: '' };
       } catch (error) {
-        this.showErrorDialog('Не удалось создать задачу: ' + error.message);
+        this.error = error.message || 'Не удалось создать задачу';
+      } finally {
+        this.loading = false;
       }
     },
     editTask(task) {
@@ -231,12 +235,16 @@ export default {
     },
     async updateTask() {
       if (!this.isEditFormValid) return;
+      this.loading = true;
+      this.error = null;
       try {
         await updateTask(this.editTask.task_id, this.editTask);
         await this.fetchTasks();
         this.showEditForm = false;
       } catch (error) {
-        this.showErrorDialog('Не удалось обновить задачу: ' + error.message);
+        this.error = error.message || 'Не удалось обновить задачу';
+      } finally {
+        this.loading = false;
       }
     },
     confirmDeleteTask(taskId) {
@@ -244,24 +252,24 @@ export default {
       this.showDeleteConfirm = true;
     },
     async deleteTask() {
+      this.loading = true;
+      this.error = null;
       try {
         await deleteTask(this.deleteTaskId);
         await this.fetchTasks();
         this.showDeleteConfirm = false;
         this.deleteTaskId = null;
       } catch (error) {
-        this.showErrorDialog('Не удалось удалить задачу: ' + error.message);
+        this.error = error.message || 'Не удалось удалить задачу';
+      } finally {
+        this.loading = false;
       }
     },
     applyFilters() {
-      // Локальная фильтрация, обновление автоматическое
+      // Локальная фильтрация
     },
     rowClicked(item) {
       this.$router.push({ name: 'TaskDetail', params: { taskId: item.task_id } });
-    },
-    showErrorDialog(message) {
-      this.errorMessage = message;
-      this.showError = true;
     },
     isFormValid(task) {
       return (

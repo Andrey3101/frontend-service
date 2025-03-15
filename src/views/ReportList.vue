@@ -3,8 +3,6 @@
     <v-row>
       <v-col>
         <h1 class="page-title">Отчеты</h1>
-
-        <!-- Фильтр -->
         <v-text-field
           v-model="searchQuery"
           label="Поиск по ID или дате"
@@ -14,8 +12,6 @@
           prepend-inner-icon="mdi-magnify"
           class="search-field"
         />
-
-        <!-- Кнопки -->
         <v-btn color="primary" @click="showGenerateForm = true" class="create-btn elevation-2">
           <v-icon left>mdi-plus</v-icon> Сгенерировать отчет
         </v-btn>
@@ -27,15 +23,10 @@
             <v-icon left>mdi-file-excel</v-icon> XLSX
           </v-btn>
         </v-btn-toggle>
-
-        <!-- Индикатор загрузки -->
-        <v-progress-linear
-          v-if="loading"
-          indeterminate
-          color="blue"
-          class="loading-bar"
-        />
-
+        <v-progress-linear v-if="loading" indeterminate color="blue" class="loading-bar" />
+        <v-alert v-if="error" type="error" dense class="error-alert">
+          {{ error }}
+        </v-alert>
         <v-data-table
           :headers="headers"
           :items="filteredReports"
@@ -50,7 +41,6 @@
             </v-btn>
           </template>
         </v-data-table>
-
         <!-- Диалог генерации -->
         <v-dialog v-model="showGenerateForm" max-width="600px" persistent>
           <v-card class="dialog-card">
@@ -88,7 +78,6 @@
             </v-card-actions>
           </v-card>
         </v-dialog>
-
         <!-- Просмотр отчета -->
         <v-dialog v-model="showReport" max-width="800px" persistent>
           <v-card class="dialog-card">
@@ -99,18 +88,6 @@
             <v-card-actions class="dialog-actions">
               <v-spacer />
               <v-btn color="grey" text @click="showReport = false">Закрыть</v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-
-        <!-- Окно ошибки -->
-        <v-dialog v-model="showError" max-width="400px" persistent>
-          <v-card class="error-dialog-card">
-            <v-card-title class="error-dialog-title">Ошибка</v-card-title>
-            <v-card-text class="error-dialog-text">{{ errorMessage }}</v-card-text>
-            <v-card-actions class="dialog-actions">
-              <v-spacer />
-              <v-btn color="grey" text @click="showError = false">Закрыть</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
@@ -130,11 +107,10 @@ export default {
       reports: [],
       users: [],
       loading: false,
+      error: null,
       searchQuery: '',
       showGenerateForm: false,
       showReport: false,
-      showError: false,
-      errorMessage: '',
       selectedReport: null,
       exportFormat: 'pdf',
       reportFilter: {
@@ -169,28 +145,31 @@ export default {
   methods: {
     async fetchReports() {
       this.loading = true;
+      this.error = null;
       try {
         const data = await getReports();
-        this.reports = data || [];
+        this.reports = Array.isArray(data) ? data : [];
       } catch (error) {
-        this.showErrorDialog('Не удалось загрузить отчеты: ' + error.message);
+        this.error = error.message || 'Не удалось загрузить отчеты';
       } finally {
         this.loading = false;
       }
     },
     async fetchUsers() {
       this.loading = true;
+      this.error = null;
       try {
         const data = await getUsers();
-        this.users = data || [];
+        this.users = Array.isArray(data) ? data : [];
       } catch (error) {
-        this.showErrorDialog('Не удалось загрузить пользователей: ' + error.message);
+        this.error = error.message || 'Не удалось загрузить пользователей';
       } finally {
         this.loading = false;
       }
     },
     async generateReport() {
       this.loading = true;
+      this.error = null;
       try {
         const filters = { ...this.reportFilter };
         if (filters.status === 'Все') delete filters.status;
@@ -199,7 +178,7 @@ export default {
         await this.fetchReports();
         this.showGenerateForm = false;
       } catch (error) {
-        this.showErrorDialog('Не удалось сгенерировать отчет: ' + error.message);
+        this.error = error.message || 'Не удалось сгенерировать отчет';
       } finally {
         this.loading = false;
       }
@@ -207,10 +186,6 @@ export default {
     viewReport(report) {
       this.selectedReport = report;
       this.showReport = true;
-    },
-    showErrorDialog(message) {
-      this.errorMessage = message;
-      this.showError = true;
     },
     exportToPDF() {
       const doc = new jsPDF();

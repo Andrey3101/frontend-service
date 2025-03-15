@@ -3,7 +3,6 @@
     <v-row>
       <v-col>
         <h1 class="detail-title">Детали акта</h1>
-
         <v-progress-circular
           v-if="loading"
           indeterminate
@@ -19,7 +18,6 @@
             </v-btn>
           </template>
         </v-alert>
-
         <v-card v-else elevation="4" class="detail-card animate__animated animate__fadeInUp">
           <v-card-title class="card-title">
             Акт #{{ act.id }}
@@ -46,9 +44,6 @@
             <v-btn color="primary" outlined @click="$router.push('/acts')" class="action-btn">
               <v-icon left>mdi-arrow-left</v-icon> Назад
             </v-btn>
-            <v-btn color="green" text @click="showCreateActModal = true" class="action-btn">
-              <v-icon left>mdi-plus</v-icon> Создать акт
-            </v-btn>
             <v-spacer />
             <v-btn color="blue" text @click="exportToPDF" class="action-btn">
               <v-icon left>mdi-file-pdf-box</v-icon> PDF
@@ -61,7 +56,6 @@
             </v-btn>
           </v-card-actions>
         </v-card>
-
         <!-- Модальное окно редактирования -->
         <edit-modal
           v-model="showEditModal"
@@ -100,7 +94,6 @@
             class="input-field"
           />
         </edit-modal>
-
         <!-- Диалог подтверждения редактирования -->
         <v-dialog v-model="showConfirmDialog" max-width="400" class="custom-dialog">
           <v-card class="dialog-card">
@@ -113,48 +106,6 @@
             </v-card-actions>
           </v-card>
         </v-dialog>
-
-        <!-- Модальное окно создания акта с выбором периода -->
-        <v-dialog v-model="showCreateActModal" max-width="500" class="custom-dialog">
-          <v-card class="dialog-card">
-            <v-card-title class="dialog-title">Создать новый акт</v-card-title>
-            <v-card-text class="dialog-text">
-              <v-form ref="createForm" v-model="createValid">
-                <v-text-field
-                  v-model="newAct.title"
-                  label="Название акта"
-                  outlined
-                  dense
-                  :rules="[v => !!v || 'Название обязательно']"
-                  class="input-field"
-                />
-                <v-text-field
-                  v-model="newAct.startDate"
-                  label="С какого числа"
-                  type="date"
-                  outlined
-                  dense
-                  :rules="[v => !!v || 'Дата начала обязательна']"
-                  class="input-field"
-                />
-                <v-text-field
-                  v-model="newAct.endDate"
-                  label="По какое число"
-                  type="date"
-                  outlined
-                  dense
-                  :rules="[v => !!v || 'Дата окончания обязательна']"
-                  class="input-field"
-                />
-              </v-form>
-            </v-card-text>
-            <v-card-actions class="dialog-actions">
-              <v-spacer />
-              <v-btn color="grey" text @click="showCreateActModal = false" class="dialog-btn">Отмена</v-btn>
-              <v-btn color="primary" @click="createAct" class="dialog-btn primary-btn" :disabled="!createValid">Создать</v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
       </v-col>
     </v-row>
   </v-container>
@@ -162,7 +113,7 @@
 
 <script>
 import { ref, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { getAct, updateAct } from '../api';
 import EditModal from './EditModal.vue';
 import jsPDF from 'jspdf';
@@ -174,20 +125,12 @@ export default {
   components: { EditModal },
   setup() {
     const route = useRoute();
-    const router = useRouter();
     const act = ref(null);
     const loading = ref(true);
     const error = ref(null);
     const showEditModal = ref(false);
     const showConfirmDialog = ref(false);
-    const showCreateActModal = ref(false);
     const editData = ref({});
-    const createValid = ref(true);
-    const newAct = ref({
-      title: '',
-      startDate: null,
-      endDate: null,
-    });
 
     onMounted(async () => {
       await fetchAct();
@@ -224,28 +167,17 @@ export default {
     };
 
     const saveAct = async () => {
-      await updateAct(route.params.id, editData.value);
-      await fetchAct();
-      showEditModal.value = false;
-      showConfirmDialog.value = false;
-    };
-
-    const createAct = async () => {
-      if (!newAct.value.title || !newAct.value.startDate || !newAct.value.endDate) return;
+      loading.value = true;
+      error.value = null;
       try {
-        const createdAct = await createAct({
-          title: newAct.value.title,
-          start_date: newAct.value.startDate,
-          end_date: newAct.value.endDate,
-          status: 'Новый',
-          responsible: null,
-          description: '',
-        });
-        router.push(`/acts/${createdAct.id}`);
-        showCreateActModal.value = false;
-        newAct.value = { title: '', startDate: null, endDate: null };
+        await updateAct(route.params.id, editData.value);
+        await fetchAct();
+        showEditModal.value = false;
+        showConfirmDialog.value = false;
       } catch (err) {
-        error.value = 'Не удалось создать акт: ' + err.message;
+        error.value = err.message || 'Не удалось сохранить изменения';
+      } finally {
+        loading.value = false;
       }
     };
 
@@ -289,7 +221,7 @@ export default {
       XLSX.writeFile(workbook, `act_${act.value.id}.xlsx`);
     };
 
-    return { act, loading, error, showEditModal, showConfirmDialog, showCreateActModal, editData, newAct, createValid, formatDate, statusColor, confirmSave, saveAct, createAct, exportToPDF, exportToExcel };
+    return { act, loading, error, showEditModal, showConfirmDialog, editData, formatDate, statusColor, confirmSave, saveAct, exportToPDF, exportToExcel };
   },
 };
 </script>

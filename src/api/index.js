@@ -22,14 +22,24 @@ export async function login(email, password) {
 }
 
 async function fetchWithCsrf(url, options = {}) {
+  const token = localStorage.getItem('token');
+  const csrfToken = localStorage.getItem('csrf_token');
   const headers = {
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'Authorization': `Bearer ${token}`,
     'X-CSRF-Token': csrfToken,
     ...options.headers,
   };
-  const response = await fetch(url, { ...options, headers });
-  if (!response.ok) throw new Error(`Ошибка: ${response.statusText || response.status}`);
-  return response;
+  try {
+    const response = await fetch(url, { ...options, headers });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Ошибка ${response.status}: ${errorText || response.statusText}`);
+    }
+    return response;
+  } catch (error) {
+    console.error('Fetch error:', error);
+    throw error;
+  }
 }
 
 // Новая функция для запроса сброса пароля
@@ -59,12 +69,14 @@ export async function getDashboard() {
   return response.json();
 }
 
-export async function logoutUser(token) {
+export async function logoutUser() {
   const response = await fetchWithCsrf(`${AUTHURL}/logout`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(token)
   });
+  localStorage.removeItem('token');
+  localStorage.removeItem('csrf_token');
+  localStorage.removeItem('user_id');
   return response.json();
 }
 
@@ -265,5 +277,33 @@ export async function deleteCompany(companyId) {
 
 export async function getTasks() {
   const response = await fetchWithCsrf(`${TasksURL}/tasks/stats`);
+  return response.json();
+}
+
+export async function getFinancialEvents() {
+  const response = await fetchWithCsrf(`${TasksURL}/financial-events`);
+  return response.json();
+}
+
+export async function startTimeTracking(taskId) {
+  const response = await fetchWithCsrf(`${TasksURL}/time/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_id: taskId }),
+  });
+  return response.json();
+}
+
+export async function stopTimeTracking(taskId) {
+  const response = await fetchWithCsrf(`${TasksURL}/time/stop`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_id: taskId }),
+  });
+  return response.json();
+}
+
+export async function getTimeReport(period = 'week') {
+  const response = await fetchWithCsrf(`${DocumentURL}/time-report?period=${period}`);
   return response.json();
 }

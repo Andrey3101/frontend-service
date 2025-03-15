@@ -3,8 +3,6 @@
     <v-row>
       <v-col>
         <h1 class="page-title">Акты</h1>
-
-        <!-- Фильтр -->
         <v-text-field
           v-model="searchQuery"
           label="Поиск по ID или типу"
@@ -14,8 +12,6 @@
           prepend-inner-icon="mdi-magnify"
           class="search-field"
         />
-
-        <!-- Кнопка экспорта -->
         <v-btn-toggle v-model="exportFormat" mandatory class="export-toggle">
           <v-btn value="pdf" color="primary" class="export-btn" @click="exportToPDF">
             <v-icon left>mdi-file-pdf-box</v-icon> PDF
@@ -24,15 +20,10 @@
             <v-icon left>mdi-file-excel</v-icon> XLSX
           </v-btn>
         </v-btn-toggle>
-
-        <!-- Индикатор загрузки -->
-        <v-progress-linear
-          v-if="loading"
-          indeterminate
-          color="blue"
-          class="loading-bar"
-        />
-
+        <v-progress-linear v-if="loading" indeterminate color="blue" class="loading-bar" />
+        <v-alert v-if="error" type="error" dense class="error-alert">
+          {{ error }}
+        </v-alert>
         <v-list class="acts-list elevation-1">
           <v-list-item
             v-for="act in filteredActs"
@@ -61,7 +52,6 @@
             </v-list-item-content>
           </v-list-item>
         </v-list>
-
         <!-- Диалог редактирования -->
         <v-dialog v-model="showEditDialog" max-width="400px" persistent>
           <v-card class="dialog-card">
@@ -73,12 +63,13 @@
                 outlined
                 dense
                 class="input-field"
+                :rules="[v => !!v || 'Тип обязателен']"
               />
             </v-card-text>
             <v-card-actions class="dialog-actions">
               <v-spacer />
               <v-btn color="grey" text @click="showEditDialog = false">Отмена</v-btn>
-              <v-btn color="primary" class="action-btn-primary" @click="saveActUpdate">Сохранить</v-btn>
+              <v-btn color="primary" class="action-btn-primary" @click="saveActUpdate" :disabled="!newActType">Сохранить</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
@@ -97,6 +88,7 @@ export default {
     return {
       acts: [],
       loading: false,
+      error: null,
       searchQuery: '',
       showEditDialog: false,
       newActType: '',
@@ -123,11 +115,12 @@ export default {
   methods: {
     async fetchActs() {
       this.loading = true;
+      this.error = null;
       try {
         const data = await getActs();
-        this.acts = data || [];
+        this.acts = Array.isArray(data) ? data : [];
       } catch (error) {
-        alert('Ошибка загрузки актов: ' + error.message);
+        this.error = error.message || 'Ошибка загрузки актов';
       } finally {
         this.loading = false;
       }
@@ -141,14 +134,17 @@ export default {
       this.showEditDialog = true;
     },
     async saveActUpdate() {
-      if (this.newActType) {
-        try {
-          await updateAct(this.selectedActId, { type: this.newActType });
-          await this.fetchActs();
-          this.showEditDialog = false;
-        } catch (error) {
-          alert('Ошибка обновления акта: ' + error.message);
-        }
+      if (!this.newActType) return;
+      this.loading = true;
+      this.error = null;
+      try {
+        await updateAct(this.selectedActId, { type: this.newActType });
+        await this.fetchActs();
+        this.showEditDialog = false;
+      } catch (error) {
+        this.error = error.message || 'Ошибка обновления акта';
+      } finally {
+        this.loading = false;
       }
     },
     exportToPDF() {

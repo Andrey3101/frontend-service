@@ -9,12 +9,15 @@
       class="comment-textarea"
       :rules="[v => !!v.trim() || 'Комментарий не может быть пустым']"
     />
+    <v-alert v-if="error" type="error" dense class="error-alert">
+      {{ error }}
+    </v-alert>
     <div class="button-group">
       <v-btn
         color="primary"
         class="action-btn"
         @click="saveComment"
-        :disabled="!commentText.trim()"
+        :disabled="!commentText.trim() || loading"
         :loading="loading"
       >
         {{ editMode ? 'Сохранить' : 'Добавить' }}
@@ -50,6 +53,7 @@ export default {
     return {
       commentText: '',
       loading: false,
+      error: null,
     };
   },
   computed: {
@@ -65,16 +69,18 @@ export default {
   methods: {
     async saveComment() {
       this.loading = true;
+      this.error = null;
       try {
         if (this.editMode) {
           await updateComment(this.taskId, this.comment.id, this.commentText);
+          this.$emit('comment-saved', 'Комментарий успешно обновлен');
         } else {
           await createComment(this.taskId, this.commentText);
+          this.$emit('comment-saved', 'Комментарий успешно добавлен');
         }
         this.commentText = '';
-        this.$emit('comment-saved');
       } catch (error) {
-        this.$emit('error', 'Не удалось сохранить комментарий: ' + error.message);
+        this.error = error.message || 'Не удалось сохранить комментарий';
       } finally {
         this.loading = false;
       }
