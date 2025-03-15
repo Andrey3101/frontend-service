@@ -32,8 +32,39 @@ async function fetchWithCsrf(url, options = {}) {
   return response;
 }
 
+// Новая функция для запроса сброса пароля
+export async function requestPasswordReset(email) {
+  const response = await fetch(`${AUTHURL}/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  if (!response.ok) throw new Error('Ошибка запроса сброса пароля');
+  return response.json();
+}
+
+// Новая функция для подтверждения сброса пароля
+export async function confirmPasswordReset(token, new_password) {
+  const response = await fetch(`${AUTHURL}/reset-password/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, new_password }),
+  });
+  if (!response.ok) throw new Error('Ошибка подтверждения сброса пароля');
+  return response.json();
+}
+
 export async function getDashboard() {
   const response = await fetchWithCsrf(`${DocumentURL}/report?period=week`); // Исправлено на DocumentURL
+  return response.json();
+}
+
+export async function logoutUser(token) {
+  const response = await fetchWithCsrf(`${AUTHURL}/logout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(token)
+  });
   return response.json();
 }
 
@@ -178,10 +209,10 @@ export async function checkEmailUnique(email) {
 }
 
 export async function createUser(email, password, role) {
-  const response = await fetchWithCsrf(`${AUTHURL}/register`, { // Исправлено на /register
+  const response = await fetchWithCsrf(`${AUTHURL}/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, role, company_name: "Default Company" }), // Добавлено обязательное поле
+    body: JSON.stringify({ email, password, role, company_name: "Default Company" }),
   });
   return response.json();
 }
@@ -221,6 +252,13 @@ export async function updateEmployeeOrder(orderData) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(orderData),
+  });
+  return response.json();
+}
+
+export async function deleteCompany(companyId) {
+  const response = await fetchWithCsrf(`${AUTHURL}/companies/${companyId}`, {
+    method: 'DELETE',
   });
   return response.json();
 }

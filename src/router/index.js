@@ -11,6 +11,8 @@ import ActsDetail from '../components/ActsDetail.vue';
 import UsersDetail from '../components/UsersDetail.vue';
 import ReportsDetail from '../components/ReportsDetail.vue';
 import TaxCalculator from '@/components/TaxCalculator.vue';
+import ResetPassword from '../views/ResetPassword.vue';
+import NotFound from '../views/NotFound.vue';
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -26,6 +28,11 @@ const routes = [
     name: 'TaxCalculator', 
     component: TaxCalculator,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/reset-password',
+    name: 'ResetPassword',
+    component: ResetPassword,
   },
   { 
     path: '/tasks', 
@@ -69,6 +76,15 @@ const routes = [
     path: '/profile', 
     component: Profile, 
     meta: { requiresAuth: true } 
+  },
+  {
+    path: '/404',
+    name: 'NotFound',
+    component: NotFound,
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/404',
   },
 ];
 

@@ -4,6 +4,16 @@
       <v-col>
         <h1 class="page-title">Профиль</h1>
 
+        <!-- Кнопка выхода -->
+        <v-btn
+          color="primary"
+          outlined
+          class="logout-btn"
+          @click="logout"
+        >
+          <v-icon left>mdi-logout</v-icon> Выйти
+        </v-btn>
+
         <v-avatar size="100" class="profile-avatar" v-if="profile.avatar">
           <img :src="profile.avatar" alt="Аватар" />
         </v-avatar>
@@ -74,6 +84,16 @@
                 Отмена
               </v-btn>
             </template>
+            <!-- Кнопка для удаления компании -->
+            <v-btn
+              v-if="profile.role !== 'user'"
+              color="red"
+              outlined
+              class="delete-btn"
+              @click="showDeleteDialog = true"
+            >
+              <v-icon left>mdi-delete</v-icon> Удалить компанию
+            </v-btn>
           </div>
           <p v-if="profile.tasks_endpoint" class="tasks-link">
             Просмотр задач:
@@ -96,6 +116,19 @@
           </v-card>
         </v-dialog>
 
+        <!-- Диалог удаления компании -->
+        <v-dialog v-model="showDeleteDialog" max-width="400" class="custom-dialog">
+          <v-card class="dialog-card">
+            <v-card-title class="dialog-title">Удаление компании</v-card-title>
+            <v-card-text class="dialog-text">Вы уверены, что хотите удалить компанию? Это действие нельзя отменить.</v-card-text>
+            <v-card-actions class="dialog-actions">
+              <v-spacer />
+              <v-btn color="grey" text @click="showDeleteDialog = false" class="dialog-btn">Отмена</v-btn>
+              <v-btn color="red" @click="handleDeleteCompany" class="dialog-btn delete-btn">Удалить</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
         <v-snackbar v-model="snackbar" :timeout="5000" :color="snackbarColor" top>
           {{ snackbarMessage }}
           <template v-slot:action="{ attrs }">
@@ -110,7 +143,7 @@
 </template>
 
 <script>
-import { getProfile, updateProfile } from '../api';
+import { getProfile, updateProfile, deleteCompany, logoutUser } from '../api';
 
 export default {
   data() {
@@ -121,6 +154,7 @@ export default {
       loading: false,
       isEditing: false,
       showConfirmDialog: false,
+      showDeleteDialog: false,
       snackbar: false,
       snackbarMessage: '',
       snackbarColor: 'red',
@@ -158,6 +192,42 @@ export default {
       this.profile = { ...this.originalProfile };
       this.isEditing = false;
       this.$refs.form.resetValidation();
+    },
+    async handleDeleteCompany() {
+      try {
+        await deleteCompany();
+        this.snackbarMessage = 'Компания успешно удалена';
+        this.snackbarColor = 'green';
+        this.snackbar = true;
+
+        // После успешного удаления можно перенаправить пользователя
+        setTimeout(() => {
+          this.$router.push('/login');
+        }, 2000);
+      } catch (error) {
+        this.snackbarMessage = 'Ошибка удаления компании: ' + error.message;
+        this.snackbarColor = 'red';
+        this.snackbar = true;
+      } finally {
+        this.showDeleteDialog = false;
+      }
+    },
+    async logout() {
+      try {
+        await logoutUser(); // Вызов API для выхода из системы
+        this.snackbarMessage = 'Вы успешно вышли из профиля';
+        this.snackbarColor = 'green';
+        this.snackbar = true;
+
+        // После успешного выхода перенаправляем пользователя на страницу входа
+        setTimeout(() => {
+          this.$router.push('/login');
+        }, 2000);
+      } catch (error) {
+        this.snackbarMessage = 'Ошибка выхода из профиля: ' + error.message;
+        this.snackbarColor = 'red';
+        this.snackbar = true;
+      }
     },
   },
 };
@@ -301,5 +371,182 @@ export default {
   .dialog-text {
     font-size: 1rem;
   }
+}
+.button-group {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.action-btn {
+  font-family: 'Gilroy-Medium', sans-serif;
+  text-transform: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  transition: transform 0.2s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+}
+
+.delete-btn {
+  color: white !important;
+  background-color: #e53935 !important; /* Красный цвет */
+  border: none;
+  font-family: 'Gilroy-Bold', sans-serif;
+  text-transform: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  transition: transform 0.2s ease;
+}
+
+.delete-btn:hover {
+  background-color: #c62828 !important; /* Темнее красный при наведении */
+  transform: translateY(-2px);
+}
+
+.dialog-card {
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+
+.dialog-title {
+  font-family: 'Gilroy-Bold', sans-serif;
+  font-size: 1.5rem;
+  color: #1976d2;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.dialog-text {
+  font-family: 'Gilroy-Regular', sans-serif;
+  font-size: 1rem;
+  color: #2c3e50;
+  padding: 20px 24px;
+}
+
+.dialog-actions {
+  padding: 16px 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.dialog-btn {
+  font-family: 'Gilroy-Medium', sans-serif;
+  text-transform: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  transition: transform 0.2s ease;
+}
+
+.dialog-btn:hover {
+  transform: translateY(-2px);
+}
+
+.primary-btn {
+  background-color: #1976d2;
+  color: white !important;
+}
+
+.delete-btn {
+  background-color: #e53935;
+  color: white !important;
+}
+
+@media (max-width: 600px) {
+  .page-title {
+    font-size: 1.75rem;
+  }
+  .profile-form {
+    padding: 16px;
+  }
+  .input-field {
+    margin-bottom: 12px;
+  }
+  .button-group {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .action-btn {
+    width: 100%;
+  }
+}
+.profile-container {
+  padding: 24px;
+  background: #f5f7fa;
+  min-height: 100vh;
+}
+
+.page-title {
+  font-family: 'Gilroy-ExtraBold', sans-serif;
+  font-size: 2.25rem;
+  color: #1976d2;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.logout-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  color: white !important;
+  background-color: #e53935 !important; /* Красный цвет */
+  border: none;
+  font-family: 'Gilroy-Bold', sans-serif;
+  text-transform: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  transition: transform 0.2s ease;
+}
+
+.logout-btn:hover {
+  background-color: #c62828 !important; /* Темнее красный при наведении */
+  transform: translateY(-2px);
+}
+
+.profile-avatar {
+  display: block;
+  margin: 0 auto 20px;
+  border: 2px solid #1976d2;
+}
+
+.profile-form {
+  background: #ffffff;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.input-field {
+  font-family: 'Gilroy-Regular', sans-serif;
+  margin-bottom: 16px;
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.action-btn {
+  font-family: 'Gilroy-Medium', sans-serif;
+  text-transform: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  transition: transform 0.2s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+}
+
+.delete-btn {
+  color: white !important;
+  background-color: #e53935 !important;
 }
 </style>

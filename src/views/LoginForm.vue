@@ -3,10 +3,10 @@
     <v-row justify="center" align="center" class="fill-height">
       <v-col cols="12" sm="8" md="6" lg="4" class="login-col">
         <v-snackbar v-model="showError" color="error" :timeout="5000" top centered>
-          Ошибка входа: неверные данные
+          {{ errorMessage }}
         </v-snackbar>
         <v-snackbar v-model="showSuccess" color="success" :timeout="3000" top centered>
-          Успешный вход! Перенаправляем...
+          {{ successMessage }}
         </v-snackbar>
         <v-card class="login-card" elevation="8">
           <v-card-title class="login-title">Вход</v-card-title>
@@ -61,6 +61,15 @@
               <v-btn
                 text
                 block
+                class="forgot-password-btn"
+                @click="requestResetPassword"
+                aria-label="Восстановить пароль"
+              >
+                Забыли пароль?
+              </v-btn>
+              <v-btn
+                text
+                block
                 class="register-btn"
                 @click="$router.push('/register')"
                 aria-label="Перейти к регистрации"
@@ -77,6 +86,7 @@
 
 <script>
 import { useAuthStore } from '@/stores/auth';
+import { requestPasswordReset } from '@/api/index';
 
 export default {
   name: 'LoginForm',
@@ -91,6 +101,8 @@ export default {
       loading: false,
       showError: false,
       showSuccess: false,
+      errorMessage: 'Ошибка входа: неверные данные',
+      successMessage: 'Успешный вход! Перенаправляем...',
       rules: {
         required: value => !!value || 'Это поле обязательно',
         email: value => {
@@ -117,11 +129,31 @@ export default {
             this.$router.push('/dashboard');
           }, 1500);
         } catch (error) {
+          this.errorMessage = 'Ошибка входа: неверные данные';
           this.showError = true;
           console.error('Ошибка входа:', error);
         } finally {
           this.loading = false;
         }
+      }
+    },
+    async requestResetPassword() {
+      if (!this.email) {
+        this.errorMessage = 'Пожалуйста, введите email для восстановления пароля';
+        this.showError = true;
+        return;
+      }
+      this.loading = true;
+      try {
+        const response = await requestPasswordReset(this.email);
+        this.successMessage = response.message;
+        this.showSuccess = true;
+      } catch (error) {
+        this.errorMessage = error.message || 'Ошибка при запросе сброса пароля';
+        this.showError = true;
+        console.error('Ошибка запроса сброса пароля:', error);
+      } finally {
+        this.loading = false;
       }
     },
   },
@@ -213,5 +245,64 @@ export default {
     padding: 10px 14px; /* Увеличиваем размер кнопок */
     margin-top: 12px;
   }
+}
+
+<style scoped>
+.login-container {
+  height: 100vh;
+}
+
+.login-col {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.login-card {
+  width: 100%;
+  padding: 20px;
+}
+
+.login-title {
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  padding: 16px 0;
+}
+
+.input-field {
+  margin-bottom: 16px;
+}
+
+.login-btn {
+  margin: 20px 0 10px 0;
+  padding: 10px;
+  font-weight: bold;
+}
+
+.forgot-password-btn {
+  margin: 10px 0;
+  color: #1976d2; /* Основной синий цвет Vuetify */
+  text-transform: none;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.forgot-password-btn:hover {
+  color: #1565c0;
+  background-color: rgba(25, 118, 210, 0.1);
+  text-decoration: underline;
+}
+
+.register-btn {
+  margin: 10px 0;
+  color: #666;
+  text-transform: none;
+  font-size: 14px;
+}
+
+.register-btn:hover {
+  color: #333;
+  background-color: rgba(0, 0, 0, 0.05);
 }
 </style>

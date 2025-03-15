@@ -69,6 +69,15 @@
               <v-btn
                 text
                 block
+                class="reset-password-btn"
+                @click="$router.push('/reset-password')"
+                aria-label="Восстановить пароль"
+              >
+                Забыли пароль?
+              </v-btn>
+              <v-btn
+                text
+                block
                 class="login-btn"
                 @click="$router.push('/login')"
                 aria-label="Перейти ко входу"
@@ -138,6 +147,64 @@ export default {
 </script>
 
 <style scoped>
+.register-container {
+  height: 100vh;
+}
+
+.register-col {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.register-card {
+  width: 100%;
+  padding: 20px;
+}
+
+.register-title {
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  padding: 16px 0;
+}
+
+.input-field {
+  margin-bottom: 16px;
+}
+
+.register-btn {
+  margin: 20px 0 10px 0;
+  padding: 10px;
+  font-weight: bold;
+}
+
+.reset-password-btn {
+  margin: 10px 0;
+  color: #9c27b0; /* Фиолетовый цвет для отличия от других кнопок */
+  text-transform: none;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.reset-password-btn:hover {
+  color: #7b1fa2; /* Более темный фиолетовый при наведении */
+  background-color: rgba(156, 39, 176, 0.1); /* Легкий фиолетовый фон */
+  text-decoration: underline;
+}
+
+.login-btn {
+  margin: 10px 0;
+  color: #666;
+  text-transform: none;
+  font-size: 14px;
+}
+
+.login-btn:hover {
+  color: #333;
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
 .register-container {
   height: 100vh;
   display: flex;
