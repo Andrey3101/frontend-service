@@ -9,7 +9,7 @@
       class="comment-textarea"
       :rules="[v => !!v.trim() || 'Комментарий не может быть пустым']"
     />
-    <v-alert v-if="error" type="error" dense class="error-alert">
+    <v-alert v-if="error" type="error" dense class="error-alert" dismissible @input="error = null">
       {{ error }}
     </v-alert>
     <div class="button-group">
@@ -71,22 +71,23 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        if (this.editMode) {
-          await updateComment(this.taskId, this.comment.id, this.commentText);
-          this.$emit('comment-saved', 'Комментарий успешно обновлен');
-        } else {
-          await createComment(this.taskId, this.commentText);
-          this.$emit('comment-saved', 'Комментарий успешно добавлен');
-        }
+        const response = this.editMode
+          ? await updateComment(this.taskId, this.comment.id, this.commentText)
+          : await createComment(this.taskId, this.commentText);
         this.commentText = '';
+        this.$emit('comment-saved', this.editMode ? 'Комментарий успешно обновлен' : 'Комментарий успешно добавлен');
       } catch (error) {
-        this.error = error.message || 'Не удалось сохранить комментарий';
+        const errorMessage = error.response
+          ? error.response.error || error.response.detail || error.message
+          : error.message || 'Не удалось сохранить комментарий';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }
     },
     cancel() {
       this.commentText = '';
+      this.error = null;
       this.$emit('cancel');
     },
   },

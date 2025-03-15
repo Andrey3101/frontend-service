@@ -10,13 +10,8 @@
           size="50"
           class="loading-spinner"
         />
-        <v-alert v-else-if="error" type="error" dense class="error-alert">
+        <v-alert v-else-if="error" type="error" dense class="error-alert" dismissible @input="error = null">
           {{ error }}
-          <template v-slot:action="{ attrs }">
-            <v-btn color="white" text v-bind="attrs" @click="error = null" class="error-close-btn">
-              Закрыть
-            </v-btn>
-          </template>
         </v-alert>
         <v-card v-else elevation="4" class="detail-card animate__animated animate__fadeInUp">
           <v-card-title class="card-title">
@@ -138,11 +133,16 @@ export default {
 
     const fetchAct = async () => {
       loading.value = true;
+      error.value = null;
       try {
-        act.value = await getAct(route.params.id);
+        const response = await getAct(route.params.id);
+        act.value = response;
         editData.value = { ...act.value };
       } catch (err) {
-        error.value = err.message || 'Не удалось загрузить акт';
+        const errorMessage = err.response
+          ? err.response.error || err.response.detail || err.message
+          : err.message || 'Не удалось загрузить акт';
+        error.value = errorMessage;
       } finally {
         loading.value = false;
       }
@@ -164,6 +164,7 @@ export default {
     const confirmSave = () => {
       if (!editData.value.title) return;
       showConfirmDialog.value = true;
+      error.value = null;
     };
 
     const saveAct = async () => {
@@ -175,7 +176,10 @@ export default {
         showEditModal.value = false;
         showConfirmDialog.value = false;
       } catch (err) {
-        error.value = err.message || 'Не удалось сохранить изменения';
+        const errorMessage = err.response
+          ? err.response.error || err.response.detail || err.message
+          : err.message || 'Не удалось сохранить изменения';
+        error.value = errorMessage;
       } finally {
         loading.value = false;
       }

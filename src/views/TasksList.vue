@@ -29,7 +29,7 @@
           </v-col>
         </v-row>
         <v-progress-linear v-if="loading" indeterminate color="blue" class="loading-bar" />
-        <v-alert v-if="error" type="error" dense class="error-alert">
+        <v-alert v-if="error" type="error" dense class="error-alert" dismissible @input="error = null">
           {{ error }}
         </v-alert>
         <v-data-table
@@ -194,10 +194,13 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        const data = await getMyTasks();
-        this.tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+        const response = await getMyTasks();
+        this.tasks = Array.isArray(response?.tasks) ? response.tasks : [];
       } catch (error) {
-        this.error = error.message || 'Не удалось загрузить задачи';
+        const errorMessage = error.response
+          ? error.response.error || error.response.detail || error.message
+          : error.message || 'Не удалось загрузить задачи';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }
@@ -206,10 +209,13 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        const data = await getUsers();
-        this.users = Array.isArray(data) ? data : [];
+        const response = await getUsers();
+        this.users = Array.isArray(response) ? response : [];
       } catch (error) {
-        this.error = error.message || 'Не удалось загрузить пользователей';
+        const errorMessage = error.response
+          ? error.response.error || error.response.detail || error.message
+          : error.message || 'Не удалось загрузить пользователей';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }
@@ -224,7 +230,10 @@ export default {
         this.showCreateForm = false;
         this.newTask = { title: '', description: '', priority: 'Средний', status: 'Новая', assignee: '', due_date: '' };
       } catch (error) {
-        this.error = error.message || 'Не удалось создать задачу';
+        const errorMessage = error.response
+          ? error.response.error || error.response.detail || error.message
+          : error.message || 'Не удалось создать задачу';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }
@@ -232,6 +241,7 @@ export default {
     editTask(task) {
       this.editTask = { ...task };
       this.showEditForm = true;
+      this.error = null;
     },
     async updateTask() {
       if (!this.isEditFormValid) return;
@@ -242,7 +252,10 @@ export default {
         await this.fetchTasks();
         this.showEditForm = false;
       } catch (error) {
-        this.error = error.message || 'Не удалось обновить задачу';
+        const errorMessage = error.response
+          ? error.response.error || error.response.detail || error.message
+          : error.message || 'Не удалось обновить задачу';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }
@@ -250,6 +263,7 @@ export default {
     confirmDeleteTask(taskId) {
       this.deleteTaskId = taskId;
       this.showDeleteConfirm = true;
+      this.error = null;
     },
     async deleteTask() {
       this.loading = true;
@@ -260,7 +274,10 @@ export default {
         this.showDeleteConfirm = false;
         this.deleteTaskId = null;
       } catch (error) {
-        this.error = error.message || 'Не удалось удалить задачу';
+        const errorMessage = error.response
+          ? error.response.error || error.response.detail || error.message
+          : error.message || 'Не удалось удалить задачу';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }

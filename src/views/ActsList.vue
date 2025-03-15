@@ -21,7 +21,7 @@
           </v-btn>
         </v-btn-toggle>
         <v-progress-linear v-if="loading" indeterminate color="blue" class="loading-bar" />
-        <v-alert v-if="error" type="error" dense class="error-alert">
+        <v-alert v-if="error" type="error" dense class="error-alert" dismissible @input="error = null">
           {{ error }}
         </v-alert>
         <v-list class="acts-list elevation-1">
@@ -117,10 +117,13 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        const data = await getActs();
-        this.acts = Array.isArray(data) ? data : [];
+        const response = await getActs();
+        this.acts = Array.isArray(response) ? response : [];
       } catch (error) {
-        this.error = error.message || 'Ошибка загрузки актов';
+        const errorMessage = error.response
+          ? error.response.error || error.response.detail || error.message
+          : error.message || 'Ошибка загрузки актов';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }
@@ -132,6 +135,7 @@ export default {
       this.selectedActId = actId;
       this.newActType = this.acts.find((act) => act.id === actId)?.type || '';
       this.showEditDialog = true;
+      this.error = null;
     },
     async saveActUpdate() {
       if (!this.newActType) return;
@@ -142,7 +146,10 @@ export default {
         await this.fetchActs();
         this.showEditDialog = false;
       } catch (error) {
-        this.error = error.message || 'Ошибка обновления акта';
+        const errorMessage = error.response
+          ? error.response.error || error.response.detail || error.message
+          : error.message || 'Ошибка обновления акта';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }

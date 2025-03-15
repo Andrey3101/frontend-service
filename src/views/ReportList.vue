@@ -24,7 +24,7 @@
           </v-btn>
         </v-btn-toggle>
         <v-progress-linear v-if="loading" indeterminate color="blue" class="loading-bar" />
-        <v-alert v-if="error" type="error" dense class="error-alert">
+        <v-alert v-if="error" type="error" dense class="error-alert" dismissible @input="error = null">
           {{ error }}
         </v-alert>
         <v-data-table
@@ -147,10 +147,13 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        const data = await getReports();
-        this.reports = Array.isArray(data) ? data : [];
+        const response = await getReports();
+        this.reports = Array.isArray(response) ? response : [];
       } catch (error) {
-        this.error = error.message || 'Не удалось загрузить отчеты';
+        const errorMessage = error.response
+          ? error.response.error || error.response.detail || error.message
+          : error.message || 'Не удалось загрузить отчеты';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }
@@ -159,10 +162,13 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        const data = await getUsers();
-        this.users = Array.isArray(data) ? data : [];
+        const response = await getUsers();
+        this.users = Array.isArray(response) ? response : [];
       } catch (error) {
-        this.error = error.message || 'Не удалось загрузить пользователей';
+        const errorMessage = error.response
+          ? error.response.error || error.response.detail || error.message
+          : error.message || 'Не удалось загрузить пользователей';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }
@@ -178,7 +184,10 @@ export default {
         await this.fetchReports();
         this.showGenerateForm = false;
       } catch (error) {
-        this.error = error.message || 'Не удалось сгенерировать отчет';
+        const errorMessage = error.response
+          ? error.response.error || error.response.detail || error.message
+          : error.message || 'Не удалось сгенерировать отчет';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }
@@ -186,6 +195,7 @@ export default {
     viewReport(report) {
       this.selectedReport = report;
       this.showReport = true;
+      this.error = null;
     },
     exportToPDF() {
       const doc = new jsPDF();
