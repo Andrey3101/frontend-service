@@ -2,9 +2,9 @@
   <v-container class="tasks-container">
     <v-row>
       <v-col>
-        <h1>Мои задачи</h1>
-        <v-btn color="primary" @click="showCreateForm = true" class="create-btn">
-          Создать задачу
+        <h1 class="page-title">Мои задачи</h1>
+        <v-btn color="primary" @click="showCreateForm = true" class="create-btn elevation-2">
+          <v-icon left>mdi-plus</v-icon> Создать задачу
         </v-btn>
         <v-row class="filters">
           <v-col cols="12" sm="6">
@@ -15,6 +15,7 @@
               outlined
               dense
               @change="applyFilters"
+              class="filter-select"
             />
           </v-col>
           <v-col cols="12" sm="6">
@@ -25,6 +26,7 @@
               outlined
               dense
               @change="applyFilters"
+              class="filter-autocomplete"
             />
           </v-col>
         </v-row>
@@ -36,29 +38,29 @@
           :headers="headers"
           :items="filteredTasks"
           item-key="task_id"
-          class="tasks-table"
+          class="tasks-table elevation-1"
           v-model:sort-by="sortBy"
           v-model:sort-desc="sortDesc"
           @click:row="rowClicked"
         >
           <template v-slot:item.actions="{ item }">
-            <v-btn icon class="edit" @click.stop="editTask(item)">
+            <v-btn icon class="edit-btn" @click.stop="editTask(item)">
               <v-icon>mdi-pencil</v-icon>
             </v-btn>
-            <v-btn icon class="delete" @click.stop="confirmDeleteTask(item.task_id)">
+            <v-btn icon class="delete-btn" @click.stop="confirmDeleteTask(item.task_id)">
               <v-icon>mdi-delete</v-icon>
             </v-btn>
           </template>
         </v-data-table>
         <!-- Диалог создания -->
-        <v-dialog v-model="showCreateForm" max-width="600px">
-          <v-card>
-            <v-card-title>Создание задачи</v-card-title>
-            <v-card-text>
-              <v-text-field v-model="newTask.title" label="Название" outlined :rules="[v => !!v || 'Введите название']" />
-              <v-textarea v-model="newTask.description" label="Описание" outlined />
-              <v-select v-model="newTask.priority" :items="priorities" label="Приоритет" outlined :rules="[v => !!v || 'Выберите приоритет']" />
-              <v-select v-model="newTask.status" :items="statuses" label="Статус" outlined :rules="[v => !!v || 'Выберите статус']" />
+        <v-dialog v-model="showCreateForm" max-width="600px" persistent>
+          <v-card class="dialog-card">
+            <v-card-title class="dialog-title">Создание задачи</v-card-title>
+            <v-card-text class="dialog-content">
+              <v-text-field v-model="newTask.title" label="Название" outlined :rules="[v => !!v || 'Введите название']" class="input-field" />
+              <v-textarea v-model="newTask.description" label="Описание" outlined class="input-field" />
+              <v-select v-model="newTask.priority" :items="priorities" label="Приоритет" outlined :rules="[v => !!v || 'Выберите приоритет']" class="input-field" />
+              <v-select v-model="newTask.status" :items="statuses" label="Статус" outlined :rules="[v => !!v || 'Выберите статус']" class="input-field" />
               <v-autocomplete
                 v-model="newTask.assignee"
                 :items="users"
@@ -67,25 +69,26 @@
                 label="Исполнитель"
                 outlined
                 :rules="assigneeRules"
+                class="input-field"
               />
-              <v-text-field v-model="newTask.due_date" label="Срок (YYYY-MM-DD)" outlined :rules="dateRules" />
+              <v-text-field v-model="newTask.due_date" label="Срок (YYYY-MM-DD)" outlined :rules="dateRules" class="input-field" />
             </v-card-text>
-            <v-card-actions>
+            <v-card-actions class="dialog-actions">
               <v-spacer />
-              <v-btn color="grey" text @click="showCreateForm = false">Отмена</v-btn>
-              <v-btn color="primary" @click="createTask" :disabled="!isCreateFormValid">Создать</v-btn>
+              <v-btn color="grey" text @click="showCreateForm = false" class="dialog-btn">Отмена</v-btn>
+              <v-btn color="primary" @click="createTask" :disabled="!isCreateFormValid" class="dialog-btn primary-btn">Создать</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
         <!-- Диалог редактирования -->
-        <v-dialog v-model="showEditForm" max-width="600px">
-          <v-card>
-            <v-card-title>Редактирование задачи</v-card-title>
-            <v-card-text>
-              <v-text-field v-model="editTask.title" label="Название" outlined :rules="[v => !!v || 'Введите название']" />
-              <v-textarea v-model="editTask.description" label="Описание" outlined />
-              <v-select v-model="editTask.priority" :items="priorities" label="Приоритет" outlined :rules="[v => !!v || 'Выберите приоритет']" />
-              <v-select v-model="editTask.status" :items="statuses" label="Статус" outlined :rules="[v => !!v || 'Выберите статус']" />
+        <v-dialog v-model="showEditForm" max-width="600px" persistent>
+          <v-card class="dialog-card">
+            <v-card-title class="dialog-title">Редактирование задачи</v-card-title>
+            <v-card-text class="dialog-content">
+              <v-text-field v-model="editTask.title" label="Название" outlined :rules="[v => !!v || 'Введите название']" class="input-field" />
+              <v-textarea v-model="editTask.description" label="Описание" outlined class="input-field" />
+              <v-select v-model="editTask.priority" :items="priorities" label="Приоритет" outlined :rules="[v => !!v || 'Выберите приоритет']" class="input-field" />
+              <v-select v-model="editTask.status" :items="statuses" label="Статус" outlined :rules="[v => !!v || 'Выберите статус']" class="input-field" />
               <v-autocomplete
                 v-model="editTask.assignee"
                 :items="users"
@@ -94,25 +97,26 @@
                 label="Исполнитель"
                 outlined
                 :rules="assigneeRules"
+                class="input-field"
               />
-              <v-text-field v-model="editTask.due_date" label="Срок (YYYY-MM-DD)" outlined :rules="dateRules" />
+              <v-text-field v-model="editTask.due_date" label="Срок (YYYY-MM-DD)" outlined :rules="dateRules" class="input-field" />
             </v-card-text>
-            <v-card-actions>
+            <v-card-actions class="dialog-actions">
               <v-spacer />
-              <v-btn color="grey" text @click="showEditForm = false">Отмена</v-btn>
-              <v-btn color="primary" @click="updateTask" :disabled="!isEditFormValid">Сохранить</v-btn>
+              <v-btn color="grey" text @click="showEditForm = false" class="dialog-btn">Отмена</v-btn>
+              <v-btn color="primary" @click="updateTask" :disabled="!isEditFormValid" class="dialog-btn primary-btn">Сохранить</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
         <!-- Подтверждение удаления -->
-        <v-dialog v-model="showDeleteConfirm" max-width="400px">
-          <v-card>
-            <v-card-title class="delete-confirm-title">Удаление задачи</v-card-title>
-            <v-card-text>Вы уверены, что хотите удалить задачу?</v-card-text>
-            <v-card-actions>
+        <v-dialog v-model="showDeleteConfirm" max-width="400px" persistent>
+          <v-card class="dialog-card">
+            <v-card-title class="dialog-title delete-confirm-title">Удаление задачи</v-card-title>
+            <v-card-text class="dialog-text">Вы уверены, что хотите удалить задачу?</v-card-text>
+            <v-card-actions class="dialog-actions">
               <v-spacer />
-              <v-btn color="grey" text @click="showDeleteConfirm = false">Отмена</v-btn>
-              <v-btn color="red" @click="deleteTask">Удалить</v-btn>
+              <v-btn color="grey" text @click="showDeleteConfirm = false" class="dialog-btn">Отмена</v-btn>
+              <v-btn color="red" @click="deleteTask" class="dialog-btn delete-btn">Удалить</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
@@ -302,11 +306,174 @@ export default {
 </script>
 
 <style scoped>
+.tasks-container {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.page-title {
+  font-size: 2rem;
+  font-weight: 500;
+  color: #1976d2;
+  margin-bottom: 20px;
+}
+
+.create-btn {
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+}
+
+.create-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 .filters {
   margin-bottom: 20px;
+  gap: 16px;
+}
+
+.filter-select,
+.filter-autocomplete {
+  border-radius: 8px;
+}
+
+.loading-bar {
+  margin-bottom: 16px;
+  border-radius: 4px;
+}
+
+.error-alert {
+  margin-bottom: 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
 }
 
 .tasks-table {
   cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tasks-table :deep(.v-data-table-header th) {
+  background-color: #f5f7fa;
+  color: #333;
+  font-weight: 600;
+}
+
+.tasks-table :deep(tr:hover) {
+  background-color: #e3f2fd !important;
+  transition: background-color 0.2s ease;
+}
+
+.edit-btn,
+.delete-btn {
+  transition: all 0.3s ease;
+}
+
+.edit-btn:hover {
+  color: #1976d2;
+  transform: scale(1.1);
+}
+
+.delete-btn:hover {
+  color: #d32f2f;
+  transform: scale(1.1);
+}
+
+.dialog-card {
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.dialog-title {
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: #333;
+  background-color: #f5f7fa;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.dialog-content {
+  padding: 20px;
+}
+
+.input-field {
+  margin-bottom: 16px;
+  border-radius: 8px;
+}
+
+.dialog-actions {
+  padding: 16px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.dialog-btn {
+  border-radius: 6px;
+  padding: 6px 16px;
+  transition: all 0.3s ease;
+}
+
+.dialog-btn:hover {
+  transform: translateY(-1px);
+}
+
+.primary-btn {
+  background-color: #1976d2;
+  color: white;
+}
+
+.primary-btn:hover {
+  background-color: #1565c0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.delete-btn {
+  background-color: #d32f2f;
+  color: white;
+}
+
+.delete-btn:hover {
+  background-color: #b71c1c;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.delete-confirm-title {
+  color: #d32f2f;
+}
+
+.dialog-text {
+  font-size: 1rem;
+  color: #555;
+  padding: 16px;
+}
+
+/* Адаптивность */
+@media (max-width: 600px) {
+  .page-title {
+    font-size: 1.5rem;
+  }
+
+  .create-btn {
+    width: 100%;
+    margin-bottom: 16px;
+  }
+
+  .filters {
+    flex-direction: column;
+  }
+
+  .tasks-table :deep(.v-data-table-header th),
+  .tasks-table :deep(td) {
+    font-size: 0.85rem;
+    padding: 8px;
+  }
+
+  .edit-btn,
+  .delete-btn {
+    margin: 0 4px;
+  }
 }
 </style>
