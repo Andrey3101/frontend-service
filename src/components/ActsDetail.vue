@@ -139,9 +139,7 @@ export default {
         act.value = response;
         editData.value = { ...act.value };
       } catch (err) {
-        const errorMessage = err.response
-          ? err.response.error || err.response.detail || err.message
-          : err.message || 'Не удалось загрузить акт';
+        const errorMessage = err.response?.error || err.response?.detail || err.message || 'Не удалось загрузить акт';
         error.value = errorMessage;
       } finally {
         loading.value = false;

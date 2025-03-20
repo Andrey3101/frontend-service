@@ -1,97 +1,69 @@
+<!-- src/components/VoiceRecorderForm.vue -->
 <template>
-  <div>
-    <v-snackbar
-      v-model="showError"
-      color="error"
-      :timeout="5000"
-      top
-      centered
-      class="mic-error-snackbar"
-      aria-label="Ошибка доступа к микрофону"
-    >
-      Доступ к микрофону не получен
-    </v-snackbar>
-    <v-btn
-      color="secondary"
-      class="voice-recorder-btn"
-      :class="{ recording: isRecording }"
-      @click="startRecording"
-      elevation="4"
-      v-if="!isRecording"
-      aria-label="Начать запись голоса"
-    >
-      Начать запись
-      <img src ="@/assets/sidebaricon/microfone.svg" class="custom-icon" alt="Microfone">
-    </v-btn>
-    <v-btn
-      color="secondary"
-      class="voice-recorder-btn"
-      @click="stopRecording"
-      elevation="4"
-      v-else
-      aria-label="Остановить запись голоса"
-    >
-      Остановить запись
-      <img src ="@/assets/sidebaricon/stop.svg" class="custom-icon" alt="Stop">
-    </v-btn>
-  </div>
+  <v-card>
+    <v-card-title>Голосовая запись</v-card-title>
+    <v-card-text>
+      <v-btn @click="startRecording" :disabled="isRecording">Начать запись</v-btn>
+      <v-btn @click="stopRecording" :disabled="!isRecording">Остановить</v-btn>
+      <v-alert v-if="result" type="success">{{ result.command }}</v-alert>
+      <v-alert v-if="error" type="error">{{ error }}</v-alert>
+    </v-card-text>
+  </v-card>
 </template>
 
 <script>
-import { processVoice } from '@/api/index.js';
+import { analyzeVoice } from '@/api';
 
 export default {
   data() {
     return {
       isRecording: false,
-      showError: false,
-      mediaRecorder: null,
-      audioChunks: [],
+      recorder: null,
+      result: null,
+      error: null,
     };
   },
   methods: {
     async startRecording() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        this.mediaRecorder = new MediaRecorder(stream);
-        this.audioChunks = [];
-        this.mediaRecorder.ondataavailable = (event) => {
-          this.audioChunks.push(event.data);
+        this.recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        const chunks = [];
+        this.recorder.ondataavailable = (e) => chunks.push(e.data);
+        this.recorder.onstop = async () => {
+          stream.getTracks().forEach(track => track.stop());
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          await this.sendAudio(blob);
         };
-        this.mediaRecorder.onstop = this.handleStop;
-        this.mediaRecorder.start();
+        this.recorder.start();
         this.isRecording = true;
-        this.showError = false;
-        this.$emit('recording-started');
-        console.log('Recording started:', stream);
-      } catch (error) {
-        this.showError = true;
-        console.error('Microphone access denied:', error);
+      } catch (err) {
+        this.error = 'Ошибка доступа к микрофону: ' + err.message;
       }
     },
     stopRecording() {
-      if (this.mediaRecorder && this.isRecording) {
-        this.mediaRecorder.stop();
-        this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      if (this.recorder) {
+        this.recorder.stop();
         this.isRecording = false;
-        this.$emit('recording-stopped');
       }
     },
-    async handleStop() {
-      const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-      const audioBase64 = await this.blobToBase64(audioBlob);
+    async sendAudio(blob) {
       try {
-        const response = await processVoice(audioBase64, 'webm');
-        this.$emit('voice-processed', response);
-      } catch (error) {
-        console.error('Voice processing failed:', error);
-        this.$emit('voice-error', error.message);
+        const base64 = await this.blobToBase64(blob);
+        const response = await analyzeVoice({ audio_file: base64, format: 'webm' });
+        this.result = response;
+        this.error = null;
+        if (response.action?.type === 'create_task') {
+          this.$emit('taskCreated', response.action.data);
+        }
+      } catch (err) {
+        this.error = 'Ошибка обработки аудио: ' + err.message;
       }
     },
     blobToBase64(blob) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result.split(',')[1]); // Убираем "data:audio/webm;base64,"
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });

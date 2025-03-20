@@ -1,6 +1,6 @@
 <template>
   <div>
-    <v-app-bar app flat color="primary" dark>
+    <v-app-bar app flat color="primary" dark class="app-bar">
       <div class="user-info" v-if="user">
         <span class="user-name">{{ user.name }}</span>
         <span class="user-phone">{{ user.phone }}</span>
@@ -86,7 +86,7 @@
             <v-badge v-if="notifications.length" color="red" :content="notifications.length" overlap />
           </v-btn>
         </template>
-        <v-list>
+        <v-list class="notification-list">
           <v-list-item v-if="wsError">
             <v-list-item-title class="error-text">Ошибка подключения к уведомлениям</v-list-item-title>
           </v-list-item>
@@ -131,16 +131,7 @@ export default {
   },
   computed: {
     isMobileOnly() {
-      const mobile = this.$vuetify?.breakpoint?.xsOnly ?? window.innerWidth < 600;
-      return mobile;
-    },
-    isTablet() {
-      const tablet = this.$vuetify?.breakpoint?.smOnly ?? (window.innerWidth >= 600 && window.innerWidth < 960);
-      return tablet;
-    },
-    isDesktop() {
-      const desktop = this.$vuetify?.breakpoint?.mdAndUp ?? window.innerWidth >= 960;
-      return desktop;
+      return this.$vuetify?.breakpoint?.xsOnly ?? window.innerWidth < 600;
     },
   },
   async mounted() {
@@ -157,9 +148,7 @@ export default {
     }
   },
   beforeUnmount() {
-    if (this.ws) {
-      this.ws.close();
-    }
+    if (this.ws) this.ws.close();
   },
   watch: {
     notifications(newNotifications) {
@@ -169,9 +158,7 @@ export default {
   methods: {
     connectToNotifications() {
       const userId = this.user?.user_id || localStorage.getItem('user_id') || 'user123';
-      this.ws = connectWebSocket(userId);
-      this.ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+      this.ws = connectWebSocket('tasks', 'ws/tasks', userId, (data) => {
         const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         this.notifications.push({
           text: data.message,
@@ -179,28 +166,26 @@ export default {
           type: data.type || 'info',
           read: false,
         });
-        if (this.notifications.length > 10) {
-          this.notifications.shift();
-        }
+        if (this.notifications.length > 10) this.notifications.shift();
         this.wsError = false;
         this.playNotificationSound();
         this.showToast(data.message);
+      });
+      this.ws.onopen = () => {
+        this.ws.send(JSON.stringify({ partition: new Date().toISOString().slice(0, 7) }));
       };
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
         this.wsError = true;
       };
       this.ws.onclose = () => {
-        console.log('WebSocket closed, attempting to reconnect...');
+        console.log('WebSocket closed, reconnecting...');
         this.wsError = true;
-        setTimeout(() => {
-          this.wsError = false;
-          this.connectToNotifications();
-        }, 2000);
+        setTimeout(() => this.connectToNotifications(), 2000);
       };
     },
     playNotificationSound() {
-      const audio = new Audio('/sounds/notification.mp3'); // Используем public/sounds
+      const audio = new Audio('/sounds/notification.mp3');
       audio.play().catch(err => console.error('Audio error:', err));
     },
     showToast(message) {

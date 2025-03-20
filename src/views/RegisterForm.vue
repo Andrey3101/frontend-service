@@ -55,6 +55,76 @@
                 :rules="[rules.required, rules.minLength]"
                 aria-label="Введите ваш пароль"
               />
+              <v-select
+                v-model="companyType"
+                :items="companyTypes"
+                label="Тип компании"
+                prepend-icon="mdi-domain"
+                class="input-field"
+                :rules="[rules.required]"
+                aria-label="Выберите тип компании"
+              />
+
+              <!-- Поля для самозанятого -->
+              <div v-if="companyType === 'Самозанятый'" class="company-fields">
+                <v-text-field
+                  v-model="selfEmployedData.inn"
+                  label="ИНН"
+                  prepend-icon="mdi-card-account-details"
+                  class="input-field"
+                  :rules="[rules.required, rules.inn]"
+                  aria-label="Введите ваш ИНН"
+                />
+              </div>
+
+              <!-- Поля для ИП -->
+              <div v-if="companyType === 'ИП'" class="company-fields">
+                <v-text-field
+                  v-model="ipData.inn"
+                  label="ИНН"
+                  prepend-icon="mdi-card-account-details"
+                  class="input-field"
+                  :rules="[rules.required, rules.inn]"
+                  aria-label="Введите ваш ИНН"
+                />
+                <v-text-field
+                  v-model="ipData.ogrnip"
+                  label="ОГРНИП"
+                  prepend-icon="mdi-file-document"
+                  class="input-field"
+                  :rules="[rules.required, rules.ogrnip]"
+                  aria-label="Введите ваш ОГРНИП"
+                />
+              </div>
+
+              <!-- Поля для ООО -->
+              <div v-if="companyType === 'ООО'" class="company-fields">
+                <v-text-field
+                  v-model="oooData.companyName"
+                  label="Название компании"
+                  prepend-icon="mdi-office-building"
+                  class="input-field"
+                  :rules="[rules.required]"
+                  aria-label="Введите название компании"
+                />
+                <v-text-field
+                  v-model="oooData.inn"
+                  label="ИНН"
+                  prepend-icon="mdi-card-account-details"
+                  class="input-field"
+                  :rules="[rules.required, rules.inn]"
+                  aria-label="Введите ИНН компании"
+                />
+                <v-text-field
+                  v-model="oooData.ogrn"
+                  label="ОГРН"
+                  prepend-icon="mdi-file-document"
+                  class="input-field"
+                  :rules="[rules.required, rules.ogrn]"
+                  aria-label="Введите ОГРН компании"
+                />
+              </div>
+
               <v-btn
                 type="submit"
                 color="primary"
@@ -109,6 +179,11 @@ export default {
       loading: false,
       showError: false,
       showSuccess: false,
+      companyType: null,
+      companyTypes: ['Самозанятый', 'ИП', 'ООО'],
+      selfEmployedData: { inn: '' },
+      ipData: { inn: '', ogrnip: '' },
+      oooData: { companyName: '', inn: '', ogrn: '' },
       rules: {
         required: value => !!value || 'Это поле обязательно',
         email: value => {
@@ -120,6 +195,9 @@ export default {
           return (cleaned.length === 11 && cleaned.startsWith('7')) || 'Номер должен быть в формате +7(ххх) ххх-хх-хх';
         },
         minLength: value => value.length >= 6 || 'Пароль должен содержать минимум 6 символов',
+        inn: value => /^\d{12}$/.test(value) || 'ИНН должен содержать 12 цифр',
+        ogrnip: value => /^\d{15}$/.test(value) || 'ОГРНИП должен содержать 15 цифр',
+        ogrn: value => /^\d{13}$/.test(value) || 'ОГРН должен содержать 13 цифр',
       },
     };
   },
@@ -128,8 +206,25 @@ export default {
       if (this.$refs.form.validate()) {
         this.loading = true;
         const authStore = useAuthStore();
+        const payload = {
+          name: this.name,
+          email: this.email,
+          phone: this.phone,
+          password: this.password,
+          company_type: this.companyType,
+        };
+
+        // Добавляем данные компании в зависимости от типа
+        if (this.companyType === 'Самозанятый') {
+          payload.company_data = this.selfEmployedData;
+        } else if (this.companyType === 'ИП') {
+          payload.company_data = this.ipData;
+        } else if (this.companyType === 'ООО') {
+          payload.company_data = this.oooData;
+        }
+
         try {
-          await authStore.register(this.name, this.email, this.password, this.phone);
+          await authStore.register(payload);
           this.showSuccess = true;
           setTimeout(() => {
             this.$router.push('/dashboard');
@@ -149,6 +244,8 @@ export default {
 <style scoped>
 .register-container {
   height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 24px;
 }
 
 .register-col {
@@ -159,135 +256,53 @@ export default {
 
 .register-card {
   width: 100%;
-  padding: 20px;
+  padding: 24px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
 .register-title {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1976d2;
   text-align: center;
-  font-size: 24px;
-  font-weight: bold;
-  padding: 16px 0;
+  margin-bottom: 16px;
 }
 
 .input-field {
   margin-bottom: 16px;
 }
 
-.register-btn {
-  margin: 20px 0 10px 0;
-  padding: 10px;
-  font-weight: bold;
-}
-
-.reset-password-btn {
-  margin: 10px 0;
-  color: #9c27b0; /* Фиолетовый цвет для отличия от других кнопок */
-  text-transform: none;
-  font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.reset-password-btn:hover {
-  color: #7b1fa2; /* Более темный фиолетовый при наведении */
-  background-color: rgba(156, 39, 176, 0.1); /* Легкий фиолетовый фон */
-  text-decoration: underline;
-}
-
-.login-btn {
-  margin: 10px 0;
-  color: #666;
-  text-transform: none;
-  font-size: 14px;
-}
-
-.login-btn:hover {
-  color: #333;
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-.register-container {
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #eef2f7 0%, #d9e2ec 100%);
-}
-
-.register-col {
-  display: flex;
-  justify-content: center;
-}
-
-.register-card {
-  padding: 24px;
-  border-radius: 16px;
-  background: #ffffff;
-  width: 100%;
-}
-
-.register-title {
-  font-family: 'Gilroy-ExtraBold', sans-serif;
-  font-size: 1.8rem;
-  color: #1976d2;
-  text-align: center;
-}
-
-.input-field {
-  margin-bottom: 20px;
-  font-family: 'Gilroy-Regular', sans-serif;
+.company-fields {
+  padding: 16px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  margin-bottom: 16px;
 }
 
 .register-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
-  margin-top: 16px;
-  background: linear-gradient(135deg, #1976d2, #42a5f5);
-  color: white;
-  transition: transform 0.2s ease;
+  padding: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0.5px;
+  transition: background-color 0.3s ease;
 }
 
 .register-btn:hover {
-  transform: scale(1.02);
+  background-color: #1565c0;
 }
 
+.reset-password-btn,
 .login-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
-  margin-top: 12px;
-  color: #1565c0;
-  background: #e3f2fd;
-  border-radius: 8px;
-  transition: background 0.2s ease;
+  margin-top: 8px;
+  text-transform: none;
+  color: #1976d2;
 }
 
+.reset-password-btn:hover,
 .login-btn:hover {
-  background: #bbdefb;
-}
-
-/* Адаптация для десктопа */
-@media (min-width: 960px) {
-  .register-card {
-    width: 100%;
-    max-width: 900px;
-  }
-}
-
-/* Адаптация для мобильных устройств (320px) */
-@media (max-width: 320px) {
-  .register-card {
-    padding: 16px;
-    max-width: 280px;
-  }
-  .register-title {
-    font-size: 1.6rem;
-  }
-  .input-field {
-    margin-bottom: 16px;
-    font-size: 1rem;
-  }
-  .register-btn,
-  .login-btn {
-    font-size: 1rem;
-    padding: 10px 14px;
-    margin-top: 12px;
-  }
+  color: #1565c0;
 }
 </style>

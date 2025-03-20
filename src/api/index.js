@@ -1,9 +1,10 @@
-// api/index.js
-const TasksURL = "http://localhost:8000"; // Проверить порт Tasks-service
-const DocumentURL = "http://localhost:5001"; // Исправлено для Documents-service
-const AUTHURL = "http://localhost:8000"; // Порт Auth-service (FastAPI по умолчанию 8000)
-const AISERVICE = "http://localhost:8002"; // Проверить порт AI-service
-const NOTIFICATIONURL = "http://localhost:8003";
+const BASE_URLS = {
+  tasks: 'http://localhost:8000',        // task-service
+  auth: 'http://localhost:8000',         // auth-service
+  ai: 'http://localhost:8002',           // ai-service
+  notifications: 'http://localhost:8003' // notification-service
+};
+
 let csrfToken = localStorage.getItem('csrf_token') || '';
 
 export async function login(email, password) {
@@ -27,6 +28,7 @@ async function fetchWithCsrf(url, options = {}) {
   const headers = {
     'Authorization': `Bearer ${token}`,
     'X-CSRF-Token': csrfToken,
+    'Content-Type': 'application/json',
     ...options.headers,
   };
   try {
@@ -35,7 +37,7 @@ async function fetchWithCsrf(url, options = {}) {
       const errorText = await response.text();
       throw new Error(`Ошибка ${response.status}: ${errorText || response.statusText}`);
     }
-    return response;
+    return response.json();
   } catch (error) {
     console.error('Fetch error:', error);
     throw error;
@@ -80,9 +82,19 @@ export async function logoutUser() {
   return response.json();
 }
 
-export function connectWebSocket(userId) {
+export async function analyzeVoice(data) {
+  return fetchWithCsrf(`${BASE_URLS.ai}/voice`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function connectWebSocket(service, endpoint, userId, onMessage) {
+  if (!BASE_URLS[service]) throw new Error(`Unknown service: ${service}`);
   const token = localStorage.getItem('token');
-  const ws = new WebSocket(`${NOTIFICATIONURL.replace('http', 'ws')}/notifications/ws/${userId}?token=${token}`);
+  const ws = new WebSocket(`ws://${BASE_URLS[service]}/${endpoint}/${userId}?token=${token}`);
+  ws.onmessage = (event) => onMessage(JSON.parse(event.data));
+  ws.onerror = (error) => console.error(`WebSocket error (${service}):`, error);
   return ws;
 }
 
@@ -103,9 +115,9 @@ export async function updateProfile(profile) {
   return response.json();
 }
 
-export async function getMyTasks() {
-  const response = await fetchWithCsrf(`${TasksURL}/tasks/my`);
-  return response.json();
+export async function getMyTasks(params = {}) {
+  const query = new URLSearchParams(params).toString();
+  return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/my?${query}`);
 }
 
 export async function createTask(task) {
@@ -113,6 +125,30 @@ export async function createTask(task) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(task),
+  });
+  return response.json();
+}
+
+export async function analyzeText(text) {
+  const response = await fetchWithCsrf(`${BASE_URLS.ai}/ai/analyze`, {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  });
+  return response.json();
+}
+
+export async function getDocuments() {
+  const response = await fetchWithCsrf(`${BASE_URLS.documents}/documents`);
+  return response.json();
+}
+
+export async function uploadDocument(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await fetchWithCsrf(`${BASE_URLS.documents}/documents`, {
+    method: 'POST',
+    body: formData,
+    headers: { 'Content-Type': undefined }, // FormData сам установит заголовок
   });
   return response.json();
 }
@@ -277,6 +313,11 @@ export async function deleteCompany(companyId) {
 
 export async function getTasks() {
   const response = await fetchWithCsrf(`${TasksURL}/tasks/stats`);
+  return response.json();
+}
+
+export async function getTask(id) {
+  const response = await fetchWithCsrf(`${BASE_URLS.tasks}/tasks/${id}`);
   return response.json();
 }
 
