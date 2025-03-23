@@ -5,21 +5,78 @@ const BASE_URLS = {
   notifications: 'http://localhost:8003' // notification-service
 };
 
+const TIMEOUTS = {
+  default: 10000,      // Общий таймаут (10 секунд)
+  login: 5000,         // Быстрая авторизация (5 секунд)
+  register: 15000,     // Регистрация может быть дольше (15 секунд)
+  googleAuth: 8000,    // Google OAuth (8 секунд)
+  googleCallback: 12000, // Callback может включать дополнительные проверки (12 секунд)
+};
+
 let csrfToken = localStorage.getItem('csrf_token') || '';
 
+async function fetchWithTimeout(url, options = {}, timeoutKey = 'default') {
+  const timeout = TIMEOUTS[timeoutKey] || TIMEOUTS.default;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  const token = localStorage.getItem('token');
+  const csrfToken = localStorage.getItem('csrf_token');
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'X-CSRF-Token': csrfToken,
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      const errorText = await response.text();
+      const error = new Error(`Ошибка ${response.status}: ${errorText || response.statusText}`);
+      error.response = { status: response.status, data: { detail: errorText } };
+      throw error;
+    }
+    return response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+    console.error(`Fetch error (timeout: ${timeout}ms):`, error);
+    throw error;
+  }
+}
+
 export async function login(email, password) {
-  const response = await fetch(`${BASE_URLS.auth}/login`, {
+  const response = await fetchWithTimeout(`${BASE_URLS.auth}/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
-  });
-  if (!response.ok) throw new Error('Login failed');
-  const data = await response.json();
-  localStorage.setItem('token', data.token);
-  localStorage.setItem('csrf_token', data.csrf_token);
-  localStorage.setItem('user_id', data.user_id);
-  csrfToken = data.csrf_token;
-  return data;
+  }, 'login');
+  localStorage.setItem('token', response.token);
+  localStorage.setItem('csrf_token', response.csrf_token);
+  localStorage.setItem('user_id', response.user_id);
+  csrfToken = response.csrf_token;
+  return response;
+}
+
+export async function getGoogleLoginUrl() {
+  return fetchWithTimeout(`${BASE_URLS.auth}/auth/google`);
+}
+
+export async function googleCallback(code, state) {
+  const response = await fetchWithTimeout(
+    `${BASE_URLS.auth}/auth/google/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
+    { method: 'GET' },
+    'googleCallback'
+  );
+  localStorage.setItem('token', response.token);
+  localStorage.setItem('csrf_token', response.csrf_token);
+  localStorage.setItem('user_id', response.user_id);
+  csrfToken = response.csrf_token;
+  return response;
 }
 
 async function fetchWithCsrf(url, options = {}) {
@@ -46,24 +103,18 @@ async function fetchWithCsrf(url, options = {}) {
 
 // Новая функция для запроса сброса пароля
 export async function requestPasswordReset(email) {
-  const response = await fetch(`${BASE_URLS.auth}/reset-password`, {
+  return fetchWithTimeout(`${BASE_URLS.auth}/reset-password`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
-  });
-  if (!response.ok) throw new Error('Ошибка запроса сброса пароля');
-  return response.json();
+  }, 'default');
 }
 
 // Новая функция для подтверждения сброса пароля
 export async function confirmPasswordReset(token, new_password) {
-  const response = await fetch(`${BASE_URLS.auth}/reset-password/confirm`, {
+  return fetchWithTimeout(`${BASE_URLS.auth}/reset-password/confirm`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, new_password }),
-  });
-  if (!response.ok) throw new Error('Ошибка подтверждения сброса пароля');
-  return response.json();
+  }, 'default');
 }
 
 export async function getDashboard() {
@@ -71,10 +122,9 @@ export async function getDashboard() {
 }
 
 export async function logoutUser() {
-  const response = await fetchWithCsrf(`${BASE_URLS.auth}/logout`, {
+  const response = await fetchWithTimeout(`${BASE_URLS.auth}/logout`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  });
+  }, 'default');
   localStorage.removeItem('token');
   localStorage.removeItem('csrf_token');
   localStorage.removeItem('user_id');
@@ -98,18 +148,17 @@ export function connectWebSocket(service, endpoint, userId, onMessage) {
 }
 
 export async function getProfile() {
-  return fetchWithCsrf(`${BASE_URLS.auth}/profile`);
+  return fetchWithTimeout(`${BASE_URLS.auth}/profile`, {}, 'default');
 }
 
 export async function updateProfile(profile) {
   if (profile.inn && !/^\d{10}$|^\d{12}$/.test(profile.inn)) {
     throw new Error("ИНН должен содержать 10 или 12 цифр");
   }
-  return fetchWithCsrf(`${BASE_URLS.auth}/profile`, {
+  return fetchWithTimeout(`${BASE_URLS.auth}/profile`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(profile),
-  });
+  }, 'default');
 }
 
 export async function getMyTasks(params = {}) {

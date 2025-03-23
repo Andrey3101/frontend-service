@@ -1,52 +1,55 @@
 import { defineStore } from 'pinia';
+import { login, logoutUser, getProfile, updateProfile, googleCallback } from '@/api';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    isAuthenticated: !!localStorage.getItem('token'),
-    userName: localStorage.getItem('userName') || '',
-    phone: localStorage.getItem('phone') || '',
+    user: null,
+    token: localStorage.getItem('token') || null,
+    csrfToken: localStorage.getItem('csrf_token') || null,
+    userId: localStorage.getItem('user_id') || null,
   }),
   actions: {
-    async login(email, password, phone) {
-      if (email && password && phone) {
-        localStorage.setItem('token', 'fake-token');
-        localStorage.setItem('userName', 'Иванов Иван');
-        localStorage.setItem('phone', phone);
-        this.isAuthenticated = true;
-        this.userName = 'Иванов Иван';
-        this.phone = phone;
-      } else {
-        throw new Error('Неверные данные');
-      }
+    async login(email, password) {
+      const data = await login(email, password); // Использует 'login'
+      this.userId = data.user_id;
+      this.token = data.token;
+      this.csrfToken = data.csrf_token;
+      this.user = await getProfile();
     },
-    async register(name, email, password, phone) {
-      if (name && email && password && phone) {
-        localStorage.setItem('token', 'fake-token');
-        localStorage.setItem('userName', name);
-        localStorage.setItem('phone', phone);
-        this.isAuthenticated = true;
-        this.userName = name;
-        this.phone = phone;
-      } else {
-        throw new Error('Неверные данные');
-      }
+    async register(payload) {
+      const response = await fetchWithTimeout(`${BASE_URLS.auth}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }, 'register'); // Использует 'register'
+      this.userId = response.user_id;
+      this.token = response.token;
+      this.csrfToken = response.csrf_token;
+      this.user = await getProfile();
     },
-    logout() {
-      localStorage.removeItem('token');
-      localStorage.removeItem('userName');
-      localStorage.removeItem('phone');
-      this.isAuthenticated = false;
-      this.userName = '';
-      this.phone = '';
+    async googleLogin(code, state) {
+      const data = await googleCallback(code, state); // Использует 'googleCallback'
+      this.userId = data.user_id;
+      this.token = data.token;
+      this.csrfToken = data.csrf_token;
+      this.user = await getProfile();
     },
-    setTestToken() {
-      localStorage.setItem('token', 'test-token');
-      localStorage.setItem('userName', 'Тестовый Пользователь');
-      localStorage.setItem('phone', '+7 (999) 000-00-00');
-      this.isAuthenticated = true;
-      this.userName = 'Тестовый Пользователь';
-      this.phone = '+7 (999) 000-00-00';
-      console.log('Тестовый токен установлен через auth store');
+    async logout() {
+      await logoutUser();
+      this.user = null;
+      this.token = null;
+      this.csrfToken = null;
+      this.userId = null;
     },
+    async fetchProfile() {
+      this.user = await getProfile();
+    },
+    async updateProfile(profile) {
+      await updateProfile(profile);
+      this.user = await getProfile();
+    },
+  },
+  getters: {
+    isAuthenticated: (state) => !!state.token,
   },
 });
