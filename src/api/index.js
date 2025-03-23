@@ -8,7 +8,7 @@ const BASE_URLS = {
 let csrfToken = localStorage.getItem('csrf_token') || '';
 
 export async function login(email, password) {
-  const response = await fetch(`${AUTHURL}/login`, {
+  const response = await fetch(`${BASE_URLS.auth}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -46,7 +46,7 @@ async function fetchWithCsrf(url, options = {}) {
 
 // Новая функция для запроса сброса пароля
 export async function requestPasswordReset(email) {
-  const response = await fetch(`${AUTHURL}/reset-password`, {
+  const response = await fetch(`${BASE_URLS.auth}/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email }),
@@ -57,7 +57,7 @@ export async function requestPasswordReset(email) {
 
 // Новая функция для подтверждения сброса пароля
 export async function confirmPasswordReset(token, new_password) {
-  const response = await fetch(`${AUTHURL}/reset-password/confirm`, {
+  const response = await fetch(`${BASE_URLS.auth}/reset-password/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, new_password }),
@@ -67,19 +67,18 @@ export async function confirmPasswordReset(token, new_password) {
 }
 
 export async function getDashboard() {
-  const response = await fetchWithCsrf(`${DocumentURL}/report?period=week`); // Исправлено на DocumentURL
-  return response.json();
+  return fetchWithCsrf(`${BASE_URLS.tasks}/report?period=week`);
 }
 
 export async function logoutUser() {
-  const response = await fetchWithCsrf(`${AUTHURL}/logout`, {
+  const response = await fetchWithCsrf(`${BASE_URLS.auth}/logout`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
   });
   localStorage.removeItem('token');
   localStorage.removeItem('csrf_token');
   localStorage.removeItem('user_id');
-  return response.json();
+  return response;
 }
 
 export async function analyzeVoice(data) {
@@ -99,20 +98,18 @@ export function connectWebSocket(service, endpoint, userId, onMessage) {
 }
 
 export async function getProfile() {
-  const response = await fetchWithCsrf(`${AUTHURL}/profile`);
-  return response.json();
+  return fetchWithCsrf(`${BASE_URLS.auth}/profile`);
 }
 
 export async function updateProfile(profile) {
   if (profile.inn && !/^\d{10}$|^\d{12}$/.test(profile.inn)) {
     throw new Error("ИНН должен содержать 10 или 12 цифр");
   }
-  const response = await fetchWithCsrf(`${AUTHURL}/profile`, {
+  return fetchWithCsrf(`${BASE_URLS.auth}/profile`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(profile),
   });
-  return response.json();
 }
 
 export async function getMyTasks(params = {}) {
@@ -121,243 +118,224 @@ export async function getMyTasks(params = {}) {
 }
 
 export async function createTask(task) {
-  const response = await fetchWithCsrf(`${TasksURL}/tasks`, {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/tasks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(task),
   });
-  return response.json();
 }
 
 export async function analyzeText(text) {
-  const response = await fetchWithCsrf(`${BASE_URLS.ai}/ai/analyze`, {
+  return fetchWithCsrf(`${BASE_URLS.ai}/ai/analyze`, {
     method: 'POST',
     body: JSON.stringify({ text }),
   });
-  return response.json();
 }
 
 export async function getDocuments() {
-  const response = await fetchWithCsrf(`${BASE_URLS.documents}/documents`);
-  return response.json();
+  return fetchWithCsrf(`${BASE_URLS.tasks}/documents`);
 }
 
 export async function uploadDocument(file) {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await fetchWithCsrf(`${BASE_URLS.documents}/documents`, {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/documents`, {
     method: 'POST',
     body: formData,
     headers: { 'Content-Type': undefined }, // FormData сам установит заголовок
   });
-  return response.json();
 }
 
 export async function updateTask(taskId, updates) {
-  const response = await fetchWithCsrf(`${TasksURL}/tasks/${taskId}`, {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/${taskId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   });
-  return response.json();
 }
 
 export async function updateReport(reportId, updates) {
-  const response = await fetchWithCsrf(`${DocumentURL}/reports/${reportId}`, {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/reports/${reportId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   });
-  return response.json();
 }
 
 export async function deleteTask(taskId) {
-  const response = await fetchWithCsrf(`${TasksURL}/tasks/${taskId}`, {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/${taskId}`, {
     method: 'DELETE',
   });
-  return response.json();
 }
 
 export async function getTask(taskId) {
-  const response = await fetchWithCsrf(`${TasksURL}/tasks/${taskId}`);
-  return response.json();
+  return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/${taskId}`);
 }
 
 export async function createComment(taskId, comment) {
-  const response = await fetchWithCsrf(`${TasksURL}/tasks/${taskId}/comments`, {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/${taskId}/comments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: comment }),
   });
-  return response.json();
 }
 
 export async function updateComment(taskId, commentId, comment) {
-  const response = await fetchWithCsrf(`${TasksURL}/tasks/${taskId}/comments/${commentId}`, {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/${taskId}/comments/${commentId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text: comment }),
   });
-  return response.json();
 }
 
 export async function deleteComment(taskId, commentId) {
-  const response = await fetchWithCsrf(`${TasksURL}/tasks/${taskId}/comments/${commentId}`, {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/${taskId}/comments/${commentId}`, {
     method: 'DELETE',
   });
-  return response.json();
 }
 
 export async function processVoice(audioBase64, format, suggestion = null) {
   const body = suggestion ? { ...suggestion } : { audio_file: audioBase64, format };
-  const response = await fetchWithCsrf(`${AISERVICE}/ai/voice/predictive`, {
+  return fetchWithCsrf(`${BASE_URLS.ai}/ai/voice/predictive`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return response.json();
 }
 
 export async function processText(text) {
-  const response = await fetchWithCsrf(`${AISERVICE}/text`, {
+  return fetchWithCsrf(`${BASE_URLS.ai}/text`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
   });
-  return response.json();
 }
 
 export async function getActs() {
-  const response = await fetchWithCsrf(`${DocumentURL}/acts`);
-  return response.json();
+  return fetchWithCsrf(`${BASE_URLS.tasks}/acts`);
 }
 
 export async function updateAct(actId, updates) {
-  const response = await fetchWithCsrf(`${DocumentURL}/acts/${actId}`, {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/acts/${actId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   });
-  return response.json();
 }
 
 export async function getAct(actId) {
-  const response = await fetchWithCsrf(`${DocumentURL}/acts/${actId}`);
-  return response.json();
+  return fetchWithCsrf(`${BASE_URLS.tasks}/acts/${actId}`);
 }
 
 export async function getUsers() {
-  const response = await fetchWithCsrf(`${AUTHURL}/users`);
-  return response.json();
+  return fetchWithCsrf(`${BASE_URLS.auth}/users`);
 }
 
 export async function checkEmailUnique(email) {
-  const response = await fetchWithCsrf(`${AUTHURL}/users/check-email?email=${encodeURIComponent(email)}`);
-  return response.json();
+  return fetchWithCsrf(`${BASE_URLS.auth}/users/check-email?email=${encodeURIComponent(email)}`);
 }
 
 export async function createUser(email, password, role) {
-  const response = await fetchWithCsrf(`${AUTHURL}/register`, {
+  return fetchWithCsrf(`${BASE_URLS.auth}/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, role, company_name: "Default Company" }),
   });
-  return response.json();
 }
 
 export async function updateUser(userId, updates) {
-  const response = await fetchWithCsrf(`${AUTHURL}/users/${userId}`, {
+  return fetchWithCsrf(`${BASE_URLS.auth}/users/${userId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   });
-  return response.json();
 }
 
 export async function deleteUser(userId) {
-  const response = await fetchWithCsrf(`${AUTHURL}/users/${userId}`, {
+  return fetchWithCsrf(`${BASE_URLS.auth}/users/${userId}`, {
     method: 'DELETE',
   });
-  return response.json();
 }
 
 export async function generateReport(filters) {
-  const response = await fetchWithCsrf(`${DocumentURL}/reports`, {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/reports`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(filters),
   });
-  return response.json();
 }
 
 export async function getReports() {
-  const response = await fetchWithCsrf(`${DocumentURL}/reports`);
-  return response.json();
+  return fetchWithCsrf(`${BASE_URLS.tasks}/reports`);
 }
 
 export async function updateEmployeeOrder(orderData) {
-  const response = await fetchWithCsrf(`${AUTHURL}/employees/order`, {
+  return fetchWithCsrf(`${BASE_URLS.auth}/employees/order`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(orderData),
   });
-  return response.json();
 }
 
 export async function deleteCompany(companyId) {
-  const response = await fetchWithCsrf(`${AUTHURL}/companies/${companyId}`, {
+  return fetchWithCsrf(`${BASE_URLS.auth}/companies/${companyId}`, {
     method: 'DELETE',
   });
-  return response.json();
 }
 
 export async function getTasks() {
-  const response = await fetchWithCsrf(`${TasksURL}/tasks/stats`);
-  return response.json();
-}
-
-export async function getTask(id) {
-  const response = await fetchWithCsrf(`${BASE_URLS.tasks}/tasks/${id}`);
-  return response.json();
+  return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/stats`);
 }
 
 export async function getFinancialEvents() {
-  const response = await fetchWithCsrf(`${TasksURL}/financial-events`);
-  return response.json();
+  return fetchWithCsrf(`${BASE_URLS.tasks}/financial-events`);
 }
 
 export async function calculatePayroll(period) {
-  const response = await fetchWithCsrf(`${AUTHURL}/payroll/calculate`, {
+  return fetchWithCsrf(`${BASE_URLS.auth}/payroll/calculate`, {
     method: 'POST',
     body: JSON.stringify({ period }),
   });
-  return response;
 }
 
 export async function getPayroll(userId) {
-  const response = await fetchWithCsrf(`${AUTHURL}/payroll/${userId}`);
-  return response;
+  return fetchWithCsrf(`${BASE_URLS.auth}/payroll/${userId}`);
+}
+
+// Новая функция для создания повторяющихся задач
+export async function createRecurringTask(taskData) {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/recurring`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(taskData),
+  });
+}
+
+// Новая функция для создания напоминаний о налогах
+export async function createTaxReminders(data) {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/tax-reminders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
 }
 
 export async function startTimeTracking(taskId) {
-  const response = await fetchWithCsrf(`${AUTHURL}/time/start`, {
+  return fetchWithCsrf(`${BASE_URLS.auth}/time/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ task_id: taskId }),
   });
-  return response.json();
 }
 
 export async function stopTimeTracking(taskId) {
-  const response = await fetchWithCsrf(`${AUTHURL}/time/stop`, {
+  return fetchWithCsrf(`${BASE_URLS.auth}/time/stop`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ task_id: taskId }),
   });
-  return response.json();
 }
 
 export async function getTimeReport(period = 'week') {
-  const response = await fetchWithCsrf(`${DocumentURL}/time-report?period=${period}`);
-  return response.json();
+  return fetchWithCsrf(`${BASE_URLS.tasks}/time-report?period=${period}`);
 }

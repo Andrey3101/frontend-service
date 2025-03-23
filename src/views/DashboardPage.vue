@@ -2,34 +2,17 @@
   <v-container class="dashboard-container">
     <v-row>
       <v-col>
-        <h1>Дашборд</h1>
-        <DndContext :collision-detection="closestCenter" @drag-end="onDragEnd">
-          <DroppableWrapper droppable-id="employees">
-            <v-row>
-              <DraggableItem v-for="emp in employeeLoad" :key="emp.user_id" :id="emp.user_id">
-                <v-card class="employee-card" v-animate-onscroll="'fadeInUp'">
-                  <v-card-text>{{ emp.user_id }}: {{ emp.task_count }} задач</v-card-text>
-                </v-card>
-              </DraggableItem>
-            </v-row>
-          </DroppableWrapper>
-        </DndContext>
-
-        <!-- График 1: Задачи за неделю -->
-        <v-row class="mt-6">
-          <v-col>
+        <h1 class="dashboard-title">Дашборд</h1>
+        <v-row>
+          <v-col cols="12" md="6">
             <v-card class="chart-card" v-animate-onscroll="'fadeInUp'">
-              <v-card-title>Задачи за неделю</v-card-title>
+              <v-card-title>Завершено за неделю</v-card-title>
               <v-card-text>
                 <BarChart :chart-data="completedLastWeekData" :chart-options="chartOptions" />
               </v-card-text>
             </v-card>
           </v-col>
-        </v-row>
-
-        <!-- График 2: Сумма за неделю -->
-        <v-row class="mt-6">
-          <v-col>
+          <v-col cols="12" md="6">
             <v-card class="chart-card" v-animate-onscroll="'fadeInUp'">
               <v-card-title>Сумма за неделю</v-card-title>
               <v-card-text>
@@ -38,22 +21,16 @@
             </v-card>
           </v-col>
         </v-row>
-
-        <!-- График 3: Задачи за вчера -->
         <v-row class="mt-6">
-          <v-col>
+          <v-col cols="12" md="6">
             <v-card class="chart-card" v-animate-onscroll="'fadeInUp'">
-              <v-card-title>Задачи за вчера</v-card-title>
+              <v-card-title>Завершено вчера</v-card-title>
               <v-card-text>
                 <BarChart :chart-data="completedYesterdayData" :chart-options="chartOptions" />
               </v-card-text>
             </v-card>
           </v-col>
-        </v-row>
-
-        <!-- График 4: Сумма за вчера -->
-        <v-row class="mt-6">
-          <v-col>
+          <v-col cols="12" md="6">
             <v-card class="chart-card" v-animate-onscroll="'fadeInUp'">
               <v-card-title>Сумма за вчера</v-card-title>
               <v-card-text>
@@ -62,42 +39,51 @@
             </v-card>
           </v-col>
         </v-row>
-
-        <!-- График 5: Задачи на сегодня -->
         <v-row class="mt-6">
-          <v-col>
+          <v-col cols="12" md="6">
             <v-card class="chart-card" v-animate-onscroll="'fadeInUp'">
-              <v-card-title>Задачи на сегодня</v-card-title>
+              <v-card-title>В работе сегодня</v-card-title>
               <v-card-text>
                 <BarChart :chart-data="inProgressTodayData" :chart-options="chartOptions" />
               </v-card-text>
             </v-card>
           </v-col>
         </v-row>
-
-        <!-- График 6: Моя зарплата за период -->
         <v-row class="mt-6">
           <v-col>
             <v-card class="chart-card" v-animate-onscroll="'fadeInUp'">
-              <v-card-title>Моя зарплата за период</v-card-title>
+              <v-card-title>Отчёт о продуктивности</v-card-title>
+              <v-card-text>
+                <v-select
+                  v-model="selectedProductivityPeriod"
+                  :items="productivityPeriods"
+                  label="Период"
+                  outlined
+                  dense
+                  @change="fetchProductivityReport"
+                />
+                <v-progress-linear v-if="productivityLoading" indeterminate color="blue" class="loading-bar mt-2" />
+                <BarChart v-if="productivityData.total_minutes" :chart-data="productivityChartData" :chart-options="chartOptionsSum" />
+                <p v-else-if="!productivityLoading" class="no-data">Нет данных о продуктивности</p>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+        <v-row class="mt-6">
+          <v-col>
+            <v-card class="chart-card" v-animate-onscroll="'fadeInUp'">
+              <v-card-title>Моя зарплата</v-card-title>
               <v-card-text>
                 <v-select
                   v-model="selectedPayrollPeriod"
                   :items="payrollPeriods"
-                  label="Выберите период"
+                  label="Период"
                   outlined
                   dense
                   class="period-select"
                   @change="fetchPayroll"
                 />
-                <v-btn
-                  color="primary"
-                  @click="startPayrollCalculation"
-                  :loading="payrollLoading"
-                  class="calculate-btn"
-                >
-                  Рассчитать
-                </v-btn>
+                <v-btn color="primary" @click="startPayrollCalculation" class="calculate-btn">Рассчитать</v-btn>
                 <v-progress-linear v-if="payrollLoading" indeterminate color="blue" class="loading-bar mt-2" />
                 <BarChart v-if="payrollData.amount" :chart-data="payrollChartData" :chart-options="chartOptionsSum" />
                 <p v-else-if="!payrollLoading" class="no-data">Нет данных о зарплате</p>
@@ -105,8 +91,6 @@
             </v-card>
           </v-col>
         </v-row>
-
-        <!-- График 7: Агрегированная зарплата сотрудников (для админов) -->
         <v-row class="mt-6" v-if="isAdmin">
           <v-col>
             <v-card class="chart-card" v-animate-onscroll="'fadeInUp'">
@@ -134,7 +118,6 @@
                 <BarChart v-if="aggregatePayrollData.length && aggregateView === 'byDepartment'" :chart-data="aggregatePayrollByDepartmentChartData" :chart-options="chartOptionsSum" />
                 <BarChart v-else-if="aggregatePayrollData.length && aggregateView === 'byEmployee'" :chart-data="aggregatePayrollByEmployeeChartData" :chart-options="chartOptionsSum" />
                 <p v-else-if="!aggregateLoading" class="no-data">Нет данных о зарплате сотрудников</p>
-                <!-- Таблица с детализацией -->
                 <v-data-table
                   v-if="aggregatePayrollData.length"
                   :headers="aggregateHeaders"
@@ -160,7 +143,7 @@ import { closestCenter } from '@dnd-kit/core';
 import DraggableItem from '../components/DraggableItem.vue';
 import DroppableWrapper from '../components/DroppableWrapper.vue';
 import BarChart from '../components/BarChart.vue';
-import { getDashboard, updateEmployeeOrder, getTasks, calculatePayroll, getPayroll, getAggregatePayroll } from '../api';
+import { getDashboard, updateEmployeeOrder, getTasks, calculatePayroll, getPayroll, getAggregatePayroll, getProductivityReport } from '../api';
 
 export default {
   components: { DndContext, DraggableItem, DroppableWrapper, BarChart },
@@ -234,6 +217,10 @@ export default {
         { text: 'Отдел', value: 'department' },
         { text: 'Сумма', value: 'amount' },
       ],
+      selectedProductivityPeriod: 'week',
+      productivityPeriods: ['day', 'week', 'month'],
+      productivityLoading: false,
+      productivityData: { total_minutes: 0, task_times: {} },
       isAdmin: false,
     };
   },
@@ -312,14 +299,30 @@ export default {
         }],
       };
     },
+    productivityChartData() {
+      const labels = Object.keys(this.productivityData.task_times);
+      const data = Object.values(this.productivityData.task_times);
+      return {
+        labels,
+        datasets: [{
+          label: 'Время на задачи (мин)',
+          backgroundColor: '#ff5722',
+          borderColor: '#ffffff',
+          borderWidth: 2,
+          data,
+          barThickness: 40,
+          borderRadius: 6,
+          hoverBackgroundColor: '#e64a19',
+        }],
+      };
+    },
   },
   async created() {
     await this.fetchDashboardData();
     await this.fetchPayroll();
     this.isAdmin = localStorage.getItem('user_role') === 'admin';
-    if (this.isAdmin) {
-      await this.fetchAggregatePayroll();
-    }
+    if (this.isAdmin) await this.fetchAggregatePayroll();
+    await this.fetchProductivityReport();
   },
   methods: {
     async fetchDashboardData() {
@@ -391,6 +394,28 @@ export default {
         console.error('Ошибка загрузки агрегированных данных о зарплате:', error);
       } finally {
         this.aggregateLoading = false;
+      }
+    },
+    async fetchProductivityReport() {
+      this.productivityLoading = true;
+      const cacheKey = `productivity_${this.selectedProductivityPeriod}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < 5 * 60 * 1000) {
+          this.productivityData = data;
+          this.productivityLoading = false;
+          return;
+        }
+      }
+      try {
+        const userId = localStorage.getItem('user_id');
+        this.productivityData = await getProductivityReport(userId, this.selectedProductivityPeriod);
+        localStorage.setItem(cacheKey, JSON.stringify({ data: this.productivityData, timestamp: Date.now() }));
+      } catch (error) {
+        console.error('Ошибка загрузки отчёта о продуктивности:', error);
+      } finally {
+        this.productivityLoading = false;
       }
     },
   },

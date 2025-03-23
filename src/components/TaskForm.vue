@@ -9,7 +9,7 @@
             label="Заголовок"
             outlined
             dense
-            :rules="[v => !!v || 'Заголовок обязателен']"
+            :rules="[v => !!v || 'Заголовок обязателен', v => v.length <= 255 || 'Максимум 255 символов']"
             class="input-field"
           />
           <v-select
@@ -27,7 +27,7 @@
             label="Приоритет"
             outlined
             dense
-            :rules="[v => !!v || 'Приоритет обязателен']"
+            :rules="[v => !!v || 'Приоритет обязателен', v => (v >= 1 && v <= 5) || 'Приоритет от 1 до 5']"
             class="input-field"
           />
           <v-text-field
@@ -36,7 +36,7 @@
             type="date"
             outlined
             dense
-            :rules="[v => !!v || 'Дата выполнения обязательна']"
+            :rules="[v => !!v || 'Дата обязательна', v => isValidDate(v) || 'Неверный формат даты']"
             class="input-field"
           />
           <v-autocomplete
@@ -47,7 +47,7 @@
             label="Исполнитель"
             outlined
             dense
-            :loading="usersLoading"
+            :rules="[v => !!v || 'Исполнитель обязателен']"
             class="input-field"
           />
           <v-textarea
@@ -56,26 +56,48 @@
             outlined
             dense
             rows="3"
+            :rules="[v => v.length <= 1000 || 'Максимум 1000 символов']"
+            class="input-field"
+          />
+          <!-- Повторяющиеся задачи -->
+          <v-checkbox v-model="task.isRecurring" label="Повторяющаяся задача" class="checkbox-field" />
+          <div v-if="task.isRecurring">
+            <v-select
+              v-model="task.recurrence.interval"
+              :items="['daily', 'weekly', 'monthly']"
+              label="Интервал"
+              outlined
+              dense
+              :rules="[v => !!v || 'Интервал обязателен']"
+              class="input-field"
+            />
+            <v-text-field
+              v-model="task.recurrence.until"
+              label="До (YYYY-MM-DD)"
+              type="date"
+              outlined
+              dense
+              :rules="[v => !!v || 'Дата окончания обязательна', v => isValidDate(v) || 'Неверный формат даты']"
+              class="input-field"
+            />
+          </div>
+          <!-- Напоминания о налогах -->
+          <v-checkbox v-model="task.isTaxReminder" label="Создать напоминания о налогах" class="checkbox-field" />
+          <v-select
+            v-if="task.isTaxReminder"
+            v-model="task.companyType"
+            :items="['self-employed', 'ip']"
+            label="Тип компании"
+            outlined
+            dense
+            :rules="[v => !!v || 'Тип компании обязателен']"
             class="input-field"
           />
           <div class="button-group">
-            <v-btn
-              type="submit"
-              color="primary"
-              class="action-btn"
-              :disabled="!valid || loading"
-              :loading="loading"
-            >
+            <v-btn type="submit" color="primary" class="action-btn" :disabled="!valid || loading" :loading="loading">
               {{ isEditMode ? 'Сохранить' : 'Создать' }}
             </v-btn>
-            <v-btn
-              color="grey"
-              text
-              class="action-btn"
-              @click="cancel"
-            >
-              Отмена
-            </v-btn>
+            <v-btn color="grey" text class="action-btn" @click="cancel">Отмена</v-btn>
           </div>
         </v-form>
 
@@ -97,7 +119,7 @@
 </template>
 
 <script>
-import { createTask, updateTask, getTask, getUsers } from '../api';
+import { createTask, updateTask, getTask, getUsers, createRecurringTask, createTaxReminders } from '../api';
 
 export default {
   props: {
@@ -115,6 +137,10 @@ export default {
         due_date: null,
         assignee_id: null,
         description: '',
+        isRecurring: false,
+        recurrence: { interval: null, until: null },
+        isTaxReminder: false,
+        companyType: null,
       },
       statusOptions: [
         { text: 'Ожидает', value: 'pending' },
@@ -151,7 +177,7 @@ export default {
       try {
         this.loading = true;
         const taskData = await getTask(this.id);
-        this.task = { ...taskData };
+        this.task = { ...taskData, isRecurring: false, isTaxReminder: false };
       } catch (error) {
         console.error('Ошибка загрузки задачи:', error);
         this.$emit('error', 'Не удалось загрузить задачу');
@@ -170,6 +196,9 @@ export default {
         this.usersLoading = false;
       }
     },
+    isValidDate(date) {
+      return /^\d{4}-\d{2}-\d{2}$/.test(date) && !isNaN(new Date(date).getTime());
+    },
     confirmSave() {
       if (!this.$refs.form.validate()) return;
       this.showConfirmDialog = true;
@@ -177,7 +206,16 @@ export default {
     async saveTask() {
       try {
         this.loading = true;
-        if (this.isEditMode) {
+        if (this.task.isRecurring) {
+          await createRecurringTask({
+            title: this.task.title,
+            description: this.task.description,
+            priority: this.task.priority,
+            recurrence: this.task.recurrence,
+          });
+        } else if (this.task.isTaxReminder) {
+          await createTaxReminders({ companyType: this.task.companyType });
+        } else if (this.isEditMode) {
           await updateTask(this.id, this.task);
           this.$emit('success', 'Задача успешно обновлена');
         } else {

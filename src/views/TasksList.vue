@@ -238,39 +238,22 @@ export default {
     async fetchTasks() {
       this.loading = true;
       this.error = null;
+      const cacheKey = 'my_tasks_' + this.statusFilter + '_' + this.assigneeFilter;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < 5 * 60 * 1000) { // Кэш действителен 5 минут
+          this.tasks = data;
+          this.loading = false;
+          return;
+        }
+      }
       try {
         const response = await getMyTasks();
         const activeTracking = await fetchWithCsrf(`${BASE_URLS.auth}/time/active`);
         const totalTimeResponse = await fetchWithCsrf(`${BASE_URLS.auth}/time/total`);
-        this.tasks = Array.isArray(response?.tasks) ? response.tasks.map(task => {
-          const active = activeTracking.find(t => t.task_id === task.task_id);
-          const totalTime = totalTimeResponse.find(t => t.task_id === task.task_id)?.total_time || 0;
-          if (active) {
-            const startTime = new Date(active.start_time).getTime();
-            const now = Date.now();
-            const elapsedSeconds = Math.floor((now - startTime) / 1000);
-            return {
-              ...task,
-              isTracking: true,
-              loading: false,
-              timeEntryId: active.entry_id,
-              trackingTime: elapsedSeconds,
-              total_time: totalTime + elapsedSeconds,
-              timer: setInterval(() => {
-                task.trackingTime++;
-                task.total_time = totalTime + task.trackingTime;
-              }, 1000),
-            };
-          }
-          return {
-            ...task,
-            isTracking: false,
-            loading: false,
-            timeEntryId: null,
-            trackingTime: 0,
-            total_time: totalTime,
-          };
-        }) : [];
+        this.tasks = Array.isArray(response?.tasks) ? this.processTasks(response.tasks, activeTracking, totalTimeResponse) : [];
+        localStorage.setItem(cacheKey, JSON.stringify({ data: this.tasks, timestamp: Date.now() }));
       } catch (error) {
         const errorMessage = error.response
           ? error.response.error || error.response.detail || error.message
@@ -279,6 +262,37 @@ export default {
       } finally {
         this.loading = false;
       }
+    },
+    processTasks(tasks, activeTracking, totalTimeResponse) {
+      return tasks.map(task => {
+        const active = activeTracking.find(t => t.task_id === task.task_id);
+        const totalTime = totalTimeResponse.find(t => t.task_id === task.task_id)?.total_time || 0;
+        if (active) {
+          const startTime = new Date(active.start_time).getTime();
+          const now = Date.now();
+          const elapsedSeconds = Math.floor((now - startTime) / 1000);
+          return {
+            ...task,
+            isTracking: true,
+            loading: false,
+            timeEntryId: active.entry_id,
+            trackingTime: elapsedSeconds,
+            total_time: totalTime + elapsedSeconds,
+            timer: setInterval(() => {
+              task.trackingTime++;
+              task.total_time = totalTime + task.trackingTime;
+            }, 1000),
+          };
+        }
+        return {
+          ...task,
+          isTracking: false,
+          loading: false,
+          timeEntryId: null,
+          trackingTime: 0,
+          total_time: totalTime,
+        };
+      });
     },
     async fetchUsers() {
       this.loading = true;
@@ -358,7 +372,7 @@ export default {
       }
     },
     applyFilters() {
-      // Локальная фильтрация уже реализована в computed filteredTasks
+      this.fetchTasks();
     },
     async startTracking(task) {
       task.loading = true;
