@@ -103,6 +103,47 @@
           </p>
         </v-form>
 
+        <!-- Раздел "Зарплата" -->
+        <v-card class="payroll-card elevation-2 mt-6">
+          <v-card-title>Моя зарплата</v-card-title>
+          <v-card-text>
+            <v-select
+              v-model="selectedPeriod"
+              :items="periods"
+              label="Выберите период"
+              outlined
+              dense
+              class="period-select"
+            />
+            <v-btn
+              color="primary"
+              @click="startPayrollCalculation"
+              :loading="payrollLoading"
+              class="calculate-btn"
+            >
+              Рассчитать
+            </v-btn>
+            <v-progress-linear v-if="payrollLoading" indeterminate color="blue" class="loading-bar mt-2" />
+            <v-alert v-if="payrollError" type="error" dense class="error-alert mt-2" dismissible @input="payrollError = null">
+              {{ payrollError }}
+            </v-alert>
+            <v-data-table
+              v-if="payrollData.length"
+              :headers="payrollHeaders"
+              :items="payrollData"
+              class="payroll-table mt-4"
+            >
+              <template v-slot:item.amount="{ item }">
+                <span>{{ item.amount.toFixed(2) }} ₽</span>
+              </template>
+              <template v-slot:item.calculated_at="{ item }">
+                <span>{{ formatDate(item.calculated_at) }}</span>
+              </template>
+            </v-data-table>
+            <p v-else-if="!payrollLoading" class="no-data">Нет данных о зарплате</p>
+          </v-card-text>
+        </v-card>
+
         <!-- Диалог подтверждения -->
         <v-dialog v-model="showConfirmDialog" max-width="400" class="custom-dialog">
           <v-card class="dialog-card">
@@ -143,7 +184,8 @@
 </template>
 
 <script>
-import { getProfile, updateProfile, deleteCompany, logoutUser } from '../api';
+import { getProfile, updateProfile, deleteCompany, logoutUser, calculatePayroll, getPayroll } from '../api';
+import dayjs from 'dayjs';
 
 export default {
   data() {
@@ -158,12 +200,23 @@ export default {
       snackbar: false,
       snackbarMessage: '',
       snackbarColor: 'red',
+      selectedPeriod: 'month',
+      periods: ['week', 'month', 'quarter'],
+      payrollLoading: false,
+      payrollError: null,
+      payrollData: [],
+      payrollHeaders: [
+        { text: 'Период', value: 'period' },
+        { text: 'Сумма', value: 'amount' },
+        { text: 'Дата расчета', value: 'calculated_at' },
+      ],
     };
   },
   async created() {
     this.profile = await getProfile();
     this.originalProfile = { ...this.profile };
     this.isEditing = this.profile.editable || false;
+    await this.fetchPayroll();
   },
   methods: {
     confirmSave() {
@@ -199,8 +252,6 @@ export default {
         this.snackbarMessage = 'Компания успешно удалена';
         this.snackbarColor = 'green';
         this.snackbar = true;
-
-        // После успешного удаления можно перенаправить пользователя
         setTimeout(() => {
           this.$router.push('/login');
         }, 2000);
@@ -214,12 +265,10 @@ export default {
     },
     async logout() {
       try {
-        await logoutUser(); // Вызов API для выхода из системы
+        await logoutUser();
         this.snackbarMessage = 'Вы успешно вышли из профиля';
         this.snackbarColor = 'green';
         this.snackbar = true;
-
-        // После успешного выхода перенаправляем пользователя на страницу входа
         setTimeout(() => {
           this.$router.push('/login');
         }, 2000);
@@ -228,6 +277,35 @@ export default {
         this.snackbarColor = 'red';
         this.snackbar = true;
       }
+    },
+    async startPayrollCalculation() {
+      this.payrollLoading = true;
+      this.payrollError = null;
+      try {
+        await calculatePayroll(this.selectedPeriod);
+        setTimeout(async () => {
+          await this.fetchPayroll();
+          this.payrollLoading = false;
+        }, 2000); // Имитация задержки обработки
+      } catch (error) {
+        this.payrollError = error.message || 'Не удалось запустить расчет';
+        this.payrollLoading = false;
+      }
+    },
+    async fetchPayroll() {
+      this.payrollLoading = true;
+      this.payrollError = null;
+      try {
+        const userId = localStorage.getItem('user_id');
+        this.payrollData = await getPayroll(userId);
+      } catch (error) {
+        this.payrollError = error.message || 'Не удалось загрузить данные о зарплате';
+      } finally {
+        this.payrollLoading = false;
+      }
+    },
+    formatDate(date) {
+      return dayjs(date).format('DD.MM.YYYY HH:mm');
     },
   },
 };
@@ -248,251 +326,12 @@ export default {
   text-align: center;
 }
 
-.profile-avatar {
-  display: block;
-  margin: 0 auto 20px;
-  border: 2px solid #1976d2;
-}
-
-.profile-form {
-  background: #ffffff;
-  padding: 24px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-  max-width: 600px;
-  margin: 0 auto;
-}
-
-.input-field {
-  font-family: 'Gilroy-Regular', sans-serif;
-  margin-bottom: 16px;
-}
-
-.button-group {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  margin-top: 20px;
-}
-
-.action-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
-  text-transform: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  transition: transform 0.2s ease;
-}
-
-.action-btn:hover {
-  transform: translateY(-2px);
-}
-
-.tasks-link {
-  font-family: 'Gilroy-Regular', sans-serif;
-  font-size: 1rem;
-  color: #2c3e50;
-  margin-top: 20px;
-  text-align: center;
-}
-
-.link {
-  color: #1976d2;
-  text-decoration: none;
-}
-
-.link:hover {
-  text-decoration: underline;
-}
-
-/* Стили для диалога */
-.dialog-card {
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
-}
-
-.dialog-title {
-  font-family: 'Gilroy-Bold', sans-serif;
-  font-size: 1.5rem;
-  color: #1976d2;
-  padding: 16px 24px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.dialog-text {
-  font-family: 'Gilroy-Regular', sans-serif;
-  font-size: 1.1rem;
-  color: #2c3e50;
-  padding: 20px 24px;
-}
-
-.dialog-actions {
-  padding: 16px 24px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.dialog-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
-  text-transform: none;
-  border-radius: 8px;
-  padding: 8px 16px;
-  transition: transform 0.2s ease;
-}
-
-.dialog-btn:hover {
-  transform: translateY(-2px);
-}
-
-.primary-btn {
-  background-color: #1976d2;
-  color: white !important;
-}
-
-@media (max-width: 600px) {
-  .page-title {
-    font-size: 1.75rem;
-  }
-  .profile-form {
-    padding: 16px;
-  }
-  .input-field {
-    margin-bottom: 12px;
-  }
-  .button-group {
-    flex-direction: column;
-    gap: 8px;
-  }
-  .action-btn {
-    width: 100%;
-  }
-  .dialog-title {
-    font-size: 1.25rem;
-  }
-  .dialog-text {
-    font-size: 1rem;
-  }
-}
-.button-group {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  margin-top: 20px;
-}
-
-.action-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
-  text-transform: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  transition: transform 0.2s ease;
-}
-
-.action-btn:hover {
-  transform: translateY(-2px);
-}
-
-.delete-btn {
-  color: white !important;
-  background-color: #e53935 !important; /* Красный цвет */
-  border: none;
-  font-family: 'Gilroy-Bold', sans-serif;
-  text-transform: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  transition: transform 0.2s ease;
-}
-
-.delete-btn:hover {
-  background-color: #c62828 !important; /* Темнее красный при наведении */
-  transform: translateY(-2px);
-}
-
-.dialog-card {
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
-}
-
-.dialog-title {
-  font-family: 'Gilroy-Bold', sans-serif;
-  font-size: 1.5rem;
-  color: #1976d2;
-  padding: 16px 24px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.dialog-text {
-  font-family: 'Gilroy-Regular', sans-serif;
-  font-size: 1rem;
-  color: #2c3e50;
-  padding: 20px 24px;
-}
-
-.dialog-actions {
-  padding: 16px 24px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.dialog-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
-  text-transform: none;
-  border-radius: 8px;
-  padding: 8px 16px;
-  transition: transform 0.2s ease;
-}
-
-.dialog-btn:hover {
-  transform: translateY(-2px);
-}
-
-.primary-btn {
-  background-color: #1976d2;
-  color: white !important;
-}
-
-.delete-btn {
-  background-color: #e53935;
-  color: white !important;
-}
-
-@media (max-width: 600px) {
-  .page-title {
-    font-size: 1.75rem;
-  }
-  .profile-form {
-    padding: 16px;
-  }
-  .input-field {
-    margin-bottom: 12px;
-  }
-  .button-group {
-    flex-direction: column;
-    gap: 8px;
-  }
-  .action-btn {
-    width: 100%;
-  }
-}
-.profile-container {
-  padding: 24px;
-  background: #f5f7fa;
-  min-height: 100vh;
-}
-
-.page-title {
-  font-family: 'Gilroy-ExtraBold', sans-serif;
-  font-size: 2.25rem;
-  color: #1976d2;
-  margin-bottom: 24px;
-  text-align: center;
-}
-
 .logout-btn {
   position: absolute;
   top: 16px;
   right: 16px;
   color: white !important;
-  background-color: #e53935 !important; /* Красный цвет */
+  background-color: #e53935 !important;
   border: none;
   font-family: 'Gilroy-Bold', sans-serif;
   text-transform: none;
@@ -502,7 +341,7 @@ export default {
 }
 
 .logout-btn:hover {
-  background-color: #c62828 !important; /* Темнее красный при наведении */
+  background-color: #c62828 !important;
   transform: translateY(-2px);
 }
 
@@ -548,5 +387,125 @@ export default {
 .delete-btn {
   color: white !important;
   background-color: #e53935 !important;
+  border: none;
+}
+
+.delete-btn:hover {
+  background-color: #c62828 !important;
+}
+
+.tasks-link {
+  font-family: 'Gilroy-Regular', sans-serif;
+  font-size: 1rem;
+  color: #2c3e50;
+  margin-top: 20px;
+  text-align: center;
+}
+
+.link {
+  color: #1976d2;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.payroll-card {
+  padding: 20px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.period-select {
+  max-width: 200px;
+  display: inline-block;
+  margin-right: 10px;
+}
+
+.calculate-btn {
+  vertical-align: top;
+}
+
+.payroll-table {
+  width: 100%;
+}
+
+.no-data {
+  text-align: center;
+  color: #757575;
+  margin-top: 20px;
+}
+
+.dialog-card {
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+
+.dialog-title {
+  font-family: 'Gilroy-Bold', sans-serif;
+  font-size: 1.5rem;
+  color: #1976d2;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.dialog-text {
+  font-family: 'Gilroy-Regular', sans-serif;
+  font-size: 1rem;
+  color: #2c3e50;
+  padding: 20px 24px;
+}
+
+.dialog-actions {
+  padding: 16px 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.dialog-btn {
+  font-family: 'Gilroy-Medium', sans-serif;
+  text-transform: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  transition: transform 0.2s ease;
+}
+
+.dialog-btn:hover {
+  transform: translateY(-2px);
+}
+
+.primary-btn {
+  background-color: #1976d2;
+  color: white !important;
+}
+
+@media (max-width: 600px) {
+  .page-title {
+    font-size: 1.75rem;
+  }
+  .profile-form, .payroll-card {
+    padding: 16px;
+  }
+  .input-field {
+    margin-bottom: 12px;
+  }
+  .button-group {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .action-btn, .delete-btn {
+    width: 100%;
+  }
+  .period-select {
+    max-width: 100%;
+    margin-bottom: 10px;
+  }
+  .calculate-btn {
+    width: 100%;
+  }
 }
 </style>

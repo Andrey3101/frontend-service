@@ -326,8 +326,21 @@ export async function getFinancialEvents() {
   return response.json();
 }
 
+export async function calculatePayroll(period) {
+  const response = await fetchWithCsrf(`${AUTHURL}/payroll/calculate`, {
+    method: 'POST',
+    body: JSON.stringify({ period }),
+  });
+  return response;
+}
+
+export async function getPayroll(userId) {
+  const response = await fetchWithCsrf(`${AUTHURL}/payroll/${userId}`);
+  return response;
+}
+
 export async function startTimeTracking(taskId) {
-  const response = await fetchWithCsrf(`${TasksURL}/time/start`, {
+  const response = await fetchWithCsrf(`${AUTHURL}/time/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ task_id: taskId }),
@@ -336,7 +349,7 @@ export async function startTimeTracking(taskId) {
 }
 
 export async function stopTimeTracking(taskId) {
-  const response = await fetchWithCsrf(`${TasksURL}/time/stop`, {
+  const response = await fetchWithCsrf(`${AUTHURL}/time/stop`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ task_id: taskId }),

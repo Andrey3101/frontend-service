@@ -37,13 +37,50 @@
         <v-data-table
           :headers="headers"
           :items="filteredTasks"
-          item-key="task_id"
-          class="tasks-table elevation-1"
-          v-model:sort-by="sortBy"
-          v-model:sort-desc="sortDesc"
-          @click:row="rowClicked"
+          :loading="loading"
+          class="task-table"
         >
+          <template v-slot:item.priority="{ item }">
+            <v-chip :color="getPriorityColor(item.priority)" small class="priority-chip">
+              {{ item.priority }}
+            </v-chip>
+          </template>
+          <template v-slot:item.progress="{ item }">
+            <v-progress-linear
+              :value="getProgressValue(item.status)"
+              :color="getProgressColor(item.status)"
+              height="8"
+              rounded
+              class="progress-bar"
+            />
+          </template>
+          <template v-slot:item.total_time="{ item }">
+            <span class="total-time">{{ formatTime(item.total_time) }}</span>
+          </template>
           <template v-slot:item.actions="{ item }">
+            <v-btn
+              v-if="!item.isTracking"
+              icon
+              color="green"
+              @click.stop="startTracking(item)"
+              :loading="item.loading"
+              class="action-btn"
+              aria-label="Начать отслеживание времени"
+            >
+              <v-icon>mdi-play</v-icon>
+            </v-btn>
+            <v-btn
+              v-else
+              icon
+              color="red"
+              @click.stop="stopTracking(item)"
+              :loading="item.loading"
+              class="action-btn"
+              aria-label="Остановить отслеживание времени"
+            >
+              <v-icon>mdi-stop</v-icon>
+            </v-btn>
+            <span v-if="item.isTracking" class="tracking-time">{{ formatTime(item.trackingTime) }}</span>
             <v-btn icon class="edit-btn" @click.stop="editTask(item)">
               <v-icon>mdi-pencil</v-icon>
             </v-btn>
@@ -127,6 +164,7 @@
 
 <script>
 import { getMyTasks, createTask, updateTask, deleteTask, getUsers } from '../api';
+import { fetchWithCsrf, startTimeTracking, stopTimeTracking } from '../api/index';
 
 export default {
   data() {
@@ -141,8 +179,6 @@ export default {
       deleteTaskId: null,
       statusFilter: 'Все',
       assigneeFilter: 'Все',
-      sortBy: 'due_date',
-      sortDesc: false,
       newTask: {
         title: '',
         description: '',
@@ -157,7 +193,9 @@ export default {
         { text: 'Статус', value: 'status', sortable: true },
         { text: 'Исполнитель', value: 'assignee', sortable: true },
         { text: 'Приоритет', value: 'priority', sortable: true },
+        { text: 'Прогресс', value: 'progress', sortable: false },
         { text: 'Срок', value: 'due_date', sortable: true },
+        { text: 'Время', value: 'total_time', sortable: true },
         { text: 'Действия', value: 'actions', sortable: false },
       ],
       priorities: ['Низкий', 'Средний', 'Высокий'],
@@ -193,13 +231,46 @@ export default {
     await this.fetchTasks();
     await this.fetchUsers();
   },
+  beforeDestroy() {
+    this.clearAllTimers();
+  },
   methods: {
     async fetchTasks() {
       this.loading = true;
       this.error = null;
       try {
         const response = await getMyTasks();
-        this.tasks = Array.isArray(response?.tasks) ? response.tasks : [];
+        const activeTracking = await fetchWithCsrf(`${BASE_URLS.auth}/time/active`);
+        const totalTimeResponse = await fetchWithCsrf(`${BASE_URLS.auth}/time/total`);
+        this.tasks = Array.isArray(response?.tasks) ? response.tasks.map(task => {
+          const active = activeTracking.find(t => t.task_id === task.task_id);
+          const totalTime = totalTimeResponse.find(t => t.task_id === task.task_id)?.total_time || 0;
+          if (active) {
+            const startTime = new Date(active.start_time).getTime();
+            const now = Date.now();
+            const elapsedSeconds = Math.floor((now - startTime) / 1000);
+            return {
+              ...task,
+              isTracking: true,
+              loading: false,
+              timeEntryId: active.entry_id,
+              trackingTime: elapsedSeconds,
+              total_time: totalTime + elapsedSeconds,
+              timer: setInterval(() => {
+                task.trackingTime++;
+                task.total_time = totalTime + task.trackingTime;
+              }, 1000),
+            };
+          }
+          return {
+            ...task,
+            isTracking: false,
+            loading: false,
+            timeEntryId: null,
+            trackingTime: 0,
+            total_time: totalTime,
+          };
+        }) : [];
       } catch (error) {
         const errorMessage = error.response
           ? error.response.error || error.response.detail || error.message
@@ -287,10 +358,83 @@ export default {
       }
     },
     applyFilters() {
-      // Локальная фильтрация
+      // Локальная фильтрация уже реализована в computed filteredTasks
     },
-    rowClicked(item) {
-      this.$router.push({ name: 'TaskDetail', params: { taskId: item.task_id } });
+    async startTracking(task) {
+      task.loading = true;
+      try {
+        const response = await startTimeTracking(task.task_id);
+        const totalTimeResponse = await fetchWithCsrf(`${BASE_URLS.auth}/time/total?task_id=${task.task_id}`);
+        const totalTime = totalTimeResponse.total_time || 0;
+        this.$set(task, 'isTracking', true);
+        this.$set(task, 'timeEntryId', response.entry_id);
+        this.$set(task, 'trackingTime', 0);
+        this.$set(task, 'total_time', totalTime);
+        task.timer = setInterval(() => {
+          task.trackingTime++;
+          task.total_time = totalTime + task.trackingTime;
+        }, 1000);
+        this.$toast.success('Трекинг времени начат');
+      } catch (err) {
+        this.$toast.error('Ошибка при запуске трекинга');
+        console.error('Start tracking error:', err);
+      } finally {
+        task.loading = false;
+      }
+    },
+    async stopTracking(task) {
+      task.loading = true;
+      try {
+        await stopTimeTracking(task.timeEntryId);
+        clearInterval(task.timer);
+        this.$set(task, 'isTracking', false);
+        this.$set(task, 'timeEntryId', null);
+        this.$set(task, 'trackingTime', 0);
+        this.$toast.success('Трекинг времени остановлен');
+      } catch (err) {
+        this.$toast.error('Ошибка при остановке трекинга');
+        console.error('Stop tracking error:', err);
+      } finally {
+        task.loading = false;
+      }
+    },
+    formatTime(seconds) {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    },
+    clearAllTimers() {
+      this.tasks.forEach(task => {
+        if (task.timer) {
+          clearInterval(task.timer);
+        }
+      });
+    },
+    getPriorityColor(priority) {
+      switch (priority) {
+        case 'Высокий': return 'red';
+        case 'Средний': return 'orange';
+        case 'Низкий': return 'green';
+        default: return 'grey';
+      }
+    },
+    getProgressValue(status) {
+      switch (status) {
+        case 'Новая': return 0;
+        case 'В работе': return 50;
+        case 'Завершена': return 100;
+        case 'Отменена': return 0;
+        default: return 0;
+      }
+    },
+    getProgressColor(status) {
+      switch (status) {
+        case 'Завершена': return 'green';
+        case 'В работе': return 'blue';
+        case 'Отменена': return 'red';
+        default: return 'grey';
+      }
     },
     isFormValid(task) {
       return (
@@ -350,25 +494,61 @@ export default {
   font-size: 0.9rem;
 }
 
-.tasks-table {
-  cursor: pointer;
+.task-table {
   border-radius: 8px;
-  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  overflow-x: auto;
 }
 
-.tasks-table :deep(.v-data-table-header th) {
+.task-table :deep(.v-data-table-header th) {
   background-color: #f5f7fa;
   color: #333;
   font-weight: 600;
 }
 
-.tasks-table :deep(tr:hover) {
+.task-table :deep(tr:hover) {
   background-color: #e3f2fd !important;
   transition: background-color 0.2s ease;
 }
 
+.task-table :deep(tr.tracking) {
+  background-color: #f0f8ff;
+}
+
+.priority-chip {
+  color: white;
+  font-weight: 500;
+  border-radius: 12px;
+}
+
+.progress-bar {
+  margin: 4px 0;
+}
+
+.total-time {
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.action-btn {
+  margin: 0 4px;
+  transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+  transform: scale(1.1);
+}
+
+.tracking-time {
+  font-size: 0.9rem;
+  color: #555;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
 .edit-btn,
 .delete-btn {
+  margin: 0 4px;
   transition: all 0.3s ease;
 }
 
@@ -465,15 +645,62 @@ export default {
     flex-direction: column;
   }
 
-  .tasks-table :deep(.v-data-table-header th),
-  .tasks-table :deep(td) {
-    font-size: 0.85rem;
-    padding: 8px;
+  .task-table {
+    overflow-x: auto;
   }
 
-  .edit-btn,
-  .delete-btn {
-    margin: 0 4px;
+  .task-table :deep(.v-data-table-header th),
+  .task-table :deep(td) {
+    font-size: 0.85rem;
+    padding: 8px 4px;
+  }
+
+  .priority-chip {
+    font-size: 0.75rem;
+    height: 20px;
+  }
+
+  .progress-bar {
+    height: 6px;
+  }
+
+  .total-time {
+    font-size: 0.75rem;
+  }
+
+  .action-btn, .edit-btn, .delete-btn {
+    margin: 2px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .action-btn .v-icon,
+  .edit-btn .v-icon,
+  .delete-btn .v-icon {
+    font-size: 18px;
+  }
+
+  .tracking-time {
+    font-size: 0.75rem;
+    margin-left: 4px;
+  }
+
+  .dialog-content {
+    padding: 16px;
+  }
+
+  .input-field {
+    margin-bottom: 12px;
+  }
+
+  .dialog-actions {
+    flex-direction: column;
+    padding: 12px;
+  }
+
+  .dialog-btn {
+    width: 100%;
+    margin: 4px 0;
   }
 }
 </style>

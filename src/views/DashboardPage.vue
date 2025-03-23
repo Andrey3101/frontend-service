@@ -74,6 +74,81 @@
             </v-card>
           </v-col>
         </v-row>
+
+        <!-- График 6: Моя зарплата за период -->
+        <v-row class="mt-6">
+          <v-col>
+            <v-card class="chart-card" v-animate-onscroll="'fadeInUp'">
+              <v-card-title>Моя зарплата за период</v-card-title>
+              <v-card-text>
+                <v-select
+                  v-model="selectedPayrollPeriod"
+                  :items="payrollPeriods"
+                  label="Выберите период"
+                  outlined
+                  dense
+                  class="period-select"
+                  @change="fetchPayroll"
+                />
+                <v-btn
+                  color="primary"
+                  @click="startPayrollCalculation"
+                  :loading="payrollLoading"
+                  class="calculate-btn"
+                >
+                  Рассчитать
+                </v-btn>
+                <v-progress-linear v-if="payrollLoading" indeterminate color="blue" class="loading-bar mt-2" />
+                <BarChart v-if="payrollData.amount" :chart-data="payrollChartData" :chart-options="chartOptionsSum" />
+                <p v-else-if="!payrollLoading" class="no-data">Нет данных о зарплате</p>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+
+        <!-- График 7: Агрегированная зарплата сотрудников (для админов) -->
+        <v-row class="mt-6" v-if="isAdmin">
+          <v-col>
+            <v-card class="chart-card" v-animate-onscroll="'fadeInUp'">
+              <v-card-title>Агрегированная зарплата сотрудников</v-card-title>
+              <v-card-text>
+                <v-select
+                  v-model="selectedAggregatePeriod"
+                  :items="aggregatePeriods"
+                  label="Выберите период"
+                  outlined
+                  dense
+                  class="period-select"
+                  @change="fetchAggregatePayroll"
+                />
+                <v-select
+                  v-model="aggregateView"
+                  :items="aggregateViews"
+                  label="Тип отображения"
+                  outlined
+                  dense
+                  class="period-select"
+                  @change="fetchAggregatePayroll"
+                />
+                <v-progress-linear v-if="aggregateLoading" indeterminate color="blue" class="loading-bar mt-2" />
+                <BarChart v-if="aggregatePayrollData.length && aggregateView === 'byDepartment'" :chart-data="aggregatePayrollByDepartmentChartData" :chart-options="chartOptionsSum" />
+                <BarChart v-else-if="aggregatePayrollData.length && aggregateView === 'byEmployee'" :chart-data="aggregatePayrollByEmployeeChartData" :chart-options="chartOptionsSum" />
+                <p v-else-if="!aggregateLoading" class="no-data">Нет данных о зарплате сотрудников</p>
+                <!-- Таблица с детализацией -->
+                <v-data-table
+                  v-if="aggregatePayrollData.length"
+                  :headers="aggregateHeaders"
+                  :items="aggregatePayrollData"
+                  class="aggregate-table mt-4"
+                >
+                  <template v-slot:item.amount="{ item }">
+                    <span>{{ item.amount.toFixed(2) }} ₽</span>
+                  </template>
+                </v-data-table>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
       </v-col>
     </v-row>
   </v-container>
@@ -85,7 +160,7 @@ import { closestCenter } from '@dnd-kit/core';
 import DraggableItem from '../components/DraggableItem.vue';
 import DroppableWrapper from '../components/DroppableWrapper.vue';
 import BarChart from '../components/BarChart.vue';
-import { getDashboard, updateEmployeeOrder, getTasks } from '../api';
+import { getDashboard, updateEmployeeOrder, getTasks, calculatePayroll, getPayroll, getAggregatePayroll } from '../api';
 
 export default {
   components: { DndContext, DraggableItem, DroppableWrapper, BarChart },
@@ -106,306 +181,174 @@ export default {
         maintainAspectRatio: false,
         aspectRatio: 1.5,
         plugins: {
-          legend: {
-            position: 'top',
-            labels: {
-              font: {
-                family: 'Gilroy-Medium',
-                size: 14,
-              },
-              color: '#546e7a',
-            },
-          },
-          title: {
-            display: true,
-            font: {
-              family: 'Gilroy-ExtraBold',
-              size: 16,
-            },
-            color: '#1e88e5',
-          },
+          legend: { position: 'top', labels: { font: { family: 'Gilroy-Medium', size: 14 }, color: '#546e7a' } },
+          title: { display: true, font: { family: 'Gilroy-ExtraBold', size: 16 }, color: '#1e88e5' },
           tooltip: {
             backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            titleFont: {
-              family: 'Gilroy-Medium',
-              size: 14,
-            },
-            bodyFont: {
-              family: 'Gilroy-Regular',
-              size: 12,
-            },
-            callbacks: {
-              label: (context) => {
-                const label = context.dataset.label || '';
-                const value = context.parsed.y;
-                return `${label}: ${value} шт.`;
-              },
-            },
+            titleFont: { family: 'Gilroy-Medium', size: 14 },
+            bodyFont: { family: 'Gilroy-Regular', size: 12 },
+            callbacks: { label: (context) => `${context.dataset.label}: ${context.parsed.y} шт.` },
           },
         },
         scales: {
-          y: {
-            beginAtZero: true,
-            title: {
-              display: true,
-              text: 'Задачи, шт.',
-              font: {
-                family: 'Gilroy-Medium',
-                size: 14,
-              },
-              color: '#37474f',
-            },
-            ticks: {
-              font: {
-                family: 'Gilroy-Regular',
-                size: 12,
-              },
-              color: '#546e7a',
-            },
-            grid: {
-              color: 'rgba(0, 0, 0, 0.05)',
-            },
-          },
-          x: {
-            title: {
-              display: true,
-              text: 'Период',
-              font: {
-                family: 'Gilroy-Medium',
-                size: 14,
-              },
-              color: '#37474f',
-            },
-            ticks: {
-              font: {
-                family: 'Gilroy-Regular',
-                size: 12,
-              },
-              color: '#546e7a',
-            },
-            grid: {
-              display: false,
-            },
-          },
+          y: { beginAtZero: true, title: { display: true, text: 'Задачи, шт.', font: { family: 'Gilroy-Medium', size: 14 }, color: '#37474f' }, ticks: { font: { family: 'Gilroy-Regular', size: 12 }, color: '#546e7a' }, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+          x: { title: { display: true, text: 'Период', font: { family: 'Gilroy-Medium', size: 14 }, color: '#37474f' }, ticks: { font: { family: 'Gilroy-Regular', size: 12 }, color: '#546e7a' }, grid: { display: false } },
         },
-        animation: {
-          duration: 1000,
-          easing: 'easeOutQuart',
-        },
+        animation: { duration: 1000, easing: 'easeOutQuart' },
       },
       chartOptionsSum: {
         responsive: true,
         maintainAspectRatio: false,
         aspectRatio: 1.5,
         plugins: {
-          legend: {
-            position: 'top',
-            labels: {
-              font: {
-                family: 'Gilroy-Medium',
-                size: 14,
-              },
-              color: '#546e7a',
-            },
-          },
-          title: {
-            display: true,
-            font: {
-              family: 'Gilroy-ExtraBold',
-              size: 16,
-            },
-            color: '#1e88e5',
-          },
+          legend: { position: 'top', labels: { font: { family: 'Gilroy-Medium', size: 14 }, color: '#546e7a' } },
+          title: { display: true, font: { family: 'Gilroy-ExtraBold', size: 16 }, color: '#1e88e5' },
           tooltip: {
             backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            titleFont: {
-              family: 'Gilroy-Medium',
-              size: 14,
-            },
-            bodyFont: {
-              family: 'Gilroy-Regular',
-              size: 12,
-            },
-            callbacks: {
-              label: (context) => {
-                const label = context.dataset.label || '';
-                const value = context.parsed.y;
-                return `${label}: ${value} руб.`;
-              },
-            },
+            titleFont: { family: 'Gilroy-Medium', size: 14 },
+            bodyFont: { family: 'Gilroy-Regular', size: 12 },
+            callbacks: { label: (context) => `${context.dataset.label}: ${context.parsed.y} руб.` },
           },
         },
         scales: {
-          y: {
-            beginAtZero: true,
-            title: {
-              display: true,
-              text: 'Сумма, руб.',
-              font: {
-                family: 'Gilroy-Medium',
-                size: 14,
-              },
-              color: '#37474f',
-            },
-            ticks: {
-              font: {
-                family: 'Gilroy-Regular',
-                size: 12,
-              },
-              color: '#546e7a',
-            },
-            grid: {
-              color: 'rgba(0, 0, 0, 0.05)',
-            },
-          },
-          x: {
-            title: {
-              display: true,
-              text: 'Период',
-              font: {
-                family: 'Gilroy-Medium',
-                size: 14,
-              },
-              color: '#37474f',
-            },
-            ticks: {
-              font: {
-                family: 'Gilroy-Regular',
-                size: 12,
-              },
-              color: '#546e7a',
-            },
-            grid: {
-              display: false,
-            },
-          },
+          y: { beginAtZero: true, title: { display: true, text: 'Сумма, руб.', font: { family: 'Gilroy-Medium', size: 14 }, color: '#37474f' }, ticks: { font: { family: 'Gilroy-Regular', size: 12 }, color: '#546e7a' }, grid: { color: 'rgba(0, 0, 0, 0.05)' } },
+          x: { title: { display: true, text: 'Период', font: { family: 'Gilroy-Medium', size: 14 }, color: '#37474f' }, ticks: { font: { family: 'Gilroy-Regular', size: 12 }, color: '#546e7a' }, grid: { display: false } },
         },
-        animation: {
-          duration: 1000,
-          easing: 'easeOutQuart',
-        },
+        animation: { duration: 1000, easing: 'easeOutQuart' },
       },
+      selectedPayrollPeriod: 'month',
+      payrollPeriods: ['week', 'month', 'quarter'],
+      payrollLoading: false,
+      payrollData: { amount: 0 },
+      selectedAggregatePeriod: 'month',
+      aggregatePeriods: ['week', 'month', 'quarter'],
+      aggregateLoading: false,
+      aggregatePayrollData: [],
+      aggregateView: 'byDepartment',
+      aggregateViews: [
+        { text: 'По отделам', value: 'byDepartment' },
+        { text: 'По сотрудникам', value: 'byEmployee' },
+      ],
+      aggregateHeaders: [
+        { text: 'Сотрудник', value: 'employee_name' },
+        { text: 'Отдел', value: 'department' },
+        { text: 'Сумма', value: 'amount' },
+      ],
+      isAdmin: false,
     };
   },
   computed: {
     completedLastWeekData() {
       return {
         labels: ['За неделю'],
-        datasets: [
-          {
-            label: 'Задачи',
-            backgroundColor: '#1976d2',
-            borderColor: '#ffffff',
-            borderWidth: 2,
-            data: [this.taskStats.completedLastWeek],
-            barThickness: 40,
-            borderRadius: 6,
-            hoverBackgroundColor: '#1565c0',
-          },
-        ],
+        datasets: [{ label: 'Задачи', backgroundColor: '#1976d2', borderColor: '#ffffff', borderWidth: 2, data: [this.taskStats.completedLastWeek], barThickness: 40, borderRadius: 6, hoverBackgroundColor: '#1565c0' }],
       };
     },
     totalCompletedLastWeekData() {
       return {
         labels: ['За неделю'],
-        datasets: [
-          {
-            label: 'Сумма',
-            backgroundColor: '#0288d1',
-            borderColor: '#ffffff',
-            borderWidth: 2,
-            data: [this.taskStats.totalCompletedLastWeek],
-            barThickness: 40,
-            borderRadius: 6,
-            hoverBackgroundColor: '#0277bd',
-          },
-        ],
+        datasets: [{ label: 'Сумма', backgroundColor: '#0288d1', borderColor: '#ffffff', borderWidth: 2, data: [this.taskStats.totalCompletedLastWeek], barThickness: 40, borderRadius: 6, hoverBackgroundColor: '#0277bd' }],
       };
     },
     completedYesterdayData() {
       return {
         labels: ['За вчера'],
-        datasets: [
-          {
-            label: 'Задачи',
-            backgroundColor: '#42a5f5',
-            borderColor: '#ffffff',
-            borderWidth: 2,
-            data: [this.taskStats.completedYesterday],
-            barThickness: 40,
-            borderRadius: 6,
-            hoverBackgroundColor: '#2196f3',
-          },
-        ],
+        datasets: [{ label: 'Задачи', backgroundColor: '#42a5f5', borderColor: '#ffffff', borderWidth: 2, data: [this.taskStats.completedYesterday], barThickness: 40, borderRadius: 6, hoverBackgroundColor: '#2196f3' }],
       };
     },
     totalCompletedYesterdayData() {
       return {
         labels: ['За вчера'],
-        datasets: [
-          {
-            label: 'Сумма',
-            backgroundColor: '#4fc3f7',
-            borderColor: '#ffffff',
-            borderWidth: 2,
-            data: [this.taskStats.totalCompletedYesterday],
-            barThickness: 40,
-            borderRadius: 6,
-            hoverBackgroundColor: '#29b6f6',
-          },
-        ],
+        datasets: [{ label: 'Сумма', backgroundColor: '#4fc3f7', borderColor: '#ffffff', borderWidth: 2, data: [this.taskStats.totalCompletedYesterday], barThickness: 40, borderRadius: 6, hoverBackgroundColor: '#29b6f6' }],
       };
     },
     inProgressTodayData() {
       return {
         labels: ['На сегодня'],
-        datasets: [
-          {
-            label: 'Задачи',
-            backgroundColor: '#ff9800',
-            borderColor: '#ffffff',
-            borderWidth: 2,
-            data: [this.taskStats.inProgressToday],
-            barThickness: 40,
-            borderRadius: 6,
-            hoverBackgroundColor: '#f57c00',
-          },
-        ],
+        datasets: [{ label: 'Задачи', backgroundColor: '#ff9800', borderColor: '#ffffff', borderWidth: 2, data: [this.taskStats.inProgressToday], barThickness: 40, borderRadius: 6, hoverBackgroundColor: '#f57c00' }],
+      };
+    },
+    payrollChartData() {
+      return {
+        labels: [this.selectedPayrollPeriod === 'week' ? 'Неделя' : this.selectedPayrollPeriod === 'month' ? 'Месяц' : 'Квартал'],
+        datasets: [{ label: 'Зарплата', backgroundColor: '#4caf50', borderColor: '#ffffff', borderWidth: 2, data: [this.payrollData.amount], barThickness: 40, borderRadius: 6, hoverBackgroundColor: '#388e3c' }],
+      };
+    },
+    aggregatePayrollByDepartmentChartData() {
+      const departments = [...new Set(this.aggregatePayrollData.map(item => item.department))];
+      const data = departments.map(dept => {
+        return this.aggregatePayrollData
+          .filter(item => item.department === dept)
+          .reduce((sum, item) => sum + item.amount, 0);
+      });
+      return {
+        labels: departments,
+        datasets: [{
+          label: 'Зарплата по отделам',
+          backgroundColor: '#7b1fa2',
+          borderColor: '#ffffff',
+          borderWidth: 2,
+          data: data,
+          barThickness: 40,
+          borderRadius: 6,
+          hoverBackgroundColor: '#6a1b9a',
+        }],
+      };
+    },
+    aggregatePayrollByEmployeeChartData() {
+      const employees = this.aggregatePayrollData.map(item => item.employee_name);
+      const data = this.aggregatePayrollData.map(item => item.amount);
+      return {
+        labels: employees,
+        datasets: [{
+          label: 'Зарплата по сотрудникам',
+          backgroundColor: '#7b1fa2',
+          borderColor: '#ffffff',
+          borderWidth: 2,
+          data: data,
+          barThickness: 40,
+          borderRadius: 6,
+          hoverBackgroundColor: '#6a1b9a',
+        }],
       };
     },
   },
   async created() {
-    try {
-      const dashboardData = await getDashboard();
-      this.dashboard = dashboardData;
-      this.employeeLoad = dashboardData.employee_load || [];
-
-      const taskData = await getTasks();
-      this.taskStats = {
-        completedLastWeek: taskData.completedLastWeek || 0,
-        completedYesterday: taskData.completedYesterday || 0,
-        inProgressToday: taskData.inProgressToday || 0,
-        totalCompletedLastWeek: taskData.totalCompletedLastWeek || 0,
-        totalCompletedYesterday: taskData.totalCompletedYesterday || 0,
-      };
-    } catch (error) {
-      console.error('Ошибка загрузки данных:', error);
-      alert('Не удалось загрузить данные');
+    await this.fetchDashboardData();
+    await this.fetchPayroll();
+    this.isAdmin = localStorage.getItem('user_role') === 'admin';
+    if (this.isAdmin) {
+      await this.fetchAggregatePayroll();
     }
   },
   methods: {
+    async fetchDashboardData() {
+      try {
+        const dashboardData = await getDashboard();
+        this.dashboard = dashboardData;
+        this.employeeLoad = dashboardData.employee_load || [];
+        const taskData = await getTasks();
+        this.taskStats = {
+          completedLastWeek: taskData.completedLastWeek || 0,
+          completedYesterday: taskData.completedYesterday || 0,
+          inProgressToday: taskData.inProgressToday || 0,
+          totalCompletedLastWeek: taskData.totalCompletedLastWeek || 0,
+          totalCompletedYesterday: taskData.totalCompletedYesterday || 0,
+        };
+      } catch (error) {
+        console.error('Ошибка загрузки данных:', error);
+        alert('Не удалось загрузить данные');
+      }
+    },
     async onDragEnd(event) {
       const { active, over } = event;
-      if (!over || active.id === active.id) return;
-
+      if (!over || active.id === over.id) return;
       const items = [...this.employeeLoad];
       const oldIndex = items.findIndex((item) => item.user_id === active.id);
       const newIndex = items.findIndex((item) => item.user_id === over.id);
-
       const [reorderedItem] = items.splice(oldIndex, 1);
       items.splice(newIndex, 0, reorderedItem);
       this.employeeLoad = items;
-
       try {
         const order = this.employeeLoad.map((emp) => emp.user_id);
         await updateEmployeeOrder(order);
@@ -413,6 +356,41 @@ export default {
       } catch (error) {
         console.error('Ошибка сохранения порядка:', error);
         alert('Не удалось сохранить порядок');
+      }
+    },
+    async startPayrollCalculation() {
+      this.payrollLoading = true;
+      try {
+        await calculatePayroll(this.selectedPayrollPeriod);
+        setTimeout(async () => {
+          await this.fetchPayroll();
+          this.payrollLoading = false;
+        }, 2000);
+      } catch (error) {
+        console.error('Ошибка расчета зарплаты:', error);
+        this.payrollLoading = false;
+      }
+    },
+    async fetchPayroll() {
+      this.payrollLoading = true;
+      try {
+        const userId = localStorage.getItem('user_id');
+        const payroll = await getPayroll(userId);
+        this.payrollData = payroll.find(p => p.period === this.selectedPayrollPeriod) || { amount: 0 };
+      } catch (error) {
+        console.error('Ошибка загрузки зарплаты:', error);
+      } finally {
+        this.payrollLoading = false;
+      }
+    },
+    async fetchAggregatePayroll() {
+      this.aggregateLoading = true;
+      try {
+        this.aggregatePayrollData = await getAggregatePayroll(this.selectedAggregatePeriod);
+      } catch (error) {
+        console.error('Ошибка загрузки агрегированных данных о зарплате:', error);
+      } finally {
+        this.aggregateLoading = false;
       }
     },
   },
@@ -441,12 +419,40 @@ export default {
   margin-bottom: 20px;
 }
 
+.period-select {
+  max-width: 200px;
+  display: inline-block;
+  margin-right: 10px;
+}
+
+.calculate-btn {
+  vertical-align: top;
+  margin-bottom: 10px;
+}
+
+.no-data {
+  text-align: center;
+  color: #757575;
+  margin-top: 20px;
+}
+
+.aggregate-table {
+  width: 100%;
+}
+
 @media (max-width: 600px) {
   .employee-card {
     padding: 10px;
   }
   .chart-card {
     padding: 10px;
+  }
+  .period-select {
+    max-width: 100%;
+    margin-bottom: 10px;
+  }
+  .calculate-btn {
+    width: 100%;
   }
 }
 </style>
