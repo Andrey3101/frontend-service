@@ -22,17 +22,6 @@
           <v-card-text>
             <v-form @submit.prevent="register" ref="form" v-model="valid">
               <v-text-field
-                v-model="name"
-                :label="$t('register.name')"
-                required
-                prepend-inner-icon="mdi-account"
-                class="input-field"
-                :rules="[rules.required]"
-                outlined
-                dense
-                :aria-label="$t('register.name')"
-              />
-              <v-text-field
                 v-model="email"
                 :label="$t('register.email')"
                 type="email"
@@ -91,7 +80,7 @@
                   :label="$t('register.inn')"
                   prepend-inner-icon="mdi-card-account-details"
                   class="input-field"
-                  :rules="[rules.required, rules.inn]"
+                  :rules="[rules.required, rules.innSelfEmployed]"
                   outlined
                   dense
                   :aria-label="$t('register.inn')"
@@ -105,7 +94,7 @@
                   :label="$t('register.inn')"
                   prepend-inner-icon="mdi-card-account-details"
                   class="input-field"
-                  :rules="[rules.required, rules.inn]"
+                  :rules="[rules.required, rules.innSelfEmployed]"
                   outlined
                   dense
                   :aria-label="$t('register.inn')"
@@ -129,7 +118,7 @@
                   :label="$t('register.companyName')"
                   prepend-inner-icon="mdi-office-building"
                   class="input-field"
-                  :rules="[rules.required]"
+                  :rules="[rules.required, rules.companyName]"
                   outlined
                   dense
                   :aria-label="$t('register.companyName')"
@@ -139,7 +128,7 @@
                   :label="$t('register.inn')"
                   prepend-inner-icon="mdi-card-account-details"
                   class="input-field"
-                  :rules="[rules.required, rules.inn]"
+                  :rules="[rules.required, rules.innOOO]"
                   outlined
                   dense
                   :aria-label="$t('register.inn')"
@@ -167,15 +156,7 @@
                 :aria-label="$t('register.registerBtn')"
               >
                 <span v-if="!loading">{{ $t('register.registerBtn') }}</span>
-                <v-progress-circular
-                  v-if="loading"
-                  :value="registerProgress"
-                  size="24"
-                  color="white"
-                  rotate="-90"
-                >
-                  <span class="timer-text">{{ registerTimeLeft }}</span>
-                </v-progress-circular>
+                <v-progress-circular v-if="loading" indeterminate size="24" color="white" />
               </v-btn>
 
               <v-btn
@@ -190,15 +171,7 @@
               >
                 <v-icon left color="grey darken-2">mdi-google</v-icon>
                 <span v-if="!googleLoading">{{ $t('register.googleBtn') }}</span>
-                <v-progress-circular
-                  v-if="googleLoading"
-                  :value="googleProgress"
-                  size="24"
-                  color="grey darken-2"
-                  rotate="-90"
-                >
-                  <span class="timer-text">{{ googleTimeLeft }}</span>
-                </v-progress-circular>
+                <v-progress-circular v-if="googleLoading" indeterminate size="24" color="grey darken-2" />
               </v-btn>
 
               <v-btn
@@ -229,14 +202,13 @@
 
 <script>
 import { useAuthStore } from '@/stores/auth';
-import { getGoogleLoginUrl, googleCallback } from '@/api';
+import { getGoogleLoginUrl } from '@/api';
 
 export default {
   name: 'RegisterForm',
   data() {
     return {
       valid: false,
-      name: '',
       email: '',
       phone: '',
       password: '',
@@ -258,95 +230,45 @@ export default {
       oooData: { companyName: '', inn: '', ogrn: '' },
       rules: {
         required: value => !!value || this.$t('register.errors.required'),
-        email: value => {
-          const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          return pattern.test(value) || this.$t('register.errors.email');
-        },
-        phone: value => {
-          const cleaned = value.replace(/\D/g, '');
-          return (cleaned.length === 11 && cleaned.startsWith('7')) || this.$t('register.errors.phone');
-        },
+        email: value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) || this.$t('register.errors.email'),
+        phone: value => /^\+7\(\d{3}\)\s\d{3}-\d{2}-\d{2}$/.test(value) || this.$t('register.errors.phone'),
         minLength: value => value.length >= 6 || this.$t('register.errors.minLength'),
-        inn: value => /^\d{12}$/.test(value) || this.$t('register.errors.inn'),
+        innSelfEmployed: value => /^\d{12}$/.test(value) || this.$t('register.errors.inn'),
+        innOOO: value => /^\d{10}$/.test(value) || this.$t('register.errors.inn'),
         ogrnip: value => /^\d{15}$/.test(value) || this.$t('register.errors.ogrnip'),
         ogrn: value => /^\d{13}$/.test(value) || this.$t('register.errors.ogrn'),
+        companyName: value => value.length <= 100 || this.$t('register.errors.companyNameLength'),
       },
-      registerTimeLeft: 15, // Начальное значение для регистрации (соответствует TIMEOUTS.register)
-      registerProgress: 100,
-      googleTimeLeft: 8,    // Начальное значение для Google (соответствует TIMEOUTS.googleAuth)
-      googleProgress: 100,
-      timerInterval: null,
     };
   },
   methods: {
-    startTimer(type) {
-      const timeout = type === 'register' ? 15000 : 8000; // Соответствует TIMEOUTS.register и TIMEOUTS.googleAuth
-      const startTime = Date.now();
-      clearInterval(this.timerInterval);
-
-      this.timerInterval = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const remaining = Math.max(0, timeout - elapsed);
-        const progress = (remaining / timeout) * 100;
-
-        if (type === 'register') {
-          this.registerTimeLeft = Math.ceil(remaining / 1000);
-          this.registerProgress = progress;
-        } else {
-          this.googleTimeLeft = Math.ceil(remaining / 1000);
-          this.googleProgress = progress;
-        }
-
-        if (remaining <= 0) {
-          clearInterval(this.timerInterval);
-        }
-      }, 100);
-    },
-    stopTimer() {
-      clearInterval(this.timerInterval);
-      this.registerTimeLeft = 15;
-      this.registerProgress = 100;
-      this.googleTimeLeft = 8;
-      this.googleProgress = 100;
-    },
     async register() {
-      if (this.$refs.form.validate()) {
-        this.loading = true;
-        this.startTimer('register');
-        const authStore = useAuthStore();
-        const payload = {
-          name: this.name,
-          email: this.email,
-          phone: this.phone,
-          password: this.password,
-          company_type: this.companyType,
-        };
+      if (!this.$refs.form.validate()) return;
+      this.loading = true;
+      const authStore = useAuthStore();
+      const payload = {
+        email: this.email,
+        phone: this.phone,
+        password: this.password,
+        company_type: this.companyType,
+        company_data: this.companyType === 'Самозанятый' ? this.selfEmployedData :
+                      this.companyType === 'ИП' ? this.ipData :
+                      this.oooData,
+      };
 
-        if (this.companyType === 'Самозанятый') {
-          payload.company_data = this.selfEmployedData;
-        } else if (this.companyType === 'ИП') {
-          payload.company_data = this.ipData;
-        } else if (this.companyType === 'ООО') {
-          payload.company_data = this.oooData;
-        }
-
-        try {
-          await authStore.register(payload);
-          this.showSuccess = true;
-          setTimeout(() => {
-            this.$router.push('/dashboard');
-          }, 1500);
-        } catch (error) {
-          this.handleError(error, 'register');
-        } finally {
-          this.loading = false;
-          this.stopTimer();
-        }
+      try {
+        const response = await authStore.register(payload);
+        localStorage.setItem('csrf_token', response.csrf_token); // Сохраняем CSRF-токен
+        this.showSuccess = true;
+        setTimeout(() => this.$router.push('/dashboard'), 1500);
+      } catch (error) {
+        this.handleError(error, 'register');
+      } finally {
+        this.loading = false;
       }
     },
     async googleLogin() {
       this.googleLoading = true;
-      this.startTimer('google');
       try {
         const { url } = await getGoogleLoginUrl();
         window.location.href = url;
@@ -354,19 +276,17 @@ export default {
         this.handleError(error, 'google');
       } finally {
         this.googleLoading = false;
-        this.stopTimer();
       }
     },
     async handleGoogleCallback() {
-      const query = this.$route.query;
-      if (query.code && query.state) {
+      const { code, state } = this.$route.query;
+      if (code && state) {
         const authStore = useAuthStore();
         try {
-          await authStore.googleLogin(query.code, query.state);
+          const response = await authStore.googleLogin(code, state);
+          localStorage.setItem('csrf_token', response.csrf_token);
           this.showSuccess = true;
-          setTimeout(() => {
-            this.$router.push('/dashboard');
-          }, 1500);
+          setTimeout(() => this.$router.push('/dashboard'), 1500);
         } catch (error) {
           this.handleError(error, 'googleCallback');
         }
@@ -375,22 +295,10 @@ export default {
     handleError(error, context) {
       console.error(`${context} error:`, error);
       this.showError = true;
-      if (error.response) {
-        const status = error.response.status;
-        if (status === 400) {
-          this.errorMessage = this.$t('register.errors.badRequest');
-        } else if (status === 401) {
-          this.errorMessage = this.$t('register.errors.unauthorized');
-        } else if (status === 409) {
-          this.errorMessage = this.$t('register.errors.conflict');
-        } else {
-          this.errorMessage = this.$t('register.errors.serverError', { status });
-        }
-      } else if (error.message.includes('Network Error') || error.name === 'AbortError') {
-        this.errorMessage = this.$t('register.errors.networkError');
-      } else {
-        this.errorMessage = this.$t('register.errors.unknownError');
-      }
+      this.errorMessage = error.response?.data?.detail ||
+                         (error.response?.status === 400 ? this.$t('register.errors.badRequest') :
+                          error.response?.status === 409 ? this.$t('register.errors.conflict') :
+                          this.$t('register.errors.unknownError'));
     },
   },
   mounted() {

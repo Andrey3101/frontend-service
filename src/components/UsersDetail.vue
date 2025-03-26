@@ -9,7 +9,7 @@
 
         <v-card v-else elevation="4" class="detail-card animate__animated animate__fadeInUp">
           <v-card-title class="card-title">
-            Пользователь #{{ user.id }}
+            Пользователь #{{ user.user_id }}
             <v-spacer />
             <v-chip :color="roleColor(user.role)" small class="role-chip">
               {{ user.role }}
@@ -18,11 +18,9 @@
           <v-card-text class="card-content">
             <v-row>
               <v-col cols="12" sm="6">
-                <p><strong>Имя:</strong> {{ user.name || 'Не указано' }}</p>
                 <p><strong>Email:</strong> {{ user.email || 'Не указано' }}</p>
               </v-col>
               <v-col cols="12" sm="6">
-                <p><strong>Телефон:</strong> {{ user.phone || 'Не указано' }}</p>
                 <p><strong>Роль:</strong> {{ user.role || 'Не определена' }}</p>
               </v-col>
             </v-row>
@@ -38,7 +36,6 @@
           </v-card-actions>
         </v-card>
 
-        <!-- Модальное окно редактирования -->
         <edit-modal
           v-model="showEditModal"
           title="Редактировать пользователя"
@@ -46,26 +43,12 @@
           @save="saveUser"
         >
           <v-text-field
-            v-model="editData.name"
-            label="Имя"
-            outlined
-            dense
-            class="input-field"
-          />
-          <v-text-field
             v-model="editData.email"
             label="Email"
             outlined
             dense
             class="input-field"
-            :rules="[v => !!v || 'Email обязателен']"
-          />
-          <v-text-field
-            v-model="editData.phone"
-            label="Телефон"
-            outlined
-            dense
-            class="input-field"
+            :rules="[v => !!v || 'Email обязателен', v => /.+@.+\..+/.test(v) || 'Неверный формат email']"
           />
           <v-select
             v-model="editData.role"
@@ -74,6 +57,7 @@
             outlined
             dense
             class="input-field"
+            :rules="[v => !!v || 'Роль обязательна']"
           />
         </edit-modal>
       </v-col>
@@ -105,28 +89,29 @@ export default {
       loading.value = true;
       try {
         const users = await getUsers();
-        user.value = users.find((u) => u.id === Number(route.params.id));
+        user.value = users.find(u => u.user_id === route.params.id);
         if (!user.value) throw new Error('Пользователь не найден');
         editData.value = { ...user.value };
       } catch (err) {
-        error.value = err.message || 'Не удалось загрузить пользователя';
+        error.value = err.response?.data?.detail || err.message || 'Не удалось загрузить пользователя';
       } finally {
         loading.value = false;
       }
     };
 
     const roleColor = (role) => {
-      switch (role?.toLowerCase()) {
-        case 'admin': return 'red';
-        case 'manager': return 'blue';
-        case 'user': return 'green';
-        default: return 'grey';
-      }
+      return { admin: 'red', manager: 'blue', user: 'green' }[role?.toLowerCase()] || 'grey';
     };
 
     const saveUser = async () => {
-      await updateUser(route.params.id, editData.value);
-      await fetchUser();
+      try {
+        const csrfToken = localStorage.getItem('csrf_token');
+        await updateUser(user.value.user_id, editData.value, csrfToken);
+        await fetchUser();
+        showEditModal.value = false;
+      } catch (err) {
+        error.value = err.response?.data?.detail || 'Не удалось обновить пользователя';
+      }
     };
 
     return { user, loading, error, showEditModal, editData, roleColor, saveUser };
