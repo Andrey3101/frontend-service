@@ -264,28 +264,36 @@ export default {
       }
     },
     processTasks(tasks, activeTracking, totalTimeResponse) {
+      const reversePriorityMap = { 1: 'Низкий', 2: 'Средний', 3: 'Высокий' };
       return tasks.map(task => {
-        const active = activeTracking.find(t => t.task_id === task.task_id);
-        const totalTime = totalTimeResponse.find(t => t.task_id === task.task_id)?.total_time || 0;
+        const active = activeTracking.find(t => t.task_id === task.id);
+        const totalTime = totalTimeResponse.find(t => t.task_id === task.id)?.total_time || 0;
+        const formattedTask = {
+          ...task,
+          task_id: task.id,
+          assignee: task.assignees?.[0]?.user_id || '',
+          priority: reversePriorityMap[task.priority] || task.priority,
+          due_date: task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '',
+        };
         if (active) {
           const startTime = new Date(active.start_time).getTime();
           const now = Date.now();
           const elapsedSeconds = Math.floor((now - startTime) / 1000);
           return {
-            ...task,
+            ...formattedTask,
             isTracking: true,
             loading: false,
             timeEntryId: active.entry_id,
             trackingTime: elapsedSeconds,
             total_time: totalTime + elapsedSeconds,
             timer: setInterval(() => {
-              task.trackingTime++;
-              task.total_time = totalTime + task.trackingTime;
+              formattedTask.trackingTime++;
+              formattedTask.total_time = totalTime + formattedTask.trackingTime;
             }, 1000),
           };
         }
         return {
-          ...task,
+          ...formattedTask,
           isTracking: false,
           loading: false,
           timeEntryId: null,

@@ -118,7 +118,10 @@ export default {
       this.error = null;
       try {
         const response = await getActs();
-        this.acts = Array.isArray(response) ? response : [];
+        this.acts = Array.isArray(response.acts) ? response.acts.map(act => ({
+        id: act.document_id,
+        type: act.type
+      })) : [];
       } catch (error) {
         const errorMessage = error.response
           ? error.response.error || error.response.detail || error.message

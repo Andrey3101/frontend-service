@@ -1,16 +1,16 @@
 const BASE_URLS = {
-  tasks: 'http://localhost:8000',        // task-service
-  auth: 'http://localhost:8000',         // auth-service
-  ai: 'http://localhost:8002',           // ai-service
-  notifications: 'http://localhost:8003' // notification-service
+  tasks: 'http://localhost:5001',        // Исправлен порт на 5001
+  auth: 'http://localhost:8000',
+  ai: 'http://localhost:8002',
+  notifications: 'http://localhost:8003'
 };
 
 const TIMEOUTS = {
-  default: 10000,      // Общий таймаут (10 секунд)
-  login: 5000,         // Быстрая авторизация (5 секунд)
-  register: 15000,     // Регистрация может быть дольше (15 секунд)
-  googleAuth: 8000,    // Google OAuth (8 секунд)
-  googleCallback: 12000, // Callback может включать дополнительные проверки (12 секунд)
+  default: 10000,
+  login: 5000,
+  register: 15000,
+  googleAuth: 8000,
+  googleCallback: 12000,
 };
 
 let csrfToken = localStorage.getItem('csrf_token') || '';
@@ -58,6 +58,7 @@ export async function login(email, password) {
   localStorage.setItem('token', response.token);
   localStorage.setItem('csrf_token', response.csrf_token);
   localStorage.setItem('user_id', response.user_id);
+  localStorage.setItem('user_role', response.role);
   csrfToken = response.csrf_token;
   return response;
 }
@@ -101,7 +102,6 @@ async function fetchWithCsrf(url, options = {}) {
   }
 }
 
-// Новая функция для запроса сброса пароля
 export async function requestPasswordReset(email) {
   return fetchWithTimeout(`${BASE_URLS.auth}/reset-password`, {
     method: 'POST',
@@ -109,7 +109,6 @@ export async function requestPasswordReset(email) {
   }, 'default');
 }
 
-// Новая функция для подтверждения сброса пароля
 export async function confirmPasswordReset(token, new_password) {
   return fetchWithTimeout(`${BASE_URLS.auth}/reset-password/confirm`, {
     method: 'POST',
@@ -167,16 +166,21 @@ export async function updateProfile(profile) {
     body: JSON.stringify(profile),
   }, 'default');
 }
+
 export async function getMyTasks(params = {}) {
   const query = new URLSearchParams(params).toString();
   return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/my?${query}`);
 }
 
 export async function createTask(task) {
+  const priorityMap = { 'Низкий': 1, 'Средний': 2, 'Высокий': 3 };
   return fetchWithCsrf(`${BASE_URLS.tasks}/tasks`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(task),
+    body: JSON.stringify({
+      ...task,
+      priority: priorityMap[task.priority] || task.priority,
+      assignees: task.assignee ? [{ user_id: task.assignee }] : [],
+    }),
   });
 }
 
@@ -197,22 +201,25 @@ export async function uploadDocument(file) {
   return fetchWithCsrf(`${BASE_URLS.tasks}/documents`, {
     method: 'POST',
     body: formData,
-    headers: { 'Content-Type': undefined }, // FormData сам установит заголовок
+    headers: { 'Content-Type': undefined },
   });
 }
 
 export async function updateTask(taskId, updates) {
+  const priorityMap = { 'Низкий': 1, 'Средний': 2, 'Высокий': 3 };
   return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/${taskId}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates),
+    body: JSON.stringify({
+      ...updates,
+      priority: priorityMap[updates.priority] || updates.priority,
+      assignees: updates.assignee ? [{ user_id: updates.assignee }] : [],
+    }),
   });
 }
 
 export async function updateReport(reportId, updates) {
-  return fetchWithCsrf(`${BASE_URLS.tasks}/reports/${reportId}`, {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/reports/${reportId}`, {  // Исправлен URL
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   });
 }
@@ -357,7 +364,6 @@ export async function getPayroll(userId) {
   return fetchWithCsrf(`${BASE_URLS.auth}/payroll/${userId}`);
 }
 
-// Новая функция для создания повторяющихся задач
 export async function createRecurringTask(taskData) {
   return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/recurring`, {
     method: 'POST',
@@ -366,7 +372,6 @@ export async function createRecurringTask(taskData) {
   });
 }
 
-// Новая функция для создания напоминаний о налогах
 export async function createTaxReminders(data) {
   return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/tax-reminders`, {
     method: 'POST',

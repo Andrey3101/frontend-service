@@ -97,7 +97,7 @@
 </template>
 
 <script>
-import { getReports, generateReport, getUsers } from '../api';
+import { getReports, generateReport, getUsers } from '../api';  // Предполагается, что api экспортирует функции из index.js
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 
@@ -148,12 +148,12 @@ export default {
       this.error = null;
       try {
         const response = await getReports();
-        this.reports = Array.isArray(response) ? response : [];
+        this.reports = Array.isArray(response.reports) ? response.reports.map(r => ({
+          id: r.document_id,
+          created_at: r.created_at
+        })) : [];
       } catch (error) {
-        const errorMessage = error.response
-          ? error.response.error || error.response.detail || error.message
-          : error.message || 'Не удалось загрузить отчеты';
-        this.error = errorMessage;
+        this.error = error.message || 'Не удалось загрузить отчеты';
       } finally {
         this.loading = false;
       }
@@ -180,22 +180,39 @@ export default {
         const filters = { ...this.reportFilter };
         if (filters.status === 'Все') delete filters.status;
         if (filters.assignee === 'Все') delete filters.assignee;
-        await generateReport(filters);
+        await generateReport({ template_id: "report_v1", filters });
         await this.fetchReports();
         this.showGenerateForm = false;
       } catch (error) {
-        const errorMessage = error.response
-          ? error.response.error || error.response.detail || error.message
-          : error.message || 'Не удалось сгенерировать отчет';
-        this.error = errorMessage;
+        this.error = error.message || 'Не удалось сгенерировать отчет';
       } finally {
         this.loading = false;
       }
     },
-    viewReport(report) {
-      this.selectedReport = report;
-      this.showReport = true;
+    async viewReport(report) {
+      this.loading = true;
       this.error = null;
+      try {
+        const response = await fetch(`http://localhost:5001/documents/${report.id}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'X-CSRF-Token': localStorage.getItem('csrf_token')
+          }
+        });
+        if (!response.ok) throw new Error('Не удалось загрузить детали отчета');
+        const detailedReport = await response.json();
+        this.selectedReport = {
+          id: detailedReport.document_id,
+          content: detailedReport.description || 'Нет содержимого',  // Используем description как content
+          created_at: detailedReport.created_at
+        };
+        this.showReport = true;
+      } catch (error) {
+        this.error = error.message || 'Ошибка загрузки отчета';
+      } finally {
+        this.loading = false;
+      }
     },
     exportToPDF() {
       const doc = new jsPDF();

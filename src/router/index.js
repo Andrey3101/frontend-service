@@ -13,8 +13,7 @@ import ReportsDetail from '../components/ReportsDetail.vue';
 import TaxCalculator from '@/components/TaxCalculator.vue';
 import ResetPassword from '../views/ResetPassword.vue';
 import NotFound from '../views/NotFound.vue';
-import TaskCreation from '@/views/TaskCreation.vue';
-import Documents from '@/views/Documents.vue';
+
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -56,14 +55,6 @@ const routes = [
     path: '/acts', 
     component: Acts, 
     meta: { requiresAuth: true } 
-  },
-  { 
-    path: '/tasks/create', 
-    component: TaskCreation 
-  },
-  {
-    path: '/documents', 
-    component: Documents 
   },
   { 
     path: '/acts/:id', 
