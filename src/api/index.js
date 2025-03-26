@@ -1,5 +1,5 @@
 const BASE_URLS = {
-  tasks: 'http://localhost:5001',        // Исправлен порт на 5001
+  tasks: 'http://localhost:5001',
   auth: 'http://localhost:8000',
   ai: 'http://localhost:8002',
   notifications: 'http://localhost:8003'
@@ -58,7 +58,9 @@ export async function login(email, password) {
   localStorage.setItem('token', response.token);
   localStorage.setItem('csrf_token', response.csrf_token);
   localStorage.setItem('user_id', response.user_id);
-  localStorage.setItem('user_role', response.role);
+  // Role не возвращается в TokenResponse, поэтому получаем через /profile
+  const profile = await getProfile();
+  localStorage.setItem('user_role', profile.role);
   csrfToken = response.csrf_token;
   return response;
 }
@@ -76,6 +78,8 @@ export async function googleCallback(code, state) {
   localStorage.setItem('token', response.token);
   localStorage.setItem('csrf_token', response.csrf_token);
   localStorage.setItem('user_id', response.user_id);
+  const profile = await getProfile();
+  localStorage.setItem('user_role', profile.role);
   csrfToken = response.csrf_token;
   return response;
 }
@@ -127,6 +131,7 @@ export async function logoutUser() {
   localStorage.removeItem('token');
   localStorage.removeItem('csrf_token');
   localStorage.removeItem('user_id');
+  localStorage.removeItem('user_role');
   return response;
 }
 
@@ -269,7 +274,7 @@ export async function deleteComment(taskId, commentId) {
 
 export async function processVoice(audioBase64, format, suggestion = null) {
   const body = suggestion ? { ...suggestion } : { audio_file: audioBase64, format };
-  return fetchWithCsrf(`${BASE_URLS.ai}/ai/voice/predictive`, {
+  return fetchWithCsrf(`${BASE_URLS.ai}/voice/predictive`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -415,4 +420,20 @@ export async function stopTimeTracking(taskId) {
 
 export async function getTimeReport(period = 'week') {
   return fetchWithCsrf(`${BASE_URLS.tasks}/time-report?period=${period}`);
+}
+
+export async function monitorCompetitors(urls) {
+  return fetchWithCsrf(`${BASE_URLS.ai}/competitors/monitor`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(urls),
+  });
+}
+
+export async function getPromotionRecommendations(salesData, competitorData) {
+  return fetchWithCsrf(`${BASE_URLS.ai}/promotion/recommendations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sales_data: salesData, competitor_data: competitorData }),
+  });
 }

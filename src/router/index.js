@@ -13,6 +13,8 @@ import ReportsDetail from '../components/ReportsDetail.vue';
 import TaxCalculator from '@/components/TaxCalculator.vue';
 import ResetPassword from '../views/ResetPassword.vue';
 import NotFound from '../views/NotFound.vue';
+import CompetitorMonitor from '@/components/CompetitorMonitor.vue';
+import PromotionRecommendations from '@/components/PromotionRecommendations.vue';
 
 
 const routes = [
@@ -34,6 +36,16 @@ const routes = [
     path: '/reset-password',
     name: 'ResetPassword',
     component: ResetPassword,
+  },
+  { 
+    path: '/competitors', 
+    name: 'CompetitorMonitor', 
+    component: CompetitorMonitor 
+  },
+  { 
+    path: '/promotion', 
+    name: 'PromotionRecommendations', 
+    component: PromotionRecommendations 
   },
   { 
     path: '/tasks', 

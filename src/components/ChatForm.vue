@@ -5,7 +5,7 @@
         Чат
         <v-spacer />
         <v-btn icon @click="minimizeChat" class="minimize-btn" aria-label="Свернуть чат">
-          <img src ="@/assets/sidebaricon/down.svg" class="custom-icon" alt="Down">
+          <img src="@/assets/sidebaricon/down.svg" class="custom-icon" alt="Down">
         </v-btn>
       </v-card-title>
       <v-card-text class="chat-messages">
@@ -29,15 +29,17 @@
               class="chat-input-field"
               dense
               hide-details
+              :maxlength="1000"
               aria-label="Введите сообщение в чат"
             />
             <v-btn
               icon
               @click="sendMessage"
               class="chat-send-btn"
+              :disabled="!newMessage.trim() || newMessage.length > 1000"
               aria-label="Отправить сообщение"
             >
-              <img src ="@/assets/sidebaricon/sendmessage.svg" class="custom-icon" alt="Send">
+              <img src="@/assets/sidebaricon/sendmessage.svg" class="custom-icon" alt="Send">
             </v-btn>
           </div>
         </div>
@@ -52,13 +54,14 @@
       aria-label="Открыть чат"
     >
       Чат
-      <img src ="@/assets/sidebaricon/chat.svg" class="custom-icon" alt="Chat">
+      <img src="@/assets/sidebaricon/chat.svg" class="custom-icon" alt="Chat">
     </v-btn>
   </div>
 </template>
 
 <script>
 import { processText } from '@/api/index.js';
+
 export default {
   props: ['suggestions'],
   data() {
@@ -70,26 +73,36 @@ export default {
   },
   methods: {
     async sendMessage() {
-      if (this.newMessage.trim()) {
-        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        this.messages.push({ text: this.newMessage, isUser: true, timestamp });
-        
-        try {
-          const response = await processText(this.newMessage);
-          const aiMessage = response.action?.status === "queued" 
-            ? "Команда принята в обработку" 
-            : response.error || "Ошибка обработки";
-          this.messages.push({ text: aiMessage, isUser: false, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
-        } catch (error) {
-          this.messages.push({ text: `Ошибка: ${error.message}`, isUser: false, timestamp });
-        }
-        
-        this.newMessage = '';
-        this.$nextTick(() => {
-          const container = this.$el.querySelector('.chat-messages');
-          container.scrollTop = container.scrollHeight;
+      if (!this.newMessage.trim()) return;
+      if (this.newMessage.length > 1000) {
+        this.messages.push({
+          text: 'Ошибка: текст превышает 1000 символов',
+          isUser: false,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         });
+        return;
       }
+
+      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      this.messages.push({ text: this.newMessage, isUser: true, timestamp });
+
+      try {
+        const response = await processText(this.newMessage);
+        const aiMessage = response.error
+          ? `Ошибка: ${response.error}`
+          : response.action?.type
+            ? `Команда обработана: ${response.action.type}`
+            : 'Команда принята в обработку';
+        this.messages.push({ text: aiMessage, isUser: false, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+      } catch (error) {
+        this.messages.push({ text: `Ошибка: ${error.message}`, isUser: false, timestamp });
+      }
+
+      this.newMessage = '';
+      this.$nextTick(() => {
+        const container = this.$el.querySelector('.chat-messages');
+        container.scrollTop = container.scrollHeight;
+      });
     },
     minimizeChat() {
       this.isMinimized = true;
