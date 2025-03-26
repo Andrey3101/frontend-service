@@ -151,6 +151,13 @@ export async function getProfile() {
   return fetchWithTimeout(`${BASE_URLS.auth}/profile`, {}, 'default');
 }
 
+export async function createUserInCompany(companyId, email, password, role) {
+  return fetchWithTimeout(`${BASE_URLS.auth}/companies/${companyId}/users`, {
+    method: 'POST',
+    body: JSON.stringify({ email, password, role }),
+  }, 'default');
+}
+
 export async function updateProfile(profile) {
   if (profile.inn && !/^\d{10}$|^\d{12}$/.test(profile.inn)) {
     throw new Error("ИНН должен содержать 10 или 12 цифр");
@@ -160,7 +167,6 @@ export async function updateProfile(profile) {
     body: JSON.stringify(profile),
   }, 'default');
 }
-
 export async function getMyTasks(params = {}) {
   const query = new URLSearchParams(params).toString();
   return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/my?${query}`);

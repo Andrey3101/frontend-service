@@ -2,8 +2,8 @@
   <v-container class="users-container">
     <v-row>
       <v-col>
-        <h1>Пользователи</h1>
-        <v-btn color="primary" @click="showCreateForm = true" class="create-btn">
+        <h1>Пользователи компании {{ profile?.company_name || 'Загрузка...' }}</h1>
+        <v-btn color="primary" @click="showCreateForm = true" class="create-btn" :disabled="!isAdmin">
           Создать пользователя
         </v-btn>
         <!-- Диалог создания -->
@@ -24,14 +24,14 @@
                 v-model="newUser.password"
                 label="Пароль"
                 type="password"
-                outlined
                 dense
+                outlined
                 :rules="passwordRules"
                 class="create-user-field"
               />
               <v-select
                 v-model="newUser.role"
-                :items="roles"
+                :items="allowedRoles"
                 label="Роль"
                 outlined
                 dense
@@ -42,7 +42,7 @@
             <v-card-actions>
               <v-spacer />
               <v-btn color="grey" text @click="showCreateForm = false">Отмена</v-btn>
-              <v-btn color="primary" @click="createUser" :disabled="!isCreateFormValid || !isEmailUnique">Создать</v-btn>
+              <v-btn color="primary" @click="createUserInCompanyHandler" :disabled="!isCreateFormValid || !isEmailUnique">Создать</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
@@ -70,7 +70,7 @@
               />
               <v-select
                 v-model="editUser.role"
-                :items="roles"
+                :items="allowedRoles"
                 label="Роль"
                 outlined
                 dense
@@ -87,14 +87,14 @@
         </v-dialog>
         <!-- Список пользователей -->
         <v-list class="users-list">
-          <v-list-item v-for="user in users" :key="user.user_id" v-animate-onscroll="'fadeInUp'">
+          <v-list-item v-for="user in filteredUsers" :key="user.user_id" v-animate-onscroll="'fadeInUp'">
             <v-list-item-content>
               <v-list-item-title>ID: {{ user.user_id }}</v-list-item-title>
               <v-list-item-subtitle v-if="isMobile">
-                {{ user.role }} | {{ user.email }}
+                {{ user.role }} | {{ user.email }} | {{ profile?.company_name }}
               </v-list-item-subtitle>
               <v-list-item-subtitle v-else>
-                Роль: {{ user.role }} | Email: {{ user.email }}
+                Роль: {{ user.role }} | Email: {{ user.email }} | Компания: {{ profile?.company_name }}
               </v-list-item-subtitle>
             </v-list-item-content>
             <v-list-item-action>
@@ -136,7 +136,7 @@
 </template>
 
 <script>
-import { getUsers, updateUser, createUser, deleteUser, checkEmailUnique } from '../api';
+import { getUsers, updateUser, deleteUser, checkEmailUnique, createUserInCompany, getProfile } from '../api';
 
 export default {
   data() {
@@ -160,7 +160,7 @@ export default {
         phone_number: '',
         role: 'user',
       },
-      roles: ['user', 'admin'],
+      allowedRoles: ['user', 'manager'], // Ограничение ролей для создания и редактирования
       emailRules: [
         v => !!v || 'Введите email',
         v => /.+@.+\..+/.test(v) || 'Email должен быть валидным',
@@ -172,6 +172,7 @@ export default {
       phoneRules: [
         v => !v || /^\+?\d{10,15}$/.test(v) || 'Номер телефона должен быть валидным (10-15 цифр)',
       ],
+      profile: null, // Профиль текущего пользователя
     };
   },
   computed: {
@@ -184,17 +185,37 @@ export default {
     isEditFormValid() {
       return this.isFormValid(this.editUser);
     },
+    isAdmin() {
+      return this.profile?.role === 'admin';
+    },
+    filteredUsers() {
+      // Отображаем только пользователей из компании текущего администратора
+      return this.users.filter(user => user.company_id === this.profile?.company_id);
+    },
   },
   async created() {
-    await this.fetchUsers();
+    await this.fetchProfile();
+    if (this.isAdmin) {
+      await this.fetchUsers();
+    } else {
+      this.showErrorDialog('У вас нет прав для просмотра этой страницы');
+      this.$router.push('/'); // Перенаправление, если не админ
+    }
   },
   methods: {
+    async fetchProfile() {
+      try {
+        this.profile = await getProfile();
+      } catch (error) {
+        this.showErrorDialog('Не удалось загрузить профиль: ' + error.message);
+      }
+    },
     async fetchUsers() {
       try {
         const data = await getUsers();
         this.users = Array.isArray(data) ? data : [];
       } catch (error) {
-        this.showErrorDialog('Не удалось загрузить пользователей: ' + error.message);
+        this.showErrorDialog('Не удалось загрузить пользователей: ' + this.getErrorMessage(error));
       }
     },
     async checkEmailUnique(email, excludeUserId = null) {
@@ -207,27 +228,42 @@ export default {
           this.emailRules = this.emailRules.filter(rule => typeof rule !== 'function' || rule() !== 'Этот email уже используется');
         }
       } catch (error) {
-        this.showErrorDialog('Ошибка проверки email: ' + error.message);
+        this.showErrorDialog('Ошибка проверки email: ' + this.getErrorMessage(error));
       }
     },
-    async createUser() {
-      if (!this.isCreateFormValid || !this.isEmailUnique) return;
+    async createUserInCompanyHandler() {
+      if (!this.isCreateFormValid || !this.isEmailUnique || !this.isAdmin) return;
       try {
-        await createUser(this.newUser.email, this.newUser.password, this.newUser.role);
+        await createUserInCompany(
+          this.profile.company_id,
+          this.newUser.email,
+          this.newUser.password,
+          this.newUser.role
+        );
         await this.fetchUsers();
         this.showCreateForm = false;
         this.newUser = { email: '', password: '', role: 'user' };
       } catch (error) {
-        this.showErrorDialog('Не удалось создать пользователя: ' + error.message);
+        this.showErrorDialog('Не удалось создать пользователя: ' + this.getErrorMessage(error));
       }
     },
     editUser(user) {
+      // Проверка, что пользователь из той же компании
+      if (user.company_id !== this.profile?.company_id) {
+        this.showErrorDialog('Вы не можете редактировать пользователей из других компаний');
+        return;
+      }
       this.editUser = { ...user };
       this.checkEmailUnique(this.editUser.email, this.editUser.user_id);
       this.showEditForm = true;
     },
     async updateUser() {
       if (!this.isEditFormValid || !this.isEmailUnique) return;
+      // Проверка, что пользователь из той же компании
+      if (this.editUser.company_id !== this.profile?.company_id) {
+        this.showErrorDialog('Вы не можете редактировать пользователей из других компаний');
+        return;
+      }
       try {
         await updateUser(this.editUser.user_id, {
           email: this.editUser.email,
@@ -237,21 +273,32 @@ export default {
         await this.fetchUsers();
         this.showEditForm = false;
       } catch (error) {
-        this.showErrorDialog('Не удалось обновить пользователя: ' + error.message);
+        this.showErrorDialog('Не удалось обновить пользователя: ' + this.getErrorMessage(error));
       }
     },
     confirmDelete(userId) {
+      const user = this.filteredUsers.find(u => u.user_id === userId);
+      if (!user || user.company_id !== this.profile?.company_id) {
+        this.showErrorDialog('Вы не можете удалить пользователей из других компаний');
+        return;
+      }
       this.deleteUserId = userId;
       this.showDeleteConfirm = true;
     },
     async deleteUser() {
+      const user = this.filteredUsers.find(u => u.user_id === this.deleteUserId);
+      if (!user || user.company_id !== this.profile?.company_id) {
+        this.showErrorDialog('Вы не можете удалить пользователей из других компаний');
+        this.showDeleteConfirm = false;
+        return;
+      }
       try {
         await deleteUser(this.deleteUserId);
         await this.fetchUsers();
         this.showDeleteConfirm = false;
         this.deleteUserId = null;
       } catch (error) {
-        this.showErrorDialog('Не удалось удалить пользователя: ' + error.message);
+        this.showErrorDialog('Не удалось удалить пользователя: ' + this.getErrorMessage(error));
       }
     },
     showErrorDialog(message) {
@@ -263,6 +310,21 @@ export default {
       const phoneValid = this.phoneRules.every(rule => rule(user.phone_number || '') === true);
       const roleValid = !!user.role;
       return emailValid && (isNew ? this.passwordRules.every(rule => rule(user.password) === true) : true) && phoneValid && roleValid;
+    },
+    getErrorMessage(error) {
+      // Улучшенная обработка ошибок
+      if (error.response?.status === 400 && error.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        if (detail.includes('Достигнут лимит пользователей')) {
+          return 'Превышен лимит пользователей в компании (максимум 8)';
+        } else if (detail.includes('уже существует')) {
+          return 'Пользователь с таким email уже существует';
+        } else if (detail.includes('Только администратор')) {
+          return 'У вас нет прав для выполнения этой операции';
+        }
+        return detail;
+      }
+      return error.message || 'Неизвестная ошибка';
     },
   },
 };
