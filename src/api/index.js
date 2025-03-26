@@ -221,10 +221,10 @@ export async function updateReport(reportId, updates) {
   const payload = {
     title: updates.title,
     status: updates.status,
-    responsible: updates.author,  // author -> responsible
-    description: updates.content  // content -> description
+    responsible: updates.author,
+    description: updates.content
   };
-  return fetchWithCsrf(`${BASE_URLS.tasks}/documents/${reportId}`, {  // Используем /documents/{document_id}
+  return fetchWithCsrf(`${BASE_URLS.tasks}/documents/${reportId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
