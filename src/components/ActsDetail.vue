@@ -109,7 +109,7 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { getAct, updateAct } from '../api';
+import { getAct, updateAct } from '../api';  // Импортируем исправленные функции
 import EditModal from './EditModal.vue';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -135,11 +135,11 @@ export default {
       loading.value = true;
       error.value = null;
       try {
-        const response = await getAct(route.params.id);
+        const response = await getAct(route.params.id);  // Используем getAct
         act.value = response;
         editData.value = { ...act.value };
       } catch (err) {
-        const errorMessage = err.response?.error || err.response?.detail || err.message || 'Не удалось загрузить акт';
+        const errorMessage = err.response?.data?.detail || err.message || 'Не удалось загрузить акт';
         error.value = errorMessage;
       } finally {
         loading.value = false;
@@ -169,14 +169,12 @@ export default {
       loading.value = true;
       error.value = null;
       try {
-        await updateAct(route.params.id, editData.value);
+        await updateAct(route.params.id, editData.value);  // Используем updateAct
         await fetchAct();
         showEditModal.value = false;
         showConfirmDialog.value = false;
       } catch (err) {
-        const errorMessage = err.response
-          ? err.response.error || err.response.detail || err.message
-          : err.message || 'Не удалось сохранить изменения';
+        const errorMessage = err.response?.data?.detail || err.message || 'Не удалось сохранить изменения';
         error.value = errorMessage;
       } finally {
         loading.value = false;

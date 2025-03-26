@@ -35,6 +35,9 @@
           :items-per-page="10"
           :footer-props="{ 'items-per-page-options': [5, 10, 15, -1] }"
         >
+          <template v-slot:item.created_at="{ item }">
+            {{ formatDate(item.created_at) }}
+          </template>
           <template v-slot:item.actions="{ item }">
             <v-btn icon class="action-btn" @click="viewReport(item)">
               <v-icon color="blue">mdi-eye</v-icon>
@@ -81,7 +84,7 @@
         <!-- Просмотр отчета -->
         <v-dialog v-model="showReport" max-width="800px" persistent>
           <v-card class="dialog-card">
-            <v-card-title class="dialog-title">Отчет</v-card-title>
+            <v-card-title class="dialog-title">Отчет #{{ selectedReport?.id }}</v-card-title>
             <v-card-text class="report-content">
               <pre>{{ selectedReport?.content }}</pre>
             </v-card-text>
@@ -97,9 +100,10 @@
 </template>
 
 <script>
-import { getReports, generateReport, getUsers } from '../api';  // Предполагается, что api экспортирует функции из index.js
+import { getReports, generateReport, getUsers, getReport } from '../api';  // Импортируем все нужные функции
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
+import dayjs from 'dayjs';  // Добавляем dayjs для форматирования даты
 
 export default {
   data() {
@@ -134,7 +138,7 @@ export default {
       return this.reports.filter(
         (report) =>
           report.id.toString().includes(query) ||
-          report.created_at.toLowerCase().includes(query)
+          this.formatDate(report.created_at).toLowerCase().includes(query)
       );
     },
   },
@@ -148,12 +152,14 @@ export default {
       this.error = null;
       try {
         const response = await getReports();
-        this.reports = Array.isArray(response.reports) ? response.reports.map(r => ({
-          id: r.document_id,
-          created_at: r.created_at
-        })) : [];
+        this.reports = Array.isArray(response.reports)
+          ? response.reports.map(r => ({
+              id: r.document_id,
+              created_at: r.created_at,
+            }))
+          : [];
       } catch (error) {
-        this.error = error.message || 'Не удалось загрузить отчеты';
+        this.error = error.response?.data?.detail || error.message || 'Не удалось загрузить отчеты';
       } finally {
         this.loading = false;
       }
@@ -165,10 +171,7 @@ export default {
         const response = await getUsers();
         this.users = Array.isArray(response) ? response : [];
       } catch (error) {
-        const errorMessage = error.response
-          ? error.response.error || error.response.detail || error.message
-          : error.message || 'Не удалось загрузить пользователей';
-        this.error = errorMessage;
+        this.error = error.response?.data?.detail || error.message || 'Не удалось загрузить пользователей';
       } finally {
         this.loading = false;
       }
@@ -180,11 +183,16 @@ export default {
         const filters = { ...this.reportFilter };
         if (filters.status === 'Все') delete filters.status;
         if (filters.assignee === 'Все') delete filters.assignee;
-        await generateReport({ template_id: "report_v1", filters });
+        // Приводим к структуре бэкенда: { template_id, client_data }
+        const payload = {
+          template_id: 'report_v1',
+          client_data: filters,
+        };
+        await generateReport(payload);
         await this.fetchReports();
         this.showGenerateForm = false;
       } catch (error) {
-        this.error = error.message || 'Не удалось сгенерировать отчет';
+        this.error = error.response?.data?.detail || error.message || 'Не удалось сгенерировать отчет';
       } finally {
         this.loading = false;
       }
@@ -193,26 +201,21 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        const response = await fetch(`http://localhost:5001/documents/${report.id}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'X-CSRF-Token': localStorage.getItem('csrf_token')
-          }
-        });
-        if (!response.ok) throw new Error('Не удалось загрузить детали отчета');
-        const detailedReport = await response.json();
+        const response = await getReport(report.id);  // Используем getReport из index.js
         this.selectedReport = {
-          id: detailedReport.document_id,
-          content: detailedReport.description || 'Нет содержимого',  // Используем description как content
-          created_at: detailedReport.created_at
+          id: response.document_id,
+          content: response.description || 'Нет содержимого',  // description как content
+          created_at: response.created_at,
         };
         this.showReport = true;
       } catch (error) {
-        this.error = error.message || 'Ошибка загрузки отчета';
+        this.error = error.response?.data?.detail || error.message || 'Ошибка загрузки отчета';
       } finally {
         this.loading = false;
       }
+    },
+    formatDate(date) {
+      return date ? dayjs(date).format('DD.MM.YYYY HH:mm') : 'Не указано';
     },
     exportToPDF() {
       const doc = new jsPDF();
@@ -221,7 +224,7 @@ export default {
       doc.text('Список отчетов', 10, 10);
       this.filteredReports.forEach((report, index) => {
         const y = 20 + index * 10;
-        doc.text(`ID: ${report.id} | Дата: ${report.created_at}`, 10, y);
+        doc.text(`ID: ${report.id} | Дата: ${this.formatDate(report.created_at)}`, 10, y);
       });
       doc.save('reports.pdf');
     },
@@ -229,7 +232,7 @@ export default {
       const worksheet = XLSX.utils.json_to_sheet(
         this.filteredReports.map((report) => ({
           'ID': report.id,
-          'Дата создания': report.created_at,
+          'Дата создания': this.formatDate(report.created_at),
         }))
       );
       const workbook = XLSX.utils.book_new();

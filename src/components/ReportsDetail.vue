@@ -105,7 +105,7 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { getReports, updateReport } from '../api';
+import { getReport, updateReport } from '../api';  // Импортируем исправленные функции
 import EditModal from './EditModal.vue';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -130,12 +130,16 @@ export default {
     const fetchReport = async () => {
       loading.value = true;
       try {
-        const reports = await getReports();
-        report.value = reports.find((r) => r.id === Number(route.params.id));
-        if (!report.value) throw new Error('Отчёт не найден');
-        editData.value = { ...report.value };
+        const response = await getReport(route.params.id);  // Используем getReport
+        report.value = response;
+        editData.value = {
+          title: response.title,
+          status: response.status,
+          author: response.responsible,  // Приводим responsible к author
+          content: response.description  // Приводим description к content
+        };
       } catch (err) {
-        error.value = err.message || 'Не удалось загрузить отчёт';
+        error.value = err.response?.data?.detail || err.message || 'Не удалось загрузить отчёт';
       } finally {
         loading.value = false;
       }
@@ -160,10 +164,18 @@ export default {
     };
 
     const saveReport = async () => {
-      await updateReport(route.params.id, editData.value);
-      await fetchReport();
-      showEditModal.value = false;
-      showConfirmDialog.value = false;
+      loading.value = true;
+      error.value = null;
+      try {
+        await updateReport(route.params.id, editData.value);  // Используем updateReport
+        await fetchReport();
+        showEditModal.value = false;
+        showConfirmDialog.value = false;
+      } catch (err) {
+        error.value = err.response?.data?.detail || err.message || 'Не удалось сохранить изменения';
+      } finally {
+        loading.value = false;
+      }
     };
 
     const exportToPDF = () => {
@@ -179,13 +191,13 @@ export default {
           ['Название', report.value.title || 'Не указано'],
           ['Дата создания', formatDate(report.value.created_at)],
           ['Статус', report.value.status || 'Не определён'],
-          ['Автор', report.value.author || 'Не указан'],
-          ['Содержимое', report.value.content || 'Отсутствует'],
+          ['Автор', report.value.responsible || 'Не указан'],  // Используем responsible как author
+          ['Содержимое', report.value.description || 'Отсутствует'],  // Используем description как content
         ],
         styles: { font: 'helvetica', fontSize: 10, cellPadding: 2, overflow: 'linebreak' },
         headStyles: { fillColor: [25, 118, 210], textColor: [255, 255, 255] },
         alternateRowStyles: { fillColor: [240, 244, 248] },
-        columnStyles: { 1: { cellWidth: 120 } }, // Увеличена ширина для длинного текста
+        columnStyles: { 1: { cellWidth: 120 } },
       });
 
       doc.save(`report_${report.value.id}.pdf`);
@@ -197,8 +209,8 @@ export default {
         'Название': report.value.title || 'Не указано',
         'Дата создания': formatDate(report.value.created_at),
         'Статус': report.value.status || 'Не определён',
-        'Автор': report.value.author || 'Не указан',
-        'Содержимое': report.value.content || 'Отсутствует',
+        'Автор': report.value.responsible || 'Не указан',
+        'Содержимое': report.value.description || 'Отсутствует',
       }];
       const worksheet = XLSX.utils.json_to_sheet(data);
       const workbook = XLSX.utils.book_new();

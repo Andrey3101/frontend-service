@@ -79,7 +79,7 @@
 </template>
 
 <script>
-import { getActs, updateAct } from '../api';
+import { getActs, updateAct } from '../api';  // Импортируем исправленные функции
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 
@@ -118,14 +118,12 @@ export default {
       this.error = null;
       try {
         const response = await getActs();
-        this.acts = Array.isArray(response.acts) ? response.acts.map(act => ({
-        id: act.document_id,
-        type: act.type
-      })) : [];
+        this.acts = response.acts.map(act => ({
+          id: act.document_id,
+          type: act.type
+        }));
       } catch (error) {
-        const errorMessage = error.response
-          ? error.response.error || error.response.detail || error.message
-          : error.message || 'Ошибка загрузки актов';
+        const errorMessage = error.response?.data?.detail || error.message || 'Ошибка загрузки актов';
         this.error = errorMessage;
       } finally {
         this.loading = false;
@@ -145,13 +143,11 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        await updateAct(this.selectedActId, { type: this.newActType });
+        await updateAct(this.selectedActId, { type: this.newActType });  // Используем updateAct
         await this.fetchActs();
         this.showEditDialog = false;
       } catch (error) {
-        const errorMessage = error.response
-          ? error.response.error || error.response.detail || error.message
-          : error.message || 'Ошибка обновления акта';
+        const errorMessage = error.response?.data?.detail || error.message || 'Ошибка обновления акта';
         this.error = errorMessage;
       } finally {
         this.loading = false;

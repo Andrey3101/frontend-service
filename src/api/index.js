@@ -218,10 +218,21 @@ export async function updateTask(taskId, updates) {
 }
 
 export async function updateReport(reportId, updates) {
-  return fetchWithCsrf(`${BASE_URLS.tasks}/reports/${reportId}`, {  // Исправлен URL
+  const payload = {
+    title: updates.title,
+    status: updates.status,
+    responsible: updates.author,  // author -> responsible
+    description: updates.content  // content -> description
+  };
+  return fetchWithCsrf(`${BASE_URLS.tasks}/documents/${reportId}`, {  // Используем /documents/{document_id}
     method: 'PUT',
-    body: JSON.stringify(updates),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
+}
+
+export async function getReport(reportId) {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/documents/${reportId}`);
 }
 
 export async function deleteTask(taskId) {
@@ -278,15 +289,21 @@ export async function getActs() {
 }
 
 export async function updateAct(actId, updates) {
-  return fetchWithCsrf(`${BASE_URLS.tasks}/acts/${actId}`, {
+  const payload = {
+    title: updates.title,
+    status: updates.status,
+    responsible: updates.responsible,
+    description: updates.description
+  };
+  return fetchWithCsrf(`${BASE_URLS.tasks}/documents/${actId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates),
+    body: JSON.stringify(payload),
   });
 }
 
 export async function getAct(actId) {
-  return fetchWithCsrf(`${BASE_URLS.tasks}/acts/${actId}`);
+  return fetchWithCsrf(`${BASE_URLS.tasks}/documents/${actId}`);
 }
 
 export async function getUsers() {
