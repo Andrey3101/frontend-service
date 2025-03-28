@@ -13,8 +13,6 @@ const TIMEOUTS = {
   googleCallback: 12000,
 };
 
-let csrfToken = localStorage.getItem('csrf_token') || '';
-
 async function fetchWithTimeout(url, options = {}, timeoutKey = 'default') {
   const timeout = TIMEOUTS[timeoutKey] || TIMEOUTS.default;
   const controller = new AbortController();
@@ -58,10 +56,8 @@ export async function login(email, password) {
   localStorage.setItem('token', response.token);
   localStorage.setItem('csrf_token', response.csrf_token);
   localStorage.setItem('user_id', response.user_id);
-  // Role не возвращается в TokenResponse, поэтому получаем через /profile
   const profile = await getProfile();
   localStorage.setItem('user_role', profile.role);
-  csrfToken = response.csrf_token;
   return response;
 }
 
@@ -80,7 +76,6 @@ export async function googleCallback(code, state) {
   localStorage.setItem('user_id', response.user_id);
   const profile = await getProfile();
   localStorage.setItem('user_role', profile.role);
-  csrfToken = response.csrf_token;
   return response;
 }
 
@@ -437,3 +432,17 @@ export async function getPromotionRecommendations(salesData, competitorData) {
     body: JSON.stringify({ sales_data: salesData, competitor_data: competitorData }),
   });
 }
+
+export async function getAggregatePayroll(period) {
+  return fetchWithCsrf(`${BASE_URLS.auth}/payroll/aggregate?period=${period}`);
+}
+
+export async function getProductivityReport(userId, period) {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/productivity/${userId}?period=${period}`);
+}
+
+export {
+  BASE_URLS,
+  fetchWithTimeout,
+  fetchWithCsrf,
+};

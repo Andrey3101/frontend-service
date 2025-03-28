@@ -164,7 +164,7 @@
 
 <script>
 import { getMyTasks, createTask, updateTask, deleteTask, getUsers } from '../api';
-import { fetchWithCsrf, startTimeTracking, stopTimeTracking } from '../api/index';
+import { fetchWithCsrf, startTimeTracking, stopTimeTracking, BASE_URLS } from '../api/index';
 
 export default {
   data() {
@@ -231,7 +231,7 @@ export default {
     await this.fetchTasks();
     await this.fetchUsers();
   },
-  beforeDestroy() {
+  beforeUnmount() {
     this.clearAllTimers();
   },
   methods: {

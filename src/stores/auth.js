@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
-import { login, logoutUser, getProfile, updateProfile, googleCallback } from '@/api';
+import { login, logoutUser, getProfile, updateProfile, googleCallback, fetchWithTimeout } from '@/api';
+import { BASE_URLS } from '@/api';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -10,7 +11,7 @@ export const useAuthStore = defineStore('auth', {
   }),
   actions: {
     async login(email, password) {
-      const data = await login(email, password); // Использует 'login'
+      const data = await login(email, password);
       this.userId = data.user_id;
       this.token = data.token;
       this.csrfToken = data.csrf_token;
@@ -21,14 +22,14 @@ export const useAuthStore = defineStore('auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      }, 'register'); // Использует 'register'
+      }, 'register');
       this.userId = response.user_id;
       this.token = response.token;
       this.csrfToken = response.csrf_token;
       this.user = await getProfile();
     },
     async googleLogin(code, state) {
-      const data = await googleCallback(code, state); // Использует 'googleCallback'
+      const data = await googleCallback(code, state);
       this.userId = data.user_id;
       this.token = data.token;
       this.csrfToken = data.csrf_token;

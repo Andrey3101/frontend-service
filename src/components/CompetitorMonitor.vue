@@ -11,9 +11,10 @@
         outlined
         :rules="urlRules"
         clearable
-        @input="clearResults"
+        @input="clearResultsDebounced"
         hint="Введите URLs сайтов конкурентов, например, https://example.com"
         persistent-hint
+        aria-label="URLs конкурентов для мониторинга"
       ></v-textarea>
       <v-row class="mt-2">
         <v-col>
@@ -22,18 +23,37 @@
             :disabled="isMonitorButtonDisabled"
             :loading="isLoading"
             color="primary"
+            aria-label="Запустить мониторинг конкурентов"
           >
             Запустить мониторинг
+          </v-btn>
+          <v-btn
+            v-if="isLoading"
+            @click="cancelMonitor"
+            color="error"
+            class="ml-2"
+            :disabled="!isLoading"
+            aria-label="Остановить мониторинг"
+          >
+            Остановить
           </v-btn>
           <v-btn
             @click="saveUrls"
             :disabled="!competitorUrls.trim()"
             color="secondary"
             class="ml-2"
+            aria-label="Сохранить URLs конкурентов"
           >
             Сохранить URLs
           </v-btn>
-          <v-btn @click="loadUrls" color="info" class="ml-2">Загрузить URLs</v-btn>
+          <v-btn
+            @click="loadUrls"
+            color="info"
+            class="ml-2"
+            aria-label="Загрузить сохранённые URLs"
+          >
+            Загрузить URLs
+          </v-btn>
         </v-col>
       </v-row>
 
@@ -48,9 +68,26 @@
         {{ Math.round(progress) }}%
       </v-progress-linear>
 
+      <!-- Сводка и фильтрация -->
+      <v-card-text v-if="results.length" class="mt-4">
+        <p>
+          Успешно: {{ results.filter((r) => r.status === 'Успешно').length }} | Ошибки:
+          {{ results.filter((r) => r.status === 'Ошибка').length }}
+        </p>
+      </v-card-text>
+      <v-row v-if="results.length" class="mt-2">
+        <v-col>
+          <v-btn-toggle v-model="filter" mandatory dense>
+            <v-btn value="all" aria-label="Показать все результаты">Все</v-btn>
+            <v-btn value="success" aria-label="Показать успешные результаты">Успешные</v-btn>
+            <v-btn value="error" aria-label="Показать ошибки">Ошибки</v-btn>
+          </v-btn-toggle>
+        </v-col>
+      </v-row>
+
       <!-- Результаты -->
-      <v-expansion-panels v-if="results.length" class="mt-4">
-        <v-expansion-panel v-for="(result, index) in results" :key="index">
+      <v-expansion-panels ref="resultsPanel" v-if="filteredResults.length" class="mt-4">
+        <v-expansion-panel v-for="(result, index) in filteredResults" :key="index">
           <v-expansion-panel-header>
             {{ result.url }} - {{ result.status }}
           </v-expansion-panel-header>
@@ -71,6 +108,7 @@
         color="success"
         class="mt-4"
         :disabled="isLoading"
+        aria-label="Экспортировать результаты в JSON"
       >
         Экспорт в JSON
       </v-btn>
@@ -83,6 +121,7 @@
 
 <script>
 import { monitorCompetitors } from '@/api/index.js';
+import debounce from 'lodash/debounce';
 
 export default {
   data() {
@@ -92,18 +131,37 @@ export default {
       error: null,
       isLoading: false,
       progress: 0,
+      filter: 'all',
+      cancelToken: null,
       urlRules: [
         (v) => !!v || 'Введите хотя бы один URL',
-        (v) => {
-          const urls = v.split('\n').filter((url) => url.trim());
-          return urls.every((url) => /^https?:\/\/[^\s/$.?#].[^\s]*$/.test(url)) || 'Все URLs должны быть валидными';
-        },
+        (v) =>
+          v.split('\n').filter((url) => url.trim()).length <= 10 || 'Максимум 10 URL',
+        (v) =>
+          v
+            .split('\n')
+            .filter((url) => url.trim())
+            .every((url) => /^https?:\/\/[^\s/$.?#].[^\s]*$/.test(url)) ||
+          'Все URLs должны быть валидными',
       ],
     };
   },
   computed: {
     isMonitorButtonDisabled() {
       return !this.competitorUrls.trim() || this.isLoading;
+    },
+    normalizedUrls() {
+      return this.competitorUrls
+        .split('\n')
+        .map((url) => url.trim())
+        .filter((url) => url)
+        .map((url) => (url.match(/^https?:\/\//) ? url : `https://${url}`));
+    },
+    filteredResults() {
+      if (this.filter === 'all') return this.results;
+      return this.results.filter((result) =>
+        this.filter === 'success' ? result.status === 'Успешно' : result.status === 'Ошибка'
+      );
     },
   },
   methods: {
@@ -112,15 +170,15 @@ export default {
       this.error = null;
       this.progress = 0;
     },
+    clearResultsDebounced: debounce(function () {
+      this.clearResults();
+    }, 300),
     async monitor() {
       this.isLoading = true;
       this.clearResults();
+      this.cancelToken = new AbortController();
 
-      const urls = this.competitorUrls
-        .split('\n')
-        .map((url) => url.trim())
-        .filter((url) => url);
-
+      const urls = this.normalizedUrls;
       if (!urls.length) {
         this.error = 'Введите хотя бы один URL';
         this.isLoading = false;
@@ -128,7 +186,7 @@ export default {
       }
 
       try {
-        const response = await this.monitorWithProgress(urls);
+        const response = await monitorCompetitors(urls, { signal: this.cancelToken.signal });
         if (response.error) {
           this.error = response.error;
         } else if (response.action && typeof response.action === 'object') {
@@ -141,23 +199,25 @@ export default {
         } else {
           this.error = 'Неожиданный формат ответа от сервера';
         }
+        this.progress = 100;
+        this.$nextTick(() => {
+          this.$refs.resultsPanel?.$el.querySelector('.v-expansion-panel-header')?.focus();
+        });
       } catch (err) {
-        this.error = `Ошибка мониторинга: ${err.message}`;
+        if (err.name === 'AbortError') {
+          this.error = 'Мониторинг отменён пользователем';
+        } else {
+          this.error = `Ошибка мониторинга: ${err.message}`;
+        }
       } finally {
         this.isLoading = false;
-        this.progress = 100;
       }
     },
-    async monitorWithProgress(urls) {
-      const response = await monitorCompetitors(urls);
-      const total = urls.length;
-      let completed = 0;
-      const interval = setInterval(() => {
-        completed += 1;
-        this.progress = (completed / total) * 100;
-        if (completed >= total) clearInterval(interval);
-      }, 500); // Симуляция прогресса
-      return response;
+    cancelMonitor() {
+      this.cancelToken?.abort();
+      this.isLoading = false;
+      this.progress = 0;
+      this.$toast.info('Мониторинг остановлен');
     },
     saveUrls() {
       localStorage.setItem('competitorUrls', this.competitorUrls);
@@ -178,9 +238,10 @@ export default {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'competitor_monitor_results.json';
+      a.download = `competitor_monitor_results_${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
+      this.$toast.success('Результаты экспортированы');
     },
   },
 };
@@ -190,6 +251,7 @@ export default {
 .headline {
   font-size: 1.5rem;
   font-weight: 500;
+  font-family: 'Gilroy-Medium', sans-serif;
 }
 
 .pa-4 {

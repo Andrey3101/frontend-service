@@ -5,29 +5,45 @@
     <v-card-text>
       <v-form ref="form" v-model="valid" lazy-validation>
         <v-row>
-          <v-col cols="6">
-            <v-text-field
-              v-model.number="salesData.totalSales"
-              label="Общие продажи (руб)"
-              type="number"
-              outlined
-              :rules="salesRules"
-              @input="clearResults"
-              hint="Сумма продаж за выбранный период"
-              persistent-hint
-            ></v-text-field>
+          <v-col cols="12" sm="6">
+            <v-tooltip bottom>
+              <template v-slot:activator="{ on, attrs }">
+                <v-text-field
+                  v-model.number="salesData.totalSales"
+                  label="Общие продажи (руб)"
+                  type="number"
+                  outlined
+                  :rules="salesRules"
+                  @input="clearResultsDebounced"
+                  hint="Сумма продаж за выбранный период"
+                  persistent-hint
+                  v-bind="attrs"
+                  v-on="on"
+                  aria-label="Общие продажи в рублях"
+                ></v-text-field>
+              </template>
+              <span>Сумма продаж за выбранный период в рублях</span>
+            </v-tooltip>
           </v-col>
-          <v-col cols="6">
-            <v-text-field
-              v-model.number="salesData.unitsSold"
-              label="Продано единиц"
-              type="number"
-              outlined
-              :rules="unitsRules"
-              @input="clearResults"
-              hint="Количество проданных единиц"
-              persistent-hint
-            ></v-text-field>
+          <v-col cols="12" sm="6">
+            <v-tooltip bottom>
+              <template v-slot:activator="{ on, attrs }">
+                <v-text-field
+                  v-model.number="salesData.unitsSold"
+                  label="Продано единиц"
+                  type="number"
+                  outlined
+                  :rules="unitsRules"
+                  @input="clearResultsDebounced"
+                  hint="Количество проданных единиц"
+                  persistent-hint
+                  v-bind="attrs"
+                  v-on="on"
+                  aria-label="Количество проданных единиц"
+                ></v-text-field>
+              </template>
+              <span>Количество проданных единиц товара</span>
+            </v-tooltip>
           </v-col>
         </v-row>
         <v-select
@@ -35,21 +51,64 @@
           :items="periodOptions"
           label="Период анализа"
           outlined
-          @change="clearResults"
+          @change="clearResultsDebounced"
           hint="Выберите период для анализа данных"
           persistent-hint
+          aria-label="Период анализа данных"
         ></v-select>
-        <v-textarea
-          v-model="competitorDataInput"
-          label="Данные конкурентов (JSON)"
-          placeholder='Пример: {"competitor1": {"sales": 10000, "units": 50}}'
-          rows="5"
-          outlined
-          :rules="jsonRules"
-          @input="clearResults"
-          hint="Введите данные о конкурентах или выберите шаблон"
-          persistent-hint
-        ></v-textarea>
+
+        <!-- Динамическая форма для конкурентов -->
+        <v-row v-for="(comp, index) in competitors" :key="index" class="mb-2">
+          <v-col cols="12" sm="4">
+            <v-text-field
+              v-model="comp.name"
+              label="Название конкурента"
+              outlined
+              :rules="[v => !!v || 'Введите название']"
+              @input="clearResultsDebounced"
+            />
+          </v-col>
+          <v-col cols="12" sm="3">
+            <v-text-field
+              v-model.number="comp.sales"
+              label="Продажи (руб)"
+              type="number"
+              outlined
+              :rules="salesRules"
+              @input="clearResultsDebounced"
+            />
+          </v-col>
+          <v-col cols="12" sm="3">
+            <v-text-field
+              v-model.number="comp.units"
+              label="Единиц"
+              type="number"
+              outlined
+              :rules="unitsRules"
+              @input="clearResultsDebounced"
+            />
+          </v-col>
+          <v-col cols="12" sm="2">
+            <v-btn
+              @click="removeCompetitor(index)"
+              color="error"
+              small
+              aria-label="Удалить конкурента"
+            >
+              Удалить
+            </v-btn>
+          </v-col>
+        </v-row>
+        <v-btn
+          @click="addCompetitor"
+          color="primary"
+          small
+          class="mb-4"
+          aria-label="Добавить конкурента"
+        >
+          Добавить конкурента
+        </v-btn>
+
         <v-row class="mt-2">
           <v-col>
             <v-btn
@@ -57,8 +116,18 @@
               :disabled="!valid || isLoading"
               :loading="isLoading"
               color="primary"
+              aria-label="Получить рекомендации по продвижению"
             >
               Получить рекомендации
+            </v-btn>
+            <v-btn
+              @click="resetForm"
+              color="warning"
+              class="ml-2"
+              :disabled="isLoading"
+              aria-label="Сбросить форму"
+            >
+              Сбросить
             </v-btn>
             <v-menu offset-y>
               <template v-slot:activator="{ on, attrs }">
@@ -68,6 +137,7 @@
                   v-bind="attrs"
                   v-on="on"
                   :disabled="isLoading"
+                  aria-label="Выбрать шаблон данных конкурентов"
                 >
                   Выбрать шаблон
                 </v-btn>
@@ -91,13 +161,18 @@
         <v-card v-if="recommendations" flat class="mt-4">
           <v-card-title>Рекомендации</v-card-title>
           <v-card-text>
-            <p>{{ recommendations }}</p>
+            <v-list>
+              <v-list-item v-for="(item, index) in formattedRecommendations" :key="index">
+                <v-list-item-content>{{ item }}</v-list-item-content>
+              </v-list-item>
+            </v-list>
             <v-btn
               @click="exportRecommendations"
               color="success"
               small
               class="mt-2"
               :disabled="isLoading"
+              aria-label="Экспортировать рекомендации в TXT"
             >
               Экспорт в TXT
             </v-btn>
@@ -113,6 +188,7 @@
 
 <script>
 import { getPromotionRecommendations } from '@/api/index.js';
+import debounce from 'lodash/debounce';
 
 export default {
   data() {
@@ -121,25 +197,14 @@ export default {
       salesData: {
         totalSales: 0,
         unitsSold: 0,
-        period: 'month', // Значение по умолчанию
+        period: 'month',
       },
-      competitorDataInput: '',
+      competitors: [],
       recommendations: null,
       error: null,
       isLoading: false,
       salesRules: [(v) => v >= 0 || 'Значение не может быть отрицательным'],
       unitsRules: [(v) => v >= 0 || 'Значение не может быть отрицательным'],
-      jsonRules: [
-        (v) => !!v || 'Введите данные конкурентов',
-        (v) => {
-          try {
-            JSON.parse(v);
-            return true;
-          } catch {
-            return 'Некорректный JSON';
-          }
-        },
-      ],
       periodOptions: [
         { text: 'Месяц', value: 'month' },
         { text: 'Квартал', value: 'quarter' },
@@ -148,35 +213,37 @@ export default {
       competitorTemplates: [
         {
           name: 'Малый бизнес',
-          data: JSON.stringify({
-            competitor1: { sales: 50000, units: 100 },
-            competitor2: { sales: 75000, units: 150 },
-          }, null, 2),
+          data: [
+            { name: 'competitor1', sales: 50000, units: 100 },
+            { name: 'competitor2', sales: 75000, units: 150 },
+          ],
         },
         {
           name: 'Средний бизнес',
-          data: JSON.stringify({
-            competitor1: { sales: 200000, units: 400 },
-            competitor2: { sales: 300000, units: 600 },
-          }, null, 2),
+          data: [
+            { name: 'competitor1', sales: 200000, units: 400 },
+            { name: 'competitor2', sales: 300000, units: 600 },
+          ],
         },
         {
           name: 'Крупный бизнес',
-          data: JSON.stringify({
-            competitor1: { sales: 1000000, units: 2000 },
-            competitor2: { sales: 1500000, units: 3000 },
-          }, null, 2),
+          data: [
+            { name: 'competitor1', sales: 1000000, units: 2000 },
+            { name: 'competitor2', sales: 1500000, units: 3000 },
+          ],
         },
       ],
     };
   },
   computed: {
     competitorData() {
-      try {
-        return JSON.parse(this.competitorDataInput || '{}');
-      } catch {
-        return {};
-      }
+      return this.competitors.reduce((acc, comp) => {
+        acc[comp.name] = { sales: comp.sales, units: comp.units };
+        return acc;
+      }, {});
+    },
+    formattedRecommendations() {
+      return this.recommendations?.split('\n').filter((line) => line.trim()) || [];
     },
   },
   methods: {
@@ -184,6 +251,9 @@ export default {
       this.recommendations = null;
       this.error = null;
     },
+    clearResultsDebounced: debounce(function () {
+      this.clearResults();
+    }, 300),
     async getRecommendations() {
       if (!this.$refs.form.validate()) return;
 
@@ -205,10 +275,24 @@ export default {
         this.isLoading = false;
       }
     },
+    addCompetitor() {
+      this.competitors.push({ name: '', sales: 0, units: 0 });
+    },
+    removeCompetitor(index) {
+      this.competitors.splice(index, 1);
+      this.clearResultsDebounced();
+    },
     applyTemplate(templateData) {
-      this.competitorDataInput = templateData;
+      this.competitors = [...templateData];
       this.clearResults();
       this.$toast.info('Шаблон применён');
+    },
+    resetForm() {
+      this.salesData = { totalSales: 0, unitsSold: 0, period: 'month' };
+      this.competitors = [];
+      this.clearResults();
+      this.$refs.form.resetValidation();
+      this.$toast.info('Форма сброшена');
     },
     exportRecommendations() {
       const text = `Рекомендации по продвижению (${this.salesData.period}):\n\n${this.recommendations}`;
@@ -229,13 +313,13 @@ export default {
 .headline {
   font-size: 1.5rem;
   font-weight: 500;
+  font-family: 'Gilroy-Medium', sans-serif;
 }
 
 .pa-4 {
   padding: 16px;
 }
 
-/* Анимация появления результатов */
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.5s ease;

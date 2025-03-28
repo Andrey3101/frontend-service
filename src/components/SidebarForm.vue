@@ -10,65 +10,141 @@
         <div v-if="isMobileOnly" class="menu-scroll">
           <div class="menu-scroll-inner">
             <v-btn text to="/dashboard" class="menu-item" aria-label="Перейти к дашборду">
-              <img src="@/assets/sidebaricon/dashboards.svg" class="custom-icon" alt="Dashboard">
+              <img src="@/assets/sidebaricon/dashboards.svg" class="custom-icon" alt="Dashboard" />
               Дашборд
             </v-btn>
             <v-btn text to="/tasks" class="menu-item" aria-label="Перейти к задачам">
-              <img src="@/assets/sidebaricon/tasks.svg" class="custom-icon" alt="Tasks">
+              <img src="@/assets/sidebaricon/tasks.svg" class="custom-icon" alt="Tasks" />
               Задачи
             </v-btn>
-            <v-btn text to="/reports" class="menu-item" aria-label="Перейти к отчётам">
-              <img src="@/assets/sidebaricon/reports.svg" class="custom-icon" alt="Reports">
-              Отчеты
-            </v-btn>
-            <v-btn text to="/acts" class="menu-item" aria-label="Перейти к актам">
-              <img src="@/assets/sidebaricon/acts.svg" class="custom-icon" alt="Acts">
-              Акты
-            </v-btn>
+            <v-menu offset-y>
+              <template v-slot:activator="{ on, attrs }">
+                <v-btn text v-bind="attrs" v-on="on" class="menu-item" aria-label="Документы">
+                  <img src="@/assets/sidebaricon/reports.svg" class="custom-icon" alt="Documents" />
+                  Документы
+                </v-btn>
+              </template>
+              <v-list>
+                <v-list-item to="/reports" aria-label="Перейти к отчётам">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/reports.svg" class="custom-icon" alt="Reports" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Отчеты</v-list-item-title>
+                </v-list-item>
+                <v-list-item to="/acts" aria-label="Перейти к актам">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/acts.svg" class="custom-icon" alt="Acts" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Акты</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
             <v-btn text to="/users" class="menu-item" aria-label="Пользователи">
-              <img src="@/assets/sidebaricon/users.svg" class="custom-icon" alt="Users">
+              <img src="@/assets/sidebaricon/users.svg" class="custom-icon" alt="Users" />
               Пользователи
             </v-btn>
             <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
-              <img src="@/assets/sidebaricon/profile.svg" class="custom-icon" alt="Profile">
+              <img src="@/assets/sidebaricon/profile.svg" class="custom-icon" alt="Profile" />
               Профиль
             </v-btn>
-            <v-btn text to="/tax-calculator" class="menu-item" aria-label="Калькулятор налогов">
-              <img src="@/assets/sidebaricon/calculator.svg" class="custom-icon" alt="Calculator">
-              Калькулятор налогов
-            </v-btn>
+            <v-menu offset-y>
+              <template v-slot:activator="{ on, attrs }">
+                <v-btn text v-bind="attrs" v-on="on" class="menu-item" aria-label="Инструменты">
+                  <img src="@/assets/sidebaricon/calculator.svg" class="custom-icon" alt="Tools" />
+                  Инструменты
+                </v-btn>
+              </template>
+              <v-list>
+                <v-list-item to="/tax-calculator" aria-label="Калькулятор налогов">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/calculator.svg" class="custom-icon" alt="Calculator" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Калькулятор налогов</v-list-item-title>
+                </v-list-item>
+                <v-list-item to="/competitor-analysis" aria-label="Анализ конкурентов">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/competitors.svg" class="custom-icon" alt="Competitors" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Анализ конкурентов</v-list-item-title>
+                </v-list-item>
+                <v-list-item to="/promotion-recommendations" aria-label="Рекомендации по продвижению">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/promotion.svg" class="custom-icon" alt="Promotion" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Рекомендации по продвижению</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
           </div>
         </div>
         <div v-else class="desktop-menu">
           <div class="desktop-menu-inner">
             <v-btn text to="/dashboard" class="menu-item" aria-label="Перейти к дашборду">
-              <img src="@/assets/sidebaricon/dashboards.svg" class="custom-icon" alt="Dashboard">
+              <img src="@/assets/sidebaricon/dashboards.svg" class="custom-icon" alt="Dashboard" />
               Дашборд
             </v-btn>
             <v-btn text to="/tasks" class="menu-item" aria-label="Перейти к задачам">
-              <img src="@/assets/sidebaricon/tasks.svg" class="custom-icon" alt="Tasks">
+              <img src="@/assets/sidebaricon/tasks.svg" class="custom-icon" alt="Tasks" />
               Задачи
             </v-btn>
-            <v-btn text to="/reports" class="menu-item" aria-label="Перейти к отчётам">
-              <img src="@/assets/sidebaricon/reports.svg" class="custom-icon" alt="Reports">
-              Отчеты
-            </v-btn>
-            <v-btn text to="/acts" class="menu-item" aria-label="Перейти к актам">
-              <img src="@/assets/sidebaricon/acts.svg" class="custom-icon" alt="Acts">
-              Акты
-            </v-btn>
+            <v-menu offset-y>
+              <template v-slot:activator="{ on, attrs }">
+                <v-btn text v-bind="attrs" v-on="on" class="menu-item" aria-label="Документы">
+                  <img src="@/assets/sidebaricon/reports.svg" class="custom-icon" alt="Documents" />
+                  Документы
+                </v-btn>
+              </template>
+              <v-list>
+                <v-list-item to="/reports" aria-label="Перейти к отчётам">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/reports.svg" class="custom-icon" alt="Reports" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Отчеты</v-list-item-title>
+                </v-list-item>
+                <v-list-item to="/acts" aria-label="Перейти к актам">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/acts.svg" class="custom-icon" alt="Acts" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Акты</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
             <v-btn text to="/users" class="menu-item" aria-label="Пользователи">
-              <img src="@/assets/sidebaricon/users.svg" class="custom-icon" alt="Users">
+              <img src="@/assets/sidebaricon/users.svg" class="custom-icon" alt="Users" />
               Пользователи
             </v-btn>
             <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
-              <img src="@/assets/sidebaricon/profile.svg" class="custom-icon" alt="Profile">
+              <img src="@/assets/sidebaricon/profile.svg" class="custom-icon" alt="Profile" />
               Профиль
             </v-btn>
-            <v-btn text to="/tax-calculator" class="menu-item" aria-label="Калькулятор налогов">
-              <img src="@/assets/sidebaricon/calculator.svg" class="custom-icon" alt="Calculator">
-              Калькулятор налогов
-            </v-btn>
+            <v-menu offset-y>
+              <template v-slot:activator="{ on, attrs }">
+                <v-btn text v-bind="attrs" v-on="on" class="menu-item" aria-label="Инструменты">
+                  <img src="@/assets/sidebaricon/calculator.svg" class="custom-icon" alt="Tools" />
+                  Инструменты
+                </v-btn>
+              </template>
+              <v-list>
+                <v-list-item to="/tax-calculator" aria-label="Калькулятор налогов">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/calculator.svg" class="custom-icon" alt="Calculator" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Калькулятор налогов</v-list-item-title>
+                </v-list-item>
+                <v-list-item to="/competitor-analysis" aria-label="Анализ конкурентов">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/competitors.svg" class="custom-icon" alt="Competitors" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Анализ конкурентов</v-list-item-title>
+                </v-list-item>
+                <v-list-item to="/promotion-recommendations" aria-label="Рекомендации по продвижению">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/promotion.svg" class="custom-icon" alt="Promotion" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Рекомендации по продвижению</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
           </div>
         </div>
       </div>
@@ -82,7 +158,7 @@
             class="notification-btn"
             aria-label="Открыть уведомления"
           >
-            <img src="@/assets/sidebaricon/notification.svg" class="custom-icon" alt="Notification">
+            <img src="@/assets/sidebaricon/notification.svg" class="custom-icon" alt="Notification" />
             <v-badge v-if="notifications.length" color="red" :content="notifications.length" overlap />
           </v-btn>
         </template>
@@ -96,7 +172,7 @@
                 :src="getNotificationIcon(notification.type)"
                 class="notification-icon"
                 :alt="notification.type"
-              >
+              />
             </v-list-item-icon>
             <v-list-item-content>
               <v-list-item-title :class="{ 'read': notification.read }">
@@ -230,7 +306,6 @@ export default {
   white-space: nowrap;
 }
 
-/* Стили для десктопного и планшетного меню */
 .desktop-menu {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -249,7 +324,6 @@ export default {
   margin-right: 8px;
 }
 
-/* Общие стили для пунктов меню */
 .menu-item {
   font-family: 'Gilroy-Medium', sans-serif;
   font-size: 1rem;
@@ -262,7 +336,6 @@ export default {
   color: #e3f2fd;
 }
 
-/* Стили для прокрутки в мобильной версии */
 .menu-wrapper {
   display: flex;
   align-items: center;
@@ -281,7 +354,6 @@ export default {
   min-width: max-content;
 }
 
-/* Увеличиваем ширину меню, чтобы прокрутка сработала */
 @media (max-width: 599px) {
   .menu-scroll {
     width: 200px;
@@ -371,7 +443,6 @@ export default {
   border-radius: 2px;
 }
 
-/* Стили для планшетной версии (600px–959px) */
 @media (min-width: 600px) and (max-width: 959px) {
   .desktop-menu {
     width: 450px;
@@ -400,11 +471,10 @@ export default {
     right: 18px;
     top: 50%;
     transform: translateY(-50%);
-    margin-right: 24;
+    margin-right: 24px;
   }
 }
 
-/* Стили для десктопной версии (≥ 960px) */
 @media (min-width: 960px) {
   .desktop-menu .menu-item {
     font-size: 1rem;
@@ -415,7 +485,6 @@ export default {
   }
 }
 
-/* Адаптация для мобильных и планшетных устройств */
 @media (max-width: 959px) {
   .user-info {
     padding-left: 8px;
@@ -440,7 +509,6 @@ export default {
   }
 }
 
-/* Стили для кнопки уведомлений и бейджа */
 .notification-btn {
   margin-right: 24px;
   position: relative;
@@ -467,13 +535,11 @@ export default {
   }
 }
 
-/* Стили для кнопки очистки уведомлений */
 .clear-btn {
   color: #1976d2;
   font-family: 'Gilroy-Medium', sans-serif;
 }
 
-/* Стили для уведомлений */
 .notification-icon {
   width: 16px;
   height: 16px;
@@ -487,5 +553,10 @@ export default {
 
 .error-text {
   color: #ff5252;
+}
+
+.v-list-item-title {
+  font-family: 'Gilroy-Medium', sans-serif;
+  font-size: 0.9rem;
 }
 </style>

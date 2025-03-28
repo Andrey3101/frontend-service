@@ -138,15 +138,11 @@
 </template>
 
 <script>
-import { DndContext } from '@dnd-kit/core';
-import { closestCenter } from '@dnd-kit/core';
-import DraggableItem from '../components/DraggableItem.vue';
-import DroppableWrapper from '../components/DroppableWrapper.vue';
 import BarChart from '../components/BarChart.vue';
 import { getDashboard, updateEmployeeOrder, getTasks, calculatePayroll, getPayroll, getAggregatePayroll, getProductivityReport } from '../api';
 
 export default {
-  components: { DndContext, DraggableItem, DroppableWrapper, BarChart },
+  components: { BarChart },
   data() {
     return {
       dashboard: {},
@@ -158,7 +154,7 @@ export default {
         totalCompletedLastWeek: 0,
         totalCompletedYesterday: 0,
       },
-      closestCenter,
+      closestCenter: null,
       chartOptions: {
         responsive: true,
         maintainAspectRatio: false,
