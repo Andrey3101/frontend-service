@@ -15,6 +15,7 @@ import ResetPassword from '../views/ResetPassword.vue';
 import NotFound from '../views/NotFound.vue';
 import CompetitorMonitor from '@/components/CompetitorMonitor.vue';
 import PromotionRecommendations from '@/components/PromotionRecommendations.vue';
+import Clients from '../views/ClientsList.vue';
 
 
 const routes = [
@@ -36,6 +37,11 @@ const routes = [
     path: '/reset-password',
     name: 'ResetPassword',
     component: ResetPassword,
+  },
+  {
+    path: '/clients',
+    name: 'Clients',
+    component: Clients,
   },
   { 
     path: '/competitors', 

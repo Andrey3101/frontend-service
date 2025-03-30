@@ -245,6 +245,31 @@ export async function getTask(taskId) {
   return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/${taskId}`);
 }
 
+export async function addClient(clientData) {
+  return fetchWithCsrf(`${BASE_URLS.auth}/clients`, {
+    method: 'POST',
+    body: JSON.stringify(clientData),
+  });
+}
+
+export async function getClients(filters = {}) {
+  const query = new URLSearchParams(filters).toString();
+  return fetchWithCsrf(`${BASE_URLS.auth}/clients${query ? `?${query}` : ''}`);
+}
+
+export async function updateClient(clientId, clientData) {
+  return fetchWithCsrf(`${BASE_URLS.auth}/clients/${clientId}`, {
+    method: 'PUT',
+    body: JSON.stringify(clientData),
+  });
+}
+
+export async function deleteClient(clientId) {
+  return fetchWithCsrf(`${BASE_URLS.auth}/clients/${clientId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function createComment(taskId, comment) {
   return fetchWithCsrf(`${BASE_URLS.tasks}/tasks/${taskId}/comments`, {
     method: 'POST',
