@@ -285,14 +285,14 @@ export default {
     applyTemplate(templateData) {
       this.competitors = [...templateData];
       this.clearResults();
-      this.$toast.info('Шаблон применён');
+      this.$toast?.info('Шаблон применён');
     },
     resetForm() {
       this.salesData = { totalSales: 0, unitsSold: 0, period: 'month' };
       this.competitors = [];
       this.clearResults();
       this.$refs.form.resetValidation();
-      this.$toast.info('Форма сброшена');
+      this.$toast?.info('Форма сброшена');
     },
     exportRecommendations() {
       const text = `Рекомендации по продвижению (${this.salesData.period}):\n\n${this.recommendations}`;
@@ -303,7 +303,7 @@ export default {
       a.download = `promotion_recommendations_${new Date().toISOString().split('T')[0]}.txt`;
       a.click();
       URL.revokeObjectURL(url);
-      this.$toast.success('Рекомендации экспортированы');
+      this.$toast?.success('Рекомендации экспортированы');
     },
   },
 };

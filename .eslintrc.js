@@ -11,6 +11,7 @@ module.exports = {
       parser: '@babel/eslint-parser',
     },
     rules: {
+      'no-undef': 'off',
       'vue/valid-v-slot': ['error', { allowModifiers: true }],
       'vue/no-dupe-keys': 'off',
     },

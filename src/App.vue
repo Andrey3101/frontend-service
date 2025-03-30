@@ -1,21 +1,23 @@
 <template>
   <v-app>
-    <!-- Меню и кнопки отображаются только после авторизации и не на страницах входа/регистрации -->
-    <Sidebar v-if="isAuthenticated && !$route.path.includes('/login') && !$route.path.includes('/register')" />
+    <Sidebar 
+      v-if="showSidebar"
+      v-model="drawer"
+      :show-mobile-button="isMobile && showSidebar"
+    />
+    
     <v-main>
-      <v-container fluid class="main-container">
+      <v-container fluid class="main-container" :class="{ 'mobile-padding': isMobile }">
         <router-view />
+        
         <VoiceRecorderForm
-          v-if="isAuthenticated && !$route.path.includes('/login') && !$route.path.includes('/register')"
-          @recording-started="onRecordingStarted"
-          @recording-stopped="onRecordingStopped"
-          @suggestions-updated="onSuggestionsUpdated"
+          v-if="showSidebar"
           class="voice-recorder-global"
         />
+        
         <Chat
-          v-if="isAuthenticated && !$route.path.includes('/login') && !$route.path.includes('/register')"
-          :suggestions="suggestions"
-          @suggestion-selected="handleSuggestion"
+          v-if="showSidebar"
+          class="chat-global"
         />
       </v-container>
     </v-main>
@@ -23,70 +25,79 @@
 </template>
 
 <script>
+import { computed, ref } from 'vue';
+import { useRoute } from 'vue-router';
+import { useAuthStore } from './stores/auth';
 import Sidebar from './components/SidebarForm.vue';
 import VoiceRecorderForm from './components/VoiceRecorderForm.vue';
 import Chat from './components/ChatForm.vue';
-import { processVoice } from './api';
-import { useAuthStore } from './stores/auth';
 
 export default {
   components: { Sidebar, VoiceRecorderForm, Chat },
-  data() {
+  setup() {
+    const route = useRoute();
+    const authStore = useAuthStore();
+    const drawer = ref(true);
+
+    const isMobile = computed(() => {
+      return window.innerWidth < 960;
+    });
+
+    const isAuthPage = computed(() => {
+      return ['/login', '/register'].some(path => route.path.startsWith(path));
+    });
+
+    const showSidebar = computed(() => {
+      return authStore.isAuthenticated && !isAuthPage.value;
+    });
+
     return {
-      suggestions: [],
+      drawer,
+      isMobile,
+      showSidebar
     };
-  },
-  computed: {
-    isAuthenticated() {
-      const authStore = useAuthStore();
-      return authStore.isAuthenticated;
-    },
-  },
-  mounted() {
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
-      navigator.serviceWorker.register('/service-worker.js')
-        .then((reg) => {
-          reg.pushManager.subscribe({ userVisibleOnly: true })
-            .then((sub) => console.log('Push subscription:', sub))
-            .catch((err) => console.error('Push subscription failed:', err));
-        })
-        .catch((err) => console.error('Service Worker registration failed:', err));
-    }
-  },
-  methods: {
-    onRecordingStarted() {
-      console.log('Recording started');
-    },
-    onRecordingStopped() {
-      console.log('Recording stopped');
-    },
-    onSuggestionsUpdated(suggestions) {
-      this.suggestions = suggestions;
-    },
-    async handleSuggestion(suggestion) {
-      try {
-        const response = await processVoice('', 'webm', suggestion.action);
-        console.log('API response:', response);
-        this.suggestions = [];
-      } catch (error) {
-        console.error('Ошибка обработки предложения:', error);
-      }
-    },
-  },
+  }
 };
 </script>
 
 <style scoped>
 .main-container {
   position: relative;
-  padding: 20px;
-  z-index: 1;
+  padding: 24px;
+  transition: padding 0.3s ease;
+}
+
+.mobile-padding {
+  padding: 16px;
 }
 
 .voice-recorder-global {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  z-index: 1000;
+  z-index: 999;
+}
+
+.chat-global {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  z-index: 999;
+}
+
+@media (max-width: 600px) {
+  .main-container {
+    padding: 12px;
+  }
+  
+  .voice-recorder-global {
+    bottom: 10px;
+    right: 10px;
+  }
+  
+  .chat-global {
+    bottom: 70px;
+    right: 10px;
+  }
 }
 </style>

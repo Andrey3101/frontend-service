@@ -13,6 +13,9 @@ import Toast from 'vue-toastification';
 import 'vue-toastification/dist/index.css';
 import './assets/styles.css';
 
+// Отладочный вывод для проверки компонентов
+console.log('Vuetify components:', components);
+
 const vuetify = createVuetify({
   components,
   directives,

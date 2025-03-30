@@ -189,7 +189,7 @@ export default {
         const response = await monitorCompetitors(urls, { signal: this.cancelToken.signal });
         if (response.error) {
           this.error = response.error;
-        } else if (response.action && typeof response.action === 'object') {
+        } else if (response.action && typeof response.action === 'object' && !Array.isArray(response.action)) {
           this.results = Object.entries(response.action).map(([url, content]) => ({
             url,
             status: content.includes('Error') || content.includes('Failed') ? 'Ошибка' : 'Успешно',
@@ -201,7 +201,12 @@ export default {
         }
         this.progress = 100;
         this.$nextTick(() => {
-          this.$refs.resultsPanel?.$el.querySelector('.v-expansion-panel-header')?.focus();
+          const panel = this.$refs.resultsPanel?.$el?.querySelector('.v-expansion-panel-header');
+          if (panel) {
+            panel.focus();
+          } else {
+            console.warn('Не удалось найти панель результатов для фокусировки');
+          }
         });
       } catch (err) {
         if (err.name === 'AbortError') {
@@ -217,19 +222,19 @@ export default {
       this.cancelToken?.abort();
       this.isLoading = false;
       this.progress = 0;
-      this.$toast.info('Мониторинг остановлен');
+      this.$toast?.info('Мониторинг остановлен');
     },
     saveUrls() {
       localStorage.setItem('competitorUrls', this.competitorUrls);
-      this.$toast.success('URLs сохранены');
+      this.$toast?.success('URLs сохранены');
     },
     loadUrls() {
       const saved = localStorage.getItem('competitorUrls');
       if (saved) {
         this.competitorUrls = saved;
-        this.$toast.info('URLs загружены');
+        this.$toast?.info('URLs загружены');
       } else {
-        this.$toast.error('Нет сохранённых URLs');
+        this.$toast?.error('Нет сохранённых URLs');
       }
     },
     exportResults() {
@@ -241,7 +246,7 @@ export default {
       a.download = `competitor_monitor_results_${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      this.$toast.success('Результаты экспортированы');
+      this.$toast?.success('Результаты экспортированы');
     },
   },
 };
