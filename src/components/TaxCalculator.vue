@@ -7,32 +7,32 @@
           <v-card-text>
             <v-form @submit.prevent="calculateTax" ref="form">
               <!-- Выбор статуса -->
-              <v-select
-                v-model="status"
-                :items="statuses"
-                label="Статус"
-                outlined
-                dense
-                class="mb-3"
-                :rules="[v => !!v || 'Выберите статус']"
-                item-text="text"
-                item-value="value"
-                @change="resetResults"
-              ></v-select>
+                <v-select
+                    v-model="status"
+                    :items="statuses"
+                    label="Статус"
+                    outlined
+                    dense
+                    class="mb-3"
+                    :rules="[v => !!v || 'Выберите статус']"
+                    item-text="text"
+                    item-value="value"
+                    @change="resetResults"
+                ></v-select>
 
-              <!-- Тип налогообложения -->
-              <v-select
-                v-model="taxType"
-                :items="filteredTaxTypes"
-                label="Тип налогообложения"
-                outlined
-                dense
-                class="mb-3"
-                :rules="[v => !!v || 'Выберите тип налогообложения']"
-                item-text="text"
-                item-value="value"
-                @change="resetResults"
-              ></v-select>
+                <!-- Тип налогообложения -->
+                <v-select
+                    v-model="taxType"
+                    :items="filteredTaxTypes"
+                    label="Тип налогообложения"
+                    outlined
+                    dense
+                    class="mb-3"
+                    :rules="[v => !!v || 'Выберите тип налогообложения']"
+                    item-text="text"
+                    item-value="value"
+                    @change="resetResults"
+                ></v-select>
 
               <!-- Доход для НДФЛ и УСН -->
               <v-text-field
@@ -202,6 +202,7 @@ import {
   LinearScale,
 } from 'chart.js';
 
+// Регистрация компонентов Chart.js
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
 
 export default {
@@ -321,7 +322,7 @@ export default {
       if (this.taxType === 'ndfl') {
         const ndfl = this.income * 0.13;
         this.results = { ndfl };
-        this.updateChart([{ label: 'НДФЛ', data: [ndfl], backgroundColor: '#4CAF50' }]);
+        this.updateChart([{ label: 'НДФЛ', data: [ndfl], backgroundColor: '#4CAF50' }]); // Зеленый
       } else if (this.taxType === 'usn') {
         const taxableBase = this.income - this.expenses > 0 ? this.income - this.expenses : this.income;
         const usnRate = this.income - this.expenses > 0 ? 0.15 : 0.06;
@@ -337,10 +338,10 @@ export default {
 
         this.results = { usn, insurance, total, usnReduction };
         this.updateChart([
-          { label: 'УСН', data: [usn], backgroundColor: '#2196F3' },
-          { label: 'Страховые взносы', data: [insurance], backgroundColor: '#FF9800' },
-          { label: 'Вычет', data: [usnReduction], backgroundColor: '#8BC34A' },
-          { label: 'Итого', data: [total], backgroundColor: '#F44336' },
+          { label: 'УСН', data: [usn], backgroundColor: '#2196F3' }, // Синий
+          { label: 'Страховые взносы', data: [insurance], backgroundColor: '#FF9800' }, // Оранжевый
+          { label: 'Вычет', data: [usnReduction], backgroundColor: '#8BC34A' }, // Светло-зеленый
+          { label: 'Итого', data: [total], backgroundColor: '#F44336' }, // Красный
         ]);
       } else if (this.taxType === 'npd') {
         const npdFromIndividuals = this.incomeFromIndividuals * 0.04;
@@ -348,9 +349,9 @@ export default {
         const npd = npdFromIndividuals + npdFromEntities;
         this.results = { npd, npdFromIndividuals, npdFromEntities };
         this.updateChart([
-          { label: 'НПД (физлица)', data: [npdFromIndividuals], backgroundColor: '#3F51B5' },
-          { label: 'НПД (юрлица)', data: [npdFromEntities], backgroundColor: '#9C27B0' },
-          { label: 'Итого НПД', data: [npd], backgroundColor: '#E91E63' },
+          { label: 'НПД (физлица)', data: [npdFromIndividuals], backgroundColor: '#3F51B5' }, // Индиго
+          { label: 'НПД (юрлица)', data: [npdFromEntities], backgroundColor: '#9C27B0' }, // Фиолетовый
+          { label: 'Итого НПД', data: [npd], backgroundColor: '#E91E63' }, // Розовый
         ]);
       }
     },
@@ -392,12 +393,12 @@ export default {
 
       this.results = results;
       this.updateChart([
-        { label: 'НДФЛ', data: [results.ndfl], backgroundColor: '#4CAF50' },
-        { label: 'УСН', data: [usn], backgroundColor: '#2196F3' },
-        { label: 'Страховые взносы', data: [insurance], backgroundColor: '#FF9800' },
-        { label: 'Вычет', data: [usnReduction], backgroundColor: '#8BC34A' },
-        { label: 'УСН Итого', data: [total], backgroundColor: '#F44336' },
-        { label: 'НПД', data: [npd], backgroundColor: '#E91E63' },
+        { label: 'НДФЛ', data: [results.ndfl], backgroundColor: '#4CAF50' }, // Зеленый
+        { label: 'УСН', data: [usn], backgroundColor: '#2196F3' }, // Синий
+        { label: 'Страховые взносы', data: [insurance], backgroundColor: '#FF9800' }, // Оранжевый
+        { label: 'Вычет', data: [usnReduction], backgroundColor: '#8BC34A' }, // Светло-зеленый
+        { label: 'УСН Итого', data: [total], backgroundColor: '#F44336' }, // Красный
+        { label: 'НПД', data: [npd], backgroundColor: '#E91E63' }, // Розовый
       ]);
     },
     saveData() {
@@ -424,6 +425,7 @@ export default {
       }
     },
     clearData() {
+      // Очистка данных и localStorage
       this.status = 'selfEmployed';
       this.taxType = 'npd';
       this.income = 0;
@@ -435,7 +437,7 @@ export default {
       this.comparisonMode = false;
       this.chartData = { labels: [], datasets: [] };
       localStorage.removeItem('taxCalculatorData');
-      this.$refs.form.resetValidation();
+      this.$refs.form.resetValidation(); // Сброс валидации формы
     },
     updateChart(datasets) {
       this.chartData = {
@@ -448,12 +450,14 @@ export default {
 </script>
 
 <style scoped>
+/* Заголовок */
 .text-h4 {
   font-weight: 500;
   color: #2c3e50;
   text-align: center;
 }
 
+/* Карточка формы */
 .form-card {
   padding: 20px;
   border-radius: 8px;
@@ -461,12 +465,14 @@ export default {
   background-color: #ffffff;
 }
 
+/* Поля ввода и селект */
 .v-select,
 .v-text-field {
   max-width: 400px;
   margin: 0 auto;
 }
 
+/* Кнопка "Рассчитать" */
 .calculate-btn {
   display: inline-block;
   margin: 20px 5px 0;
@@ -478,9 +484,10 @@ export default {
 }
 
 .calculate-btn:hover {
-  background-color: #1976d2 !important;
+  background-color: #1976d2 !important; /* Для primary */
 }
 
+/* Карточка результатов */
 .result-card,
 .chart-card {
   margin-top: 20px;
@@ -490,34 +497,39 @@ export default {
   background-color: #f9f9f9;
 }
 
+/* Заголовок результатов */
 .result-title {
   font-size: 20px;
   color: #34495e;
 }
 
+/* Текст результатов */
 .result-text {
   font-size: 16px;
   color: #333;
   line-height: 1.6;
 }
 
+/* Суммы в результатах */
 .amount {
   font-weight: bold;
   color: #2980b9;
 }
 
+/* Итоговая сумма */
 .amount.total {
   color: #e74c3c;
   font-size: 18px;
 }
 
+/* Адаптивность и высота диаграммы */
 .chart-card {
-  height: 400px;
+  height: 400px; /* Десктоп */
 }
 
 @media (max-width: 960px) {
   .chart-card {
-    height: 350px;
+    height: 350px; /* Планшет */
   }
 }
 
@@ -533,7 +545,7 @@ export default {
   }
 
   .chart-card {
-    height: 300px;
+    height: 300px; /* Мобильные устройства */
   }
 }
 </style>

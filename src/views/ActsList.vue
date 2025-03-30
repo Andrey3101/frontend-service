@@ -24,25 +24,34 @@
         <v-alert v-if="error" type="error" dense class="error-alert" dismissible @input="error = null">
           {{ error }}
         </v-alert>
-        <v-data-table
-          :headers="headers"
-          :items="filteredActs"
-          :items-per-page="10"
-          class="elevation-1"
-          :loading="loading"
-          loading-text="Загрузка данных..."
-          no-data-text="Нет доступных актов"
-        >
-          <template v-slot:item.actions="{ item }">
-            <v-btn icon @click="viewActDetails(item.id)">
-              <v-icon color="blue">mdi-eye</v-icon>
-            </v-btn>
-            <v-btn icon @click="handleUpdateAct(item.id)" class="ml-2">
-              <v-icon color="blue-grey">mdi-pencil</v-icon>
-            </v-btn>
-          </template>
-        </v-data-table>
-
+        <v-list class="acts-list elevation-1">
+          <v-list-item
+            v-for="act in filteredActs"
+            :key="act.id"
+            class="act-item"
+            :class="{ 'mobile-item': isMobile }"
+            @click="viewActDetails(act.id)"
+          >
+            <v-list-item-content>
+              <v-list-item-title class="act-title">
+                Акт ID: {{ act.id }}
+              </v-list-item-title>
+              <v-list-item-subtitle class="act-subtitle">
+                {{ isMobile ? act.type : `Тип: ${act.type}` }}
+              </v-list-item-subtitle>
+            </v-list-item-content>
+            <v-list-item-action>
+              <v-btn icon class="edit-btn" @click.stop="handleUpdateAct(act.id)">
+                <v-icon color="blue-grey">mdi-pencil</v-icon>
+              </v-btn>
+            </v-list-item-action>
+          </v-list-item>
+          <v-list-item v-if="!filteredActs.length && !loading" class="empty-item">
+            <v-list-item-content>
+              <v-list-item-title>Нет актов</v-list-item-title>
+            </v-list-item-content>
+          </v-list-item>
+        </v-list>
         <!-- Диалог редактирования -->
         <v-dialog v-model="showEditDialog" max-width="400px" persistent>
           <v-card class="dialog-card">
@@ -70,12 +79,11 @@
 </template>
 
 <script>
-import { getActs, updateAct } from '@/api/acts';
+import { getActs, updateAct } from '../api';  // Импортируем исправленные функции
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 
 export default {
-  name: 'ActsList',
   data() {
     return {
       acts: [],
@@ -86,22 +94,18 @@ export default {
       newActType: '',
       selectedActId: null,
       exportFormat: 'pdf',
-      headers: [
-        { text: 'ID', value: 'id' },
-        { text: 'Тип', value: 'type' },
-        { text: 'Дата создания', value: 'created_at' },
-        { text: 'Действия', value: 'actions', sortable: false },
-      ],
     };
   },
   computed: {
+    isMobile() {
+      return this.$vuetify.breakpoint.smAndDown;
+    },
     filteredActs() {
       if (!this.searchQuery) return this.acts;
       const query = this.searchQuery.toLowerCase();
       return this.acts.filter(
         (act) =>
-          act.id.toString().includes(query) || 
-          act.type.toLowerCase().includes(query)
+          act.id.toString().includes(query) || act.type.toLowerCase().includes(query)
       );
     },
   },
@@ -114,13 +118,13 @@ export default {
       this.error = null;
       try {
         const response = await getActs();
-        this.acts = response.data.map(act => ({
-          id: act.id,
-          type: act.type,
-          created_at: new Date(act.created_at).toLocaleDateString(),
+        this.acts = response.acts.map(act => ({
+          id: act.document_id,
+          type: act.type
         }));
       } catch (error) {
-        this.error = error.response?.data?.message || 'Ошибка загрузки актов';
+        const errorMessage = error.response?.data?.detail || error.message || 'Ошибка загрузки актов';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }
@@ -139,11 +143,12 @@ export default {
       this.loading = true;
       this.error = null;
       try {
-        await updateAct(this.selectedActId, { type: this.newActType });
+        await updateAct(this.selectedActId, { type: this.newActType });  // Используем updateAct
         await this.fetchActs();
         this.showEditDialog = false;
       } catch (error) {
-        this.error = error.response?.data?.message || 'Ошибка обновления акта';
+        const errorMessage = error.response?.data?.detail || error.message || 'Ошибка обновления акта';
+        this.error = errorMessage;
       } finally {
         this.loading = false;
       }
@@ -155,7 +160,7 @@ export default {
       doc.text('Список актов', 10, 10);
       this.filteredActs.forEach((act, index) => {
         const y = 20 + index * 10;
-        doc.text(`ID: ${act.id} | Тип: ${act.type} | Дата: ${act.created_at}`, 10, y);
+        doc.text(`ID: ${act.id} | Тип: ${act.type}`, 10, y);
       });
       doc.save('acts.pdf');
     },
@@ -164,7 +169,6 @@ export default {
         this.filteredActs.map((act) => ({
           'ID': act.id,
           'Тип': act.type,
-          'Дата создания': act.created_at,
         }))
       );
       const workbook = XLSX.utils.book_new();

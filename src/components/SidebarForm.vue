@@ -1,369 +1,562 @@
 <template>
-  <v-navigation-drawer
-    v-model="drawer"
-    app
-    :temporary="isMobile"
-    :fixed="!isMobile"
-    :clipped="isMobile"
-    left
-    class="sidebar"
-    :width="sidebarWidth"
-  >
-    <!-- Заголовок бокового меню -->
-    <div class="sidebar-header">
-      <v-btn
-        v-if="!isMobile"
-        icon
-        @click.stop="toggleSidebar"
-        class="menu-toggle-btn"
-      >
-        <v-icon color="white">mdi-menu</v-icon>
-      </v-btn>
-      <img src="@/assets/logo.png" alt="Logo" class="logo-icon" />
-      <span class="logo-text">Мой Проект</span>
-
-      <!-- Кнопка закрытия для мобильных -->
-      <v-btn
-        v-if="isMobile"
-        icon
-        @click.stop="toggleSidebar"
-        class="ml-auto close-btn"
-      >
-        <v-icon color="white">mdi-close</v-icon>
-      </v-btn>
-    </div>
-
-    <!-- Список пунктов меню -->
-    <v-list dense class="sidebar-list">
-      <!-- Основные пункты меню -->
-      <template v-for="item in menuItems">
-        <template v-if="item.submenu">
-          <!-- Пункты с подменю -->
-          <v-list-group
-            :key="item.route"
-            :value="isSubmenuOpen(item.route)"
-            prepend-icon=""
-            class="sidebar-item-group"
+  <div>
+    <v-app-bar app flat color="primary" dark class="app-bar">
+      <div class="user-info" v-if="user">
+        <span class="user-name">{{ user.name }}</span>
+        <span class="user-phone">{{ user.phone }}</span>
+      </div>
+      <v-spacer v-if="!isMobileOnly" />
+      <div class="menu-wrapper">
+        <div v-if="isMobileOnly" class="menu-scroll">
+          <div class="menu-scroll-inner">
+            <v-btn text to="/dashboard" class="menu-item" aria-label="Перейти к дашборду">
+              <img src="@/assets/sidebaricon/dashboards.svg" class="custom-icon" alt="Dashboard" />
+              Дашборд
+            </v-btn>
+            <v-btn text to="/tasks" class="menu-item" aria-label="Перейти к задачам">
+              <img src="@/assets/sidebaricon/tasks.svg" class="custom-icon" alt="Tasks" />
+              Задачи
+            </v-btn>
+            <v-menu offset-y>
+              <template v-slot:activator="{ on, attrs }">
+                <v-btn text v-bind="attrs" v-on="on" class="menu-item" aria-label="Документы">
+                  <img src="@/assets/sidebaricon/reports.svg" class="custom-icon" alt="Documents" />
+                  Документы
+                </v-btn>
+              </template>
+              <v-list>
+                <v-list-item to="/reports" aria-label="Перейти к отчётам">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/reports.svg" class="custom-icon" alt="Reports" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Отчеты</v-list-item-title>
+                </v-list-item>
+                <v-list-item to="/acts" aria-label="Перейти к актам">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/acts.svg" class="custom-icon" alt="Acts" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Акты</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
+            <v-btn text to="/users" class="menu-item" aria-label="Пользователи">
+              <img src="@/assets/sidebaricon/users.svg" class="custom-icon" alt="Users" />
+              Пользователи
+            </v-btn>
+            <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
+              <img src="@/assets/sidebaricon/profile.svg" class="custom-icon" alt="Profile" />
+              Профиль
+            </v-btn>
+            <v-menu offset-y>
+              <template v-slot:activator="{ on, attrs }">
+                <v-btn text v-bind="attrs" v-on="on" class="menu-item" aria-label="Инструменты">
+                  <img src="@/assets/sidebaricon/calculator.svg" class="custom-icon" alt="Tools" />
+                  Инструменты
+                </v-btn>
+              </template>
+              <v-list>
+                <v-list-item to="/tax-calculator" aria-label="Калькулятор налогов">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/calculator.svg" class="custom-icon" alt="Calculator" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Калькулятор налогов</v-list-item-title>
+                </v-list-item>
+                <v-list-item to="/competitor-analysis" aria-label="Анализ конкурентов">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/competitors.svg" class="custom-icon" alt="Competitors" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Анализ конкурентов</v-list-item-title>
+                </v-list-item>
+                <v-list-item to="/promotion-recommendations" aria-label="Рекомендации по продвижению">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/promotion.svg" class="custom-icon" alt="Promotion" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Рекомендации по продвижению</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
+          </div>
+        </div>
+        <div v-else class="desktop-menu">
+          <div class="desktop-menu-inner">
+            <v-btn text to="/dashboard" class="menu-item" aria-label="Перейти к дашборду">
+              <img src="@/assets/sidebaricon/dashboards.svg" class="custom-icon" alt="Dashboard" />
+              Дашборд
+            </v-btn>
+            <v-btn text to="/tasks" class="menu-item" aria-label="Перейти к задачам">
+              <img src="@/assets/sidebaricon/tasks.svg" class="custom-icon" alt="Tasks" />
+              Задачи
+            </v-btn>
+            <v-menu offset-y>
+              <template v-slot:activator="{ on, attrs }">
+                <v-btn text v-bind="attrs" v-on="on" class="menu-item" aria-label="Документы">
+                  <img src="@/assets/sidebaricon/reports.svg" class="custom-icon" alt="Documents" />
+                  Документы
+                </v-btn>
+              </template>
+              <v-list>
+                <v-list-item to="/reports" aria-label="Перейти к отчётам">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/reports.svg" class="custom-icon" alt="Reports" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Отчеты</v-list-item-title>
+                </v-list-item>
+                <v-list-item to="/acts" aria-label="Перейти к актам">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/acts.svg" class="custom-icon" alt="Acts" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Акты</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
+            <v-btn text to="/users" class="menu-item" aria-label="Пользователи">
+              <img src="@/assets/sidebaricon/users.svg" class="custom-icon" alt="Users" />
+              Пользователи
+            </v-btn>
+            <v-btn text to="/profile" class="menu-item" aria-label="Перейти к профилю">
+              <img src="@/assets/sidebaricon/profile.svg" class="custom-icon" alt="Profile" />
+              Профиль
+            </v-btn>
+            <v-menu offset-y>
+              <template v-slot:activator="{ on, attrs }">
+                <v-btn text v-bind="attrs" v-on="on" class="menu-item" aria-label="Инструменты">
+                  <img src="@/assets/sidebaricon/calculator.svg" class="custom-icon" alt="Tools" />
+                  Инструменты
+                </v-btn>
+              </template>
+              <v-list>
+                <v-list-item to="/tax-calculator" aria-label="Калькулятор налогов">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/calculator.svg" class="custom-icon" alt="Calculator" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Калькулятор налогов</v-list-item-title>
+                </v-list-item>
+                <v-list-item to="/competitor-analysis" aria-label="Анализ конкурентов">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/competitors.svg" class="custom-icon" alt="Competitors" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Анализ конкурентов</v-list-item-title>
+                </v-list-item>
+                <v-list-item to="/promotion-recommendations" aria-label="Рекомендации по продвижению">
+                  <v-list-item-icon>
+                    <img src="@/assets/sidebaricon/promotion.svg" class="custom-icon" alt="Promotion" />
+                  </v-list-item-icon>
+                  <v-list-item-title>Рекомендации по продвижению</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
+          </div>
+        </div>
+      </div>
+      <v-spacer v-if="!isMobileOnly" />
+      <v-menu offset-y>
+        <template v-slot:activator="{ on, attrs }">
+          <v-btn
+            icon
+            v-bind="attrs"
+            v-on="on"
+            class="notification-btn"
+            aria-label="Открыть уведомления"
           >
-            <template v-slot:activator="{ props }">
-              <v-list-item v-bind="props" class="sidebar-item">
-                <v-list-item-icon>
-                  <img :src="getIcon(item.icon)" class="custom-icon" :alt="item.title" />
-                </v-list-item-icon>
-                <v-list-item-title class="item-title">{{ item.title }}</v-list-item-title>
-                <v-list-item-action>
-                  <v-icon class="toggle-icon">{{ isSubmenuOpen(item.route) ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
-                </v-list-item-action>
-              </v-list-item>
-            </template>
-
-            <v-list-item
-              v-for="subItem in item.submenu"
-              :key="subItem.route"
-              :to="subItem.route"
-              class="submenu-item"
-              :class="{ 'sidebar-item-active': isActive(subItem.route) }"
-              @click="closeDrawer"
-            >
-              <v-list-item-icon class="submenu-icon">
-                <v-icon color="white">mdi-circle-small</v-icon>
-              </v-list-item-icon>
-              <v-list-item-title class="submenu-title">
-                {{ subItem.title }}
-              </v-list-item-title>
-            </v-list-item>
-          </v-list-group>
+            <img src="@/assets/sidebaricon/notification.svg" class="custom-icon" alt="Notification" />
+            <v-badge v-if="notifications.length" color="red" :content="notifications.length" overlap />
+          </v-btn>
         </template>
-        
-        <template v-else>
-          <!-- Одиночные пункты меню -->
-          <v-list-item
-            :key="item.route"
-            :to="item.route"
-            class="sidebar-item"
-            :class="{ 'sidebar-item-active': isActive(item.route) }"
-            @click="closeDrawer"
-          >
-            <v-list-item-icon>
-              <img :src="getIcon(item.icon)" class="custom-icon" :alt="item.title" />
-            </v-list-item-icon>
-            <v-list-item-title class="item-title">{{ item.title }}</v-list-item-title>
-            <!-- Пустой элемент для выравнивания -->
-            <v-list-item-action>
-              <v-icon class="empty-icon" v-if="!isMobile">mdi-circle-small</v-icon>
-            </v-list-item-action>
+        <v-list class="notification-list">
+          <v-list-item v-if="wsError">
+            <v-list-item-title class="error-text">Ошибка подключения к уведомлениям</v-list-item-title>
           </v-list-item>
-        </template>
-      </template>
-    </v-list>
-  </v-navigation-drawer>
+          <v-list-item v-for="(notification, index) in notifications" :key="index" @click="markAsRead(index)">
+            <v-list-item-icon>
+              <img
+                :src="getNotificationIcon(notification.type)"
+                class="notification-icon"
+                :alt="notification.type"
+              />
+            </v-list-item-icon>
+            <v-list-item-content>
+              <v-list-item-title :class="{ 'read': notification.read }">
+                {{ notification.text }}
+              </v-list-item-title>
+              <v-list-item-subtitle>{{ notification.timestamp }}</v-list-item-subtitle>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item v-if="!notifications.length && !wsError">
+            <v-list-item-title>Нет уведомлений</v-list-item-title>
+          </v-list-item>
+          <v-list-item v-if="notifications.length">
+            <v-btn text @click="clearNotifications" class="clear-btn">Очистить уведомления</v-btn>
+          </v-list-item>
+        </v-list>
+      </v-menu>
+    </v-app-bar>
+  </div>
 </template>
 
 <script>
+import { connectWebSocket, getProfile } from '@/api/index.js';
+
 export default {
-  name: 'SidebarForm',
-  props: {
-    value: {
-      type: Boolean,
-      default: false,
-    },
-  },
   data() {
     return {
-      menuItems: [
-        {
-          title: 'Дашборд',
-          route: '/dashboard',
-          icon: 'dashboards.svg',
-        },
-        {
-          title: 'Задачи',
-          route: '/tasks',
-          icon: 'tasks.svg',
-        },
-        {
-          title: 'Документы',
-          route: '/documents',
-          icon: 'reports.svg',
-          submenu: [
-            { title: 'Отчеты', route: '/reports' },
-            { title: 'Акты', route: '/acts' },
-          ],
-        },
-        {
-          title: 'Пользователи',
-          route: '/users',
-          icon: 'users.svg',
-        },
-        {
-          title: 'Клиенты',
-          route: '/clients',
-          icon: 'clients.svg',
-        },
-        {
-          title: 'Инструменты',
-          route: '/tools',
-          icon: 'calculator.svg',
-          submenu: [
-            { title: 'Калькулятор налогов', route: '/tax-calculator' },
-            { title: 'Анализ конкурентов', route: '/competitor-analysis' },
-            { title: 'Рекомендации', route: '/promotion-recommendations' },
-          ],
-        },
-        {
-          title: 'Профиль',
-          route: '/profile',
-          icon: 'profile.svg',
-        },
-      ],
-      localDrawer: false,
+      user: null,
+      notifications: [],
+      ws: null,
+      wsError: false,
     };
   },
   computed: {
-    drawer: {
-      get() {
-        return this.value || this.localDrawer;
-      },
-      set(val) {
-        this.localDrawer = val;
-        this.$emit('input', val);
-      },
+    isMobileOnly() {
+      return this.$vuetify?.breakpoint?.xsOnly ?? window.innerWidth < 600;
     },
-    isMobile() {
-      return this.$vuetify?.breakpoint?.xsOnly || false;
-    },
-    sidebarWidth() {
-      return this.isMobile ? '100%' : '280px';
+  },
+  async mounted() {
+    try {
+      this.user = await getProfile();
+      const storedNotifications = localStorage.getItem('notifications');
+      if (storedNotifications) {
+        this.notifications = JSON.parse(storedNotifications);
+      }
+      this.connectToNotifications();
+    } catch (error) {
+      console.error('Failed to load profile:', error);
+      this.user = { name: 'Иванов Иван', phone: '+7 (999) 123-45-67' };
+    }
+  },
+  beforeUnmount() {
+    if (this.ws) this.ws.close();
+  },
+  watch: {
+    notifications(newNotifications) {
+      localStorage.setItem('notifications', JSON.stringify(newNotifications));
     },
   },
   methods: {
-    getIcon(iconName) {
-      try {
-        return require(`@/assets/sidebaricon/${iconName}`);
-      } catch (e) {
-        console.error(`Icon not found: ${iconName}`);
-        return '';
-      }
+    connectToNotifications() {
+      const userId = this.user?.user_id || localStorage.getItem('user_id') || 'user123';
+      this.ws = connectWebSocket('tasks', 'ws/tasks', userId, (data) => {
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        this.notifications.push({
+          text: data.message,
+          timestamp,
+          type: data.type || 'info',
+          read: false,
+        });
+        if (this.notifications.length > 10) this.notifications.shift();
+        this.wsError = false;
+        this.playNotificationSound();
+        this.showToast(data.message);
+      });
+      this.ws.onopen = () => {
+        this.ws.send(JSON.stringify({ partition: new Date().toISOString().slice(0, 7) }));
+      };
+      this.ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        this.wsError = true;
+      };
+      this.ws.onclose = () => {
+        console.log('WebSocket closed, reconnecting...');
+        this.wsError = true;
+        setTimeout(() => this.connectToNotifications(), 2000);
+      };
     },
-    isActive(route) {
-      return this.$route.path === route || 
-             this.$route.path.startsWith(route + '/');
+    playNotificationSound() {
+      const audio = new Audio('/sounds/notification.mp3');
+      audio.play().catch(err => console.error('Audio error:', err));
     },
-    isSubmenuOpen(route) {
-      return this.$route.path.startsWith(route + '/') || 
-             this.menuItems.find(i => i.route === route)?.submenu?.some(
-               sub => this.$route.path === sub.route
-             );
+    showToast(message) {
+      this.$toast.info(message, { timeout: 5000 });
     },
-    toggleSidebar() {
-      this.drawer = !this.drawer;
+    clearNotifications() {
+      this.notifications = [];
     },
-    closeDrawer() {
-      if (this.isMobile) {
-        this.drawer = false;
-      }
+    markAsRead(index) {
+      this.$set(this.notifications, index, { ...this.notifications[index], read: true });
+    },
+    getNotificationIcon(type) {
+      const icons = {
+        task: require('@/assets/sidebaricon/tasks.svg'),
+        report: require('@/assets/sidebaricon/reports.svg'),
+        info: require('@/assets/sidebaricon/notification.svg'),
+      };
+      return icons[type] || icons.info;
     },
   },
 };
 </script>
 
 <style scoped>
-.sidebar {
-  background-color: #2c3e50;
-  color: #ecf0f1;
-  z-index: 1000;
-  overflow-x: hidden;
-  transition: width 0.3s ease;
-}
-
-.sidebar-header {
+.user-info {
   display: flex;
-  align-items: center;
-  padding: 16px;
-  background-color: #34495e;
-  min-height: 64px;
-  position: relative;
+  flex-direction: column;
+  align-items: flex-start;
+  padding-left: 16px;
+  min-width: 150px;
 }
 
-.menu-toggle-btn {
-  margin-right: 12px;
+.user-name {
+  font-family: 'Gilroy-ExtraBold', sans-serif;
+  font-size: 1.2rem;
 }
 
-.close-btn {
-  position: absolute;
-  right: 10px;
-}
-
-.logo-icon {
-  width: 36px;
-  height: 36px;
-  margin-right: 12px;
-  flex-shrink: 0;
-}
-
-.logo-text {
-  font-family: 'Gilroy-Bold', sans-serif;
-  font-size: 1.25rem;
-  color: #ecf0f1;
+.user-phone {
+  font-family: 'Gilroy-Light', sans-serif;
+  font-size: 0.9rem;
+  opacity: 0.8;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: opacity 0.3s ease;
 }
 
-.sidebar-list {
-  padding: 0;
-  width: 100%;
+.desktop-menu {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-.sidebar-item,
-.sidebar-item-group >>> .v-list-item {
-  padding: 12px 16px;
-  position: relative;
-  transition: background-color 0.2s ease;
+.desktop-menu-inner {
   display: flex;
-  align-items: center;
-  min-height: 48px;
-  cursor: pointer;
-}
-
-.sidebar-item:hover,
-.sidebar-item-group >>> .v-list-item:hover {
-  background-color: #34495e;
-}
-
-.sidebar-item-active {
-  background-color: #3e5c76;
-  font-weight: bold;
+  white-space: nowrap;
+  min-width: max-content;
 }
 
 .custom-icon {
-  width: 24px;
-  height: 24px;
-  margin-right: 12px;
-  filter: brightness(0) invert(1);
-  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  margin-right: 8px;
 }
 
-.submenu-item {
-  padding: 8px 16px 8px 48px !important;
-  min-height: 40px;
-}
-
-.submenu-icon {
-  min-width: 24px !important;
-  margin-right: 12px;
-}
-
-.submenu-item:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.item-title,
-.submenu-title {
+.menu-item {
   font-family: 'Gilroy-Medium', sans-serif;
   font-size: 1rem;
-  color: #ecf0f1;
+  color: white;
+  margin: 0 8px;
+  transition: color 0.2s ease;
+}
+
+.menu-item:hover {
+  color: #e3f2fd;
+}
+
+.menu-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.menu-scroll {
+  width: 200px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.menu-scroll-inner {
+  display: flex;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-grow: 1;
+  min-width: max-content;
 }
 
-.toggle-icon {
-  color: white !important;
-  transition: transform 0.2s ease;
-}
-
-.empty-icon {
-  opacity: 0;
-}
-
-/* Мобильные стили */
-@media (max-width: 600px) {
-  .sidebar {
-    width: 100% !important;
+@media (max-width: 599px) {
+  .menu-scroll {
+    width: 200px;
+    overflow-x: auto;
+    padding-bottom: 5px;
   }
-
-  .sidebar-header {
-    padding: 12px 16px;
+  .menu-scroll-inner {
+    display: flex;
+    white-space: nowrap;
   }
-
-  .logo-icon {
-    width: 32px;
-    height: 32px;
+  .menu-scroll .menu-item {
+    font-size: 0.8rem;
+    margin: 0 2px;
+    padding: 0 8px;
+    flex: 0 0 auto;
+    min-width: 80px;
   }
-
-  .logo-text {
-    font-size: 1.1rem;
-  }
-
-  .sidebar-item,
-  .sidebar-item-group >>> .v-list-item {
-    padding: 10px 16px;
-  }
-
-  .submenu-item {
-    padding: 8px 16px 8px 40px !important;
-  }
-
-  .custom-icon {
-    width: 20px;
-    height: 20px;
-  }
-
-  .item-title,
-  .submenu-title {
-    font-size: 0.95rem;
+  .notification-btn {
+    margin-right: 16px;
+    width: 45px;
+    height: 45px;
   }
 }
 
-.v-navigation-drawer__content {
-  overflow-y: auto;
+@media (max-width: 430px) {
+  .menu-scroll {
+    width: 260px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  .notification-btn {
+    margin-right: auto;
+    margin-left: 3px;
+  }
 }
 
-/* Анимация для подменю */
-.v-list-group__items {
-  transition: all 0.3s ease;
+@media (max-width: 414px) {
+  .menu-scroll {
+    width: 240px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+}
+
+@media (max-width: 390px) {
+  .menu-scroll {
+    width: 220px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  .notification-btn {
+    margin-right: 3px;
+    margin-left: 3px;
+  }
+}
+
+@media (max-width: 375px) {
+  .menu-scroll {
+    width: 190px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  .notification-btn {
+    margin-right: auto;
+    margin-left: 3px;
+  }
+}
+
+@media (max-width: 320px) {
+  .menu-scroll {
+    width: 155px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  .notification-btn {
+    margin-right: 2px;
+    margin-left: 2px;
+  }
+}
+
+.menu-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.menu-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 2px;
+}
+
+@media (min-width: 600px) and (max-width: 959px) {
+  .desktop-menu {
+    width: 450px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  .desktop-menu-inner {
+    display: flex;
+    white-space: nowrap;
+  }
+  .desktop-menu .menu-item {
+    font-size: 0.9rem;
+    margin: 0 4px;
+    flex: 0 0 auto;
+    min-width: 80px;
+  }
+  .desktop-menu::-webkit-scrollbar {
+    height: 4px;
+  }
+  .desktop-menu::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 2px;
+  }
+  .notification-btn {
+    position: absolute;
+    right: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-right: 24px;
+  }
+}
+
+@media (min-width: 960px) {
+  .desktop-menu .menu-item {
+    font-size: 1rem;
+    margin: 0 8px;
+  }
+  .notification-btn {
+    margin-right: 24px;
+  }
+}
+
+@media (max-width: 959px) {
+  .user-info {
+    padding-left: 8px;
+    min-width: 120px;
+  }
+  .user-name {
+    font-size: 1rem;
+  }
+  .user-phone {
+    font-size: 0.8rem;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: initial;
+  }
+  .notification-btn {
+    margin-right: 24px;
+    margin-left: auto;
+  }
+  .v-btn--icon.v-btn--density-default {
+    width: calc(var(--v-btn-height) + 5px) !important;
+    height: calc(var(--v-btn-height) + 5px) !important;
+  }
+}
+
+.notification-btn {
+  margin-right: 24px;
+  position: relative;
+}
+
+.notification-btn .v-badge__badge {
+  top: 10px;
+  right: -2px;
+  background-color: red;
+  color: white;
+  font-size: 0.75rem;
+  height: 18px;
+  width: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+@media (max-width: 959px) {
+  .notification-btn .v-badge__badge {
+    top: 12px;
+    right: -2px;
+  }
+}
+
+.clear-btn {
+  color: #1976d2;
+  font-family: 'Gilroy-Medium', sans-serif;
+}
+
+.notification-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+}
+
+.read {
+  color: #888;
+  text-decoration: line-through;
+}
+
+.error-text {
+  color: #ff5252;
+}
+
+.v-list-item-title {
+  font-family: 'Gilroy-Medium', sans-serif;
+  font-size: 0.9rem;
 }
 </style>
