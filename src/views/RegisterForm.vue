@@ -2,25 +2,53 @@
   <v-container class="register-container">
     <v-row justify="center" align="center" class="fill-height">
       <v-col cols="12" sm="8" md="6" lg="4" class="register-col">
-        <v-snackbar v-model="showError" color="error" :timeout="5000" top rounded="pill" elevation="4">
+        <!-- Error Snackbar -->
+        <v-snackbar 
+          v-model="showError" 
+          color="error" 
+          :timeout="errorTimeout" 
+          top 
+          rounded="pill" 
+          elevation="4"
+          multi-line
+        >
+          <v-icon left>mdi-alert-circle</v-icon>
           {{ errorMessage }}
           <template v-slot:action="{ attrs }">
-            <v-btn text v-bind="attrs" @click="showError = false">{{ $t('register.errors.close') }}</v-btn>
+            <v-btn text v-bind="attrs" @click="showError = false">
+              {{ $t('register.errors.close') }}
+            </v-btn>
           </template>
         </v-snackbar>
-        <v-snackbar v-model="showSuccess" color="success" :timeout="3000" top rounded="pill" elevation="4">
+
+        <!-- Success Snackbar -->
+        <v-snackbar 
+          v-model="showSuccess" 
+          color="success" 
+          :timeout="3000" 
+          top 
+          rounded="pill" 
+          elevation="4"
+        >
+          <v-icon left>mdi-check-circle</v-icon>
           {{ $t('register.success') }}
           <template v-slot:action="{ attrs }">
-            <v-btn text v-bind="attrs" @click="showSuccess = false">{{ $t('register.errors.close') }}</v-btn>
+            <v-btn text v-bind="attrs" @click="showSuccess = false">
+              {{ $t('register.errors.close') }}
+            </v-btn>
           </template>
         </v-snackbar>
+
         <v-card class="register-card" elevation="10">
           <v-card-title class="register-title">
             <v-icon left color="primary">mdi-account-plus</v-icon>
             {{ $t('register.title') }}
           </v-card-title>
+          
           <v-card-text>
-            <v-form @submit.prevent="register" ref="form" v-model="valid">
+            <!-- Registration Form -->
+            <v-form @submit.prevent="register" ref="form" v-model="valid" lazy-validation>
+              <!-- Email Field -->
               <v-text-field
                 v-model="email"
                 :label="$t('register.email')"
@@ -32,7 +60,11 @@
                 outlined
                 dense
                 :aria-label="$t('register.email')"
+                :error-messages="fieldErrors.email"
+                @input="clearFieldError('email')"
               />
+
+              <!-- Phone Field -->
               <v-text-field
                 v-model="phone"
                 :label="$t('register.phone')"
@@ -46,7 +78,11 @@
                 outlined
                 dense
                 :aria-label="$t('register.phone')"
+                :error-messages="fieldErrors.phone"
+                @input="clearFieldError('phone')"
               />
+
+              <!-- Password Field -->
               <v-text-field
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
@@ -60,7 +96,11 @@
                 outlined
                 dense
                 :aria-label="$t('register.password')"
+                :error-messages="fieldErrors.password"
+                @input="clearFieldError('password')"
               />
+
+              <!-- Company Type Select -->
               <v-select
                 v-model="companyType"
                 :items="companyTypes"
@@ -71,9 +111,11 @@
                 outlined
                 dense
                 :aria-label="$t('register.companyType')"
+                :error-messages="fieldErrors.companyType"
+                @change="clearFieldError('companyType')"
               />
 
-              <!-- Поля для самозанятого -->
+              <!-- Fields for Self-Employed -->
               <div v-if="companyType === 'Самозанятый'" class="company-fields">
                 <v-text-field
                   v-model="selfEmployedData.inn"
@@ -84,10 +126,12 @@
                   outlined
                   dense
                   :aria-label="$t('register.inn')"
+                  :error-messages="fieldErrors['selfEmployedData.inn']"
+                  @input="clearFieldError('selfEmployedData.inn')"
                 />
               </div>
 
-              <!-- Поля для ИП -->
+              <!-- Fields for IP -->
               <div v-if="companyType === 'ИП'" class="company-fields">
                 <v-text-field
                   v-model="ipData.inn"
@@ -98,6 +142,8 @@
                   outlined
                   dense
                   :aria-label="$t('register.inn')"
+                  :error-messages="fieldErrors['ipData.inn']"
+                  @input="clearFieldError('ipData.inn')"
                 />
                 <v-text-field
                   v-model="ipData.ogrnip"
@@ -108,10 +154,12 @@
                   outlined
                   dense
                   :aria-label="$t('register.ogrnip')"
+                  :error-messages="fieldErrors['ipData.ogrnip']"
+                  @input="clearFieldError('ipData.ogrnip')"
                 />
               </div>
 
-              <!-- Поля для ООО -->
+              <!-- Fields for OOO -->
               <div v-if="companyType === 'ООО'" class="company-fields">
                 <v-text-field
                   v-model="oooData.companyName"
@@ -122,6 +170,8 @@
                   outlined
                   dense
                   :aria-label="$t('register.companyName')"
+                  :error-messages="fieldErrors['oooData.companyName']"
+                  @input="clearFieldError('oooData.companyName')"
                 />
                 <v-text-field
                   v-model="oooData.inn"
@@ -132,6 +182,8 @@
                   outlined
                   dense
                   :aria-label="$t('register.inn')"
+                  :error-messages="fieldErrors['oooData.inn']"
+                  @input="clearFieldError('oooData.inn')"
                 />
                 <v-text-field
                   v-model="oooData.ogrn"
@@ -142,9 +194,12 @@
                   outlined
                   dense
                   :aria-label="$t('register.ogrn')"
+                  :error-messages="fieldErrors['oooData.ogrn']"
+                  @input="clearFieldError('oooData.ogrn')"
                 />
               </div>
 
+              <!-- Submit Button -->
               <v-btn
                 type="submit"
                 color="primary"
@@ -159,6 +214,7 @@
                 <v-progress-circular v-if="loading" indeterminate size="24" color="white" />
               </v-btn>
 
+              <!-- Google Login Button -->
               <v-btn
                 color="white"
                 block
@@ -174,6 +230,7 @@
                 <v-progress-circular v-if="googleLoading" indeterminate size="24" color="grey darken-2" />
               </v-btn>
 
+              <!-- Additional Actions -->
               <v-btn
                 text
                 block
@@ -219,6 +276,8 @@ export default {
       showError: false,
       showSuccess: false,
       errorMessage: '',
+      errorTimeout: 10000, // 10 seconds for error messages
+      fieldErrors: {}, // Object to store field-specific errors
       companyType: null,
       companyTypes: [
         { text: this.$t('register.companyTypes.selfEmployed'), value: 'Самозанятый' },
@@ -237,15 +296,22 @@ export default {
         innOOO: value => /^\d{10}$/.test(value) || this.$t('register.errors.inn'),
         ogrnip: value => /^\d{15}$/.test(value) || this.$t('register.errors.ogrnip'),
         ogrn: value => /^\d{13}$/.test(value) || this.$t('register.errors.ogrn'),
-        companyName: value => value.length <= 100 || this.$t('register.errors.companyNameLength'),
+        companyName: value => (value && value.length <= 100) || this.$t('register.errors.companyNameLength'),
       },
     };
   },
   methods: {
     async register() {
-      if (!this.$refs.form.validate()) return;
+      if (!this.$refs.form.validate()) {
+        this.showError = true;
+        this.errorMessage = this.$t('register.errors.formValidation');
+        return;
+      }
+
       this.loading = true;
+      this.clearAllErrors();
       const authStore = useAuthStore();
+      
       const payload = {
         email: this.email,
         phone: this.phone,
@@ -258,7 +324,7 @@ export default {
 
       try {
         const response = await authStore.register(payload);
-        localStorage.setItem('csrf_token', response.csrf_token); // Сохраняем CSRF-токен
+        localStorage.setItem('csrf_token', response.csrf_token);
         this.showSuccess = true;
         setTimeout(() => this.$router.push('/dashboard'), 1500);
       } catch (error) {
@@ -267,6 +333,7 @@ export default {
         this.loading = false;
       }
     },
+
     async googleLogin() {
       this.googleLoading = true;
       try {
@@ -278,6 +345,7 @@ export default {
         this.googleLoading = false;
       }
     },
+
     async handleGoogleCallback() {
       const { code, state } = this.$route.query;
       if (code && state) {
@@ -292,13 +360,73 @@ export default {
         }
       }
     },
+
     handleError(error, context) {
       console.error(`${context} error:`, error);
+      
+      // Default error message
+      let message = this.$t('register.errors.unknownError');
+      let fieldErrors = {};
+
+      if (error.response) {
+        // Handle 400 Bad Request with field errors
+        if (error.response.status === 400 && error.response.data.detail) {
+          if (typeof error.response.data.detail === 'string') {
+            message = error.response.data.detail;
+          } else if (Array.isArray(error.response.data.detail)) {
+            // Process field errors from API
+            error.response.data.detail.forEach(err => {
+              const field = err.loc ? err.loc[err.loc.length - 1] : null;
+              if (field) {
+                fieldErrors[field] = err.msg;
+              }
+            });
+            message = this.$t('register.errors.validationError');
+          }
+        } 
+        // Handle 409 Conflict (duplicate email, etc.)
+        else if (error.response.status === 409) {
+          message = error.response.data.detail || this.$t('register.errors.conflict');
+        }
+        // Handle 422 Unprocessable Entity
+        else if (error.response.status === 422) {
+          message = this.$t('register.errors.validationError');
+          if (error.response.data.detail) {
+            error.response.data.detail.forEach(err => {
+              const field = err.loc ? err.loc[err.loc.length - 1] : null;
+              if (field) {
+                fieldErrors[field] = err.msg;
+              }
+            });
+          }
+        }
+        // Handle 500 Server Error
+        else if (error.response.status >= 500) {
+          message = this.$t('register.errors.serverError');
+        }
+      } else if (error.request) {
+        message = this.$t('register.errors.networkError');
+      }
+
+      // Set the error state
+      this.errorMessage = message;
       this.showError = true;
-      this.errorMessage = error.response?.data?.detail ||
-                         (error.response?.status === 400 ? this.$t('register.errors.badRequest') :
-                          error.response?.status === 409 ? this.$t('register.errors.conflict') :
-                          this.$t('register.errors.unknownError'));
+      
+      // Set field-specific errors if any
+      if (Object.keys(fieldErrors).length > 0) {
+        this.fieldErrors = { ...this.fieldErrors, ...fieldErrors };
+      }
+    },
+
+    clearFieldError(field) {
+      if (this.fieldErrors[field]) {
+        this.$set(this.fieldErrors, field, null);
+      }
+    },
+
+    clearAllErrors() {
+      this.fieldErrors = {};
+      this.showError = false;
     },
   },
   mounted() {
@@ -410,8 +538,15 @@ export default {
   color: #1565c0;
 }
 
-.timer-text {
+/* Error message styling */
+.v-messages.error--text {
   font-size: 12px;
-  color: inherit;
+  margin-top: 4px;
+}
+
+/* Snackbar custom styling */
+.v-snackbar >>> .v-snack__content {
+  display: flex;
+  align-items: center;
 }
 </style>

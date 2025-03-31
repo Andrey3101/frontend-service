@@ -3,36 +3,53 @@
     <v-row>
       <v-col cols="12">
         <h1 class="text-h4 mb-4">Калькулятор налогов (РФ)</h1>
+        
+        <!-- Сообщения об ошибках и предупреждениях -->
+        <v-row v-if="errorMessage || limitWarning">
+          <v-col cols="12">
+            <v-alert v-if="errorMessage" type="error" dismissible @input="errorMessage = ''">
+              <v-icon left>mdi-alert-circle</v-icon>
+              {{ errorMessage }}
+            </v-alert>
+            <v-alert v-if="limitWarning" type="warning" dense>
+              <v-icon left>mdi-alert</v-icon>
+              {{ limitWarning }}
+            </v-alert>
+          </v-col>
+        </v-row>
+        
         <v-card class="form-card">
           <v-card-text>
-            <v-form @submit.prevent="calculateTax" ref="form">
+            <v-form @submit.prevent="calculateTax" ref="form" lazy-validation>
               <!-- Выбор статуса -->
-                <v-select
-                    v-model="status"
-                    :items="statuses"
-                    label="Статус"
-                    outlined
-                    dense
-                    class="mb-3"
-                    :rules="[v => !!v || 'Выберите статус']"
-                    item-text="text"
-                    item-value="value"
-                    @change="resetResults"
-                ></v-select>
+              <v-select
+                v-model="status"
+                :items="statuses"
+                label="Статус"
+                outlined
+                dense
+                class="mb-3"
+                :rules="[v => !!v || 'Выберите статус']"
+                item-text="text"
+                item-value="value"
+                @change="resetResults"
+                :error-messages="fieldErrors.status"
+              ></v-select>
 
-                <!-- Тип налогообложения -->
-                <v-select
-                    v-model="taxType"
-                    :items="filteredTaxTypes"
-                    label="Тип налогообложения"
-                    outlined
-                    dense
-                    class="mb-3"
-                    :rules="[v => !!v || 'Выберите тип налогообложения']"
-                    item-text="text"
-                    item-value="value"
-                    @change="resetResults"
-                ></v-select>
+              <!-- Тип налогообложения -->
+              <v-select
+                v-model="taxType"
+                :items="filteredTaxTypes"
+                label="Тип налогообложения"
+                outlined
+                dense
+                class="mb-3"
+                :rules="[v => !!v || 'Выберите тип налогообложения']"
+                item-text="text"
+                item-value="value"
+                @change="resetResults"
+                :error-messages="fieldErrors.taxType"
+              ></v-select>
 
               <!-- Доход для НДФЛ и УСН -->
               <v-text-field
@@ -43,13 +60,11 @@
                 outlined
                 dense
                 class="mb-3"
-                :rules="[
-                  v => v >= 0 || 'Доход не может быть отрицательным',
-                  v => /^\d+$/.test(v) || 'Введите только цифры'
-                ]"
+                :rules="incomeRules"
                 :hint="taxType === 'usn' ? 'Для ИП на УСН учитываются страховые взносы' : ''"
                 persistent-hint
                 @input="resetResults"
+                :error-messages="fieldErrors.income"
               ></v-text-field>
 
               <!-- Доход от физлиц для НПД -->
@@ -61,13 +76,11 @@
                 outlined
                 dense
                 class="mb-3"
-                :rules="[
-                  v => v >= 0 || 'Доход не может быть отрицательным',
-                  v => /^\d+$/.test(v) || 'Введите только цифры'
-                ]"
+                :rules="incomeRules"
                 hint="Ставка 4% для доходов от физлиц"
                 persistent-hint
                 @input="resetResults"
+                :error-messages="fieldErrors.incomeFromIndividuals"
               ></v-text-field>
 
               <!-- Доход от юрлиц для НПД -->
@@ -79,13 +92,11 @@
                 outlined
                 dense
                 class="mb-3"
-                :rules="[
-                  v => v >= 0 || 'Доход не может быть отрицательным',
-                  v => /^\d+$/.test(v) || 'Введите только цифры'
-                ]"
+                :rules="incomeRules"
                 hint="Ставка 6% для доходов от юрлиц"
                 persistent-hint
                 @input="resetResults"
+                :error-messages="fieldErrors.incomeFromEntities"
               ></v-text-field>
 
               <!-- Расходы для УСН -->
@@ -97,92 +108,122 @@
                 outlined
                 dense
                 class="mb-3"
-                :rules="[
-                  v => v >= 0 || 'Расходы не могут быть отрицательными',
-                  v => /^\d+$/.test(v) || 'Введите только цифры',
-                  v => v <= this.income || 'Расходы не могут превышать доход'
-                ]"
+                :rules="expensesRules"
                 hint="Учитываются только при УСН 'Доходы минус расходы'"
                 persistent-hint
                 @input="resetResults"
+                :error-messages="fieldErrors.expenses"
               ></v-text-field>
 
               <!-- Кнопки -->
-              <v-btn
-                color="primary"
-                type="submit"
-                :disabled="!isFormValid"
-                class="calculate-btn mr-2"
-              >
-                Рассчитать
-              </v-btn>
-              <v-btn
-                color="secondary"
-                @click="compareAllSystems"
-                :disabled="!isFormValid"
-                class="calculate-btn mr-2"
-              >
-                Сравнить все
-              </v-btn>
-              <v-btn
-                color="error"
-                @click="clearData"
-                class="calculate-btn"
-              >
-                Очистить
-              </v-btn>
+              <div class="button-group">
+                <v-btn
+                  color="primary"
+                  type="submit"
+                  :disabled="!isFormValid"
+                  :loading="loading"
+                  class="action-btn"
+                  elevation="2"
+                >
+                  <v-icon left>mdi-calculator</v-icon>
+                  Рассчитать
+                </v-btn>
+                <v-btn
+                  color="primary"
+                  outlined
+                  @click="compareAllSystems"
+                  :disabled="!isFormValid || loading"
+                  :loading="comparisonLoading"
+                  class="action-btn"
+                  elevation="2"
+                >
+                  <v-icon left>mdi-scale-balance</v-icon>
+                  Сравнить все
+                </v-btn>
+                <v-btn
+                  color="error"
+                  outlined
+                  @click="clearData"
+                  :disabled="loading || comparisonLoading"
+                  class="action-btn"
+                  elevation="2"
+                >
+                  <v-icon left>mdi-broom</v-icon>
+                  Очистить
+                </v-btn>
+              </div>
             </v-form>
           </v-card-text>
         </v-card>
       </v-col>
     </v-row>
 
-    <!-- Предупреждение о лимитах -->
-    <v-row v-if="limitWarning">
-      <v-col cols="12">
-        <v-alert type="warning" dense>
-          {{ limitWarning }}
-        </v-alert>
-      </v-col>
-    </v-row>
-
     <!-- Результаты -->
-    <v-row v-if="results">
+    <v-row v-if="results && !loading">
       <v-col cols="12">
         <v-card class="result-card">
-          <v-card-title class="result-title">Результаты расчета</v-card-title>
+          <v-card-title class="result-title">
+            <v-icon left color="primary">mdi-chart-bar</v-icon>
+            Результаты расчета
+          </v-card-title>
           <v-card-text class="result-text">
-            <p v-if="taxType === 'ndfl' || comparisonMode">
-              НДФЛ (13%): <span class="amount">{{ results.ndfl.toLocaleString() }}</span> руб.
-            </p>
-            <p v-if="taxType === 'usn' || comparisonMode">
-              УСН ({{ usnRate }}%): <span class="amount">{{ results.usn.toLocaleString() }}</span> руб.
-              <br>
-              Страховые взносы: <span class="amount">{{ results.insurance.toLocaleString() }}</span> руб.
-              <br v-if="results.usnReduction">
-              Вычет взносов: <span class="amount">{{ results.usnReduction.toLocaleString() }}</span> руб.
-              <br>
-              Итого к уплате: <span class="amount total">{{ results.total.toLocaleString() }}</span> руб.
-            </p>
-            <p v-if="taxType === 'npd' || comparisonMode">
-              НПД: <span class="amount">{{ results.npd.toLocaleString() }}</span> руб.
-              <br v-if="taxType === 'npd' || comparisonMode">
-              - от физлиц (4%): <span class="amount">{{ results.npdFromIndividuals.toLocaleString() }}</span> руб.
-              <br>
-              - от юрлиц (6%): <span class="amount">{{ results.npdFromEntities.toLocaleString() }}</span> руб.
-            </p>
+            <template v-if="taxType === 'ndfl' || comparisonMode">
+              <div class="result-item">
+                <span>НДФЛ (13%):</span>
+                <span class="amount">{{ formatCurrency(results.ndfl) }}</span>
+              </div>
+            </template>
+            
+            <template v-if="taxType === 'usn' || comparisonMode">
+              <div class="result-item">
+                <span>УСН ({{ usnRate }}%):</span>
+                <span class="amount">{{ formatCurrency(results.usn) }}</span>
+              </div>
+              <div class="result-item">
+                <span>Страховые взносы:</span>
+                <span class="amount">{{ formatCurrency(results.insurance) }}</span>
+              </div>
+              <div v-if="results.usnReduction" class="result-item">
+                <span>Вычет взносов:</span>
+                <span class="amount">{{ formatCurrency(results.usnReduction) }}</span>
+              </div>
+              <div class="result-item total">
+                <span>Итого к уплате:</span>
+                <span class="amount total">{{ formatCurrency(results.total) }}</span>
+              </div>
+            </template>
+            
+            <template v-if="taxType === 'npd' || comparisonMode">
+              <div class="result-item">
+                <span>Всего НПД:</span>
+                <span class="amount">{{ formatCurrency(results.npd) }}</span>
+              </div>
+              <div class="result-item">
+                <span>- от физлиц (4%):</span>
+                <span class="amount">{{ formatCurrency(results.npdFromIndividuals) }}</span>
+              </div>
+              <div class="result-item">
+                <span>- от юрлиц (6%):</span>
+                <span class="amount">{{ formatCurrency(results.npdFromEntities) }}</span>
+              </div>
+            </template>
           </v-card-text>
         </v-card>
       </v-col>
-    </v-row>
+    </row>
 
     <!-- Диаграмма -->
-    <v-row v-if="results">
+    <v-row v-if="chartData.labels.length > 0 && !loading">
       <v-col cols="12">
         <v-card class="chart-card">
-          <v-card-title class="result-title">Распределение налогов</v-card-title>
+          <v-card-title class="result-title">
+            <v-icon left color="primary">mdi-chart-pie</v-icon>
+            Распределение налогов
+          </v-card-title>
           <v-card-text>
-            <BarChart :chart-data="chartData" :options="chartOptions" />
+            <div class="chart-container">
+              <BarChart :chart-data="chartData" :options="chartOptions" />
+            </div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -202,7 +243,6 @@ import {
   LinearScale,
 } from 'chart.js';
 
-// Регистрация компонентов Chart.js
 ChartJS.register(Title, Tooltip, Legend, BarElement, CategoryScale, LinearScale);
 
 export default {
@@ -228,9 +268,13 @@ export default {
       expenses: 0,
       incomeFromIndividuals: 0,
       incomeFromEntities: 0,
-      results: null,
+      loading: false,
+      comparisonLoading: false,
+      errorMessage: '',
       limitWarning: null,
+      results: null,
       comparisonMode: false,
+      fieldErrors: {},
       chartData: {
         labels: [],
         datasets: [],
@@ -242,13 +286,44 @@ export default {
           y: {
             beginAtZero: true,
             title: { display: true, text: 'Сумма (руб.)' },
+            ticks: {
+              callback: (value) => value.toLocaleString() + ' ₽'
+            }
           },
+          x: {
+            grid: { display: false }
+          }
         },
         plugins: {
-          legend: { position: 'top' },
-          tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${context.raw.toLocaleString()} руб.` } },
+          legend: { 
+            position: 'top',
+            labels: { boxWidth: 12 }
+          },
+          tooltip: { 
+            callbacks: { 
+              label: (tooltipItem) => {
+                return `${tooltipItem.dataset.label}: ${tooltipItem.raw.toLocaleString()} ₽`;
+              } 
+            } 
+          },
+          datalabels: {
+            display: false
+          }
         },
       },
+      incomeRules: [
+        v => v !== null && v !== undefined || 'Введите сумму',
+        v => v >= 0 || 'Сумма не может быть отрицательной',
+        v => /^\d+$/.test(v) || 'Введите целое число',
+        v => v <= 1000000000 || 'Сумма слишком большая'
+      ],
+      expensesRules: [
+        v => v !== null && v !== undefined || 'Введите сумму',
+        v => v >= 0 || 'Сумма не может быть отрицательной',
+        v => /^\d+$/.test(v) || 'Введите целое число',
+        v => v <= this.income || 'Расходы не могут превышать доход',
+        v => v <= 1000000000 || 'Сумма слишком большая'
+      ]
     };
   },
   computed: {
@@ -256,27 +331,7 @@ export default {
       return this.taxTypes.filter(type => type.statuses.includes(this.status));
     },
     isFormValid() {
-      if (this.taxType === 'ndfl') {
-        return this.income >= 0 && /^\d+$/.test(this.income);
-      }
-      if (this.taxType === 'usn') {
-        return (
-          this.income >= 0 &&
-          this.expenses >= 0 &&
-          this.income >= this.expenses &&
-          /^\d+$/.test(this.income) &&
-          /^\d+$/.test(this.expenses)
-        );
-      }
-      if (this.taxType === 'npd') {
-        return (
-          this.incomeFromIndividuals >= 0 &&
-          this.incomeFromEntities >= 0 &&
-          /^\d+$/.test(this.incomeFromIndividuals) &&
-          /^\d+$/.test(this.incomeFromEntities)
-        );
-      }
-      return false;
+      return this.$refs.form ? this.$refs.form.validate() : false;
     },
     usnRate() {
       return this.income - this.expenses > 0 ? 15 : 6;
@@ -298,109 +353,282 @@ export default {
       this.limitWarning = null;
       this.comparisonMode = false;
       this.chartData = { labels: [], datasets: [] };
+      this.clearErrors();
     },
+    
+    clearErrors() {
+      this.errorMessage = '';
+      this.fieldErrors = {};
+    },
+    
     checkLimits() {
+      this.limitWarning = null;
+      
       if (this.taxType === 'npd' || this.comparisonMode) {
         const totalNpdIncome = this.incomeFromIndividuals + this.incomeFromEntities;
         if (totalNpdIncome > 2400000) {
           this.limitWarning = 'Доход для НПД превышает лимит в 2.4 млн руб. в год.';
         }
       }
+      
+      if (this.income > 100000000 || this.expenses > 100000000 || 
+          this.incomeFromIndividuals > 100000000 || this.incomeFromEntities > 100000000) {
+        this.limitWarning = (this.limitWarning ? this.limitWarning + ' ' : '') + 
+          'Внимание: введены очень большие суммы. Проверьте правильность ввода.';
+      }
     },
+    
     calculateInsurance(income) {
       const fixedInsurance2025 = 45842;
       const additionalInsurance = income > 300000 ? (income - 300000) * 0.01 : 0;
       return Math.min(fixedInsurance2025 + additionalInsurance, fixedInsurance2025 * 8);
     },
-    calculateTax() {
-      if (!this.$refs.form.validate()) return;
+    
+    async calculateTax() {
+      if (!this.isFormValid) {
+        this.errorMessage = 'Пожалуйста, исправьте ошибки в форме';
+        return;
+      }
 
-      this.comparisonMode = false;
-      this.checkLimits();
-      this.saveData();
+      try {
+        this.loading = true;
+        this.clearErrors();
+        this.checkLimits();
+        this.saveData();
 
-      if (this.taxType === 'ndfl') {
-        const ndfl = this.income * 0.13;
-        this.results = { ndfl };
-        this.updateChart([{ label: 'НДФЛ', data: [ndfl], backgroundColor: '#4CAF50' }]); // Зеленый
-      } else if (this.taxType === 'usn') {
+        if (this.taxType === 'ndfl') {
+          const ndfl = Math.round(this.income * 0.13);
+          this.results = { ndfl };
+          this.updateChart([{ 
+            label: 'НДФЛ', 
+            data: [ndfl], 
+            backgroundColor: '#4CAF50',
+            borderColor: '#388E3C',
+            borderWidth: 1
+          }]);
+        } 
+        else if (this.taxType === 'usn') {
+          const taxableBase = this.income - this.expenses > 0 ? this.income - this.expenses : this.income;
+          const usnRate = this.income - this.expenses > 0 ? 0.15 : 0.06;
+          const usn = Math.round(taxableBase * usnRate);
+          const insurance = this.status === 'ip' ? this.calculateInsurance(this.income) : 0;
+          let total = usn + insurance;
+          let usnReduction = 0;
+
+          if (usnRate === 0.06 && this.status === 'ip') {
+            usnReduction = Math.min(insurance, usn * 0.5);
+            total = Math.max(usn - usnReduction, 0) + insurance;
+          }
+
+          this.results = { 
+            usn, 
+            insurance, 
+            total: Math.round(total), 
+            usnReduction: Math.round(usnReduction) 
+          };
+          
+          this.updateChart([
+            { 
+              label: 'УСН', 
+              data: [usn], 
+              backgroundColor: '#2196F3',
+              borderColor: '#1976D2',
+              borderWidth: 1
+            },
+            { 
+              label: 'Страховые взносы', 
+              data: [insurance], 
+              backgroundColor: '#FF9800',
+              borderColor: '#FB8C00',
+              borderWidth: 1
+            },
+            { 
+              label: 'Вычет', 
+              data: [usnReduction], 
+              backgroundColor: '#8BC34A',
+              borderColor: '#7CB342',
+              borderWidth: 1
+            },
+            { 
+              label: 'Итого', 
+              data: [total], 
+              backgroundColor: '#F44336',
+              borderColor: '#E53935',
+              borderWidth: 1
+            }
+          ]);
+        } 
+        else if (this.taxType === 'npd') {
+          const npdFromIndividuals = Math.round(this.incomeFromIndividuals * 0.04);
+          const npdFromEntities = Math.round(this.incomeFromEntities * 0.06);
+          const npd = npdFromIndividuals + npdFromEntities;
+          
+          this.results = { 
+            npd, 
+            npdFromIndividuals, 
+            npdFromEntities 
+          };
+          
+          this.updateChart([
+            { 
+              label: 'НПД (физлица)', 
+              data: [npdFromIndividuals], 
+              backgroundColor: '#3F51B5',
+              borderColor: '#303F9F',
+              borderWidth: 1
+            },
+            { 
+              label: 'НПД (юрлица)', 
+              data: [npdFromEntities], 
+              backgroundColor: '#9C27B0',
+              borderColor: '#7B1FA2',
+              borderWidth: 1
+            },
+            { 
+              label: 'Итого НПД', 
+              data: [npd], 
+              backgroundColor: '#E91E63',
+              borderColor: '#C2185B',
+              borderWidth: 1
+            }
+          ]);
+        }
+      } catch (error) {
+        this.handleError(error, 'calculateTax');
+      } finally {
+        this.loading = false;
+      }
+    },
+    
+    async compareAllSystems() {
+      if (!this.isFormValid) {
+        this.errorMessage = 'Пожалуйста, исправьте ошибки в форме';
+        return;
+      }
+
+      try {
+        this.comparisonLoading = true;
+        this.clearErrors();
+        this.checkLimits();
+        this.saveData();
+
+        const results = {};
+
+        // НДФЛ
+        results.ndfl = Math.round(this.income * 0.13);
+
+        // УСН
         const taxableBase = this.income - this.expenses > 0 ? this.income - this.expenses : this.income;
         const usnRate = this.income - this.expenses > 0 ? 0.15 : 0.06;
-        const usn = taxableBase * usnRate;
+        const usn = Math.round(taxableBase * usnRate);
         const insurance = this.status === 'ip' ? this.calculateInsurance(this.income) : 0;
         let total = usn + insurance;
         let usnReduction = 0;
-
+        
         if (usnRate === 0.06 && this.status === 'ip') {
           usnReduction = Math.min(insurance, usn * 0.5);
           total = Math.max(usn - usnReduction, 0) + insurance;
         }
+        
+        results.usn = usn;
+        results.insurance = insurance;
+        results.total = Math.round(total);
+        results.usnReduction = Math.round(usnReduction);
 
-        this.results = { usn, insurance, total, usnReduction };
-        this.updateChart([
-          { label: 'УСН', data: [usn], backgroundColor: '#2196F3' }, // Синий
-          { label: 'Страховые взносы', data: [insurance], backgroundColor: '#FF9800' }, // Оранжевый
-          { label: 'Вычет', data: [usnReduction], backgroundColor: '#8BC34A' }, // Светло-зеленый
-          { label: 'Итого', data: [total], backgroundColor: '#F44336' }, // Красный
-        ]);
-      } else if (this.taxType === 'npd') {
-        const npdFromIndividuals = this.incomeFromIndividuals * 0.04;
-        const npdFromEntities = this.incomeFromEntities * 0.06;
+        // НПД
+        const npdFromIndividuals = Math.round(this.incomeFromIndividuals * 0.04);
+        const npdFromEntities = Math.round(this.incomeFromEntities * 0.06);
         const npd = npdFromIndividuals + npdFromEntities;
-        this.results = { npd, npdFromIndividuals, npdFromEntities };
+        
+        results.npd = npd;
+        results.npdFromIndividuals = npdFromIndividuals;
+        results.npdFromEntities = npdFromEntities;
+
+        this.results = results;
+        this.comparisonMode = true;
+        
         this.updateChart([
-          { label: 'НПД (физлица)', data: [npdFromIndividuals], backgroundColor: '#3F51B5' }, // Индиго
-          { label: 'НПД (юрлица)', data: [npdFromEntities], backgroundColor: '#9C27B0' }, // Фиолетовый
-          { label: 'Итого НПД', data: [npd], backgroundColor: '#E91E63' }, // Розовый
+          { 
+            label: 'НДФЛ', 
+            data: [results.ndfl], 
+            backgroundColor: '#4CAF50',
+            borderColor: '#388E3C',
+            borderWidth: 1
+          },
+          { 
+            label: 'УСН', 
+            data: [usn], 
+            backgroundColor: '#2196F3',
+            borderColor: '#1976D2',
+            borderWidth: 1
+          },
+          { 
+            label: 'Страховые взносы', 
+            data: [insurance], 
+            backgroundColor: '#FF9800',
+            borderColor: '#FB8C00',
+            borderWidth: 1
+          },
+          { 
+            label: 'Вычет', 
+            data: [usnReduction], 
+            backgroundColor: '#8BC34A',
+            borderColor: '#7CB342',
+            borderWidth: 1
+          },
+          { 
+            label: 'УСН Итого', 
+            data: [total], 
+            backgroundColor: '#F44336',
+            borderColor: '#E53935',
+            borderWidth: 1
+          },
+          { 
+            label: 'НПД', 
+            data: [npd], 
+            backgroundColor: '#E91E63',
+            borderColor: '#C2185B',
+            borderWidth: 1
+          }
         ]);
+      } catch (error) {
+        this.handleError(error, 'compareAllSystems');
+      } finally {
+        this.comparisonLoading = false;
       }
     },
-    compareAllSystems() {
-      if (!this.$refs.form.validate()) return;
-
-      this.comparisonMode = true;
-      this.checkLimits();
-      this.saveData();
-
-      const results = {};
-
-      // НДФЛ
-      results.ndfl = this.income * 0.13;
-
-      // УСН
-      const taxableBase = this.income - this.expenses > 0 ? this.income - this.expenses : this.income;
-      const usnRate = this.income - this.expenses > 0 ? 0.15 : 0.06;
-      const usn = taxableBase * usnRate;
-      const insurance = this.status === 'ip' ? this.calculateInsurance(this.income) : 0;
-      let total = usn + insurance;
-      let usnReduction = 0;
-      if (usnRate === 0.06 && this.status === 'ip') {
-        usnReduction = Math.min(insurance, usn * 0.5);
-        total = Math.max(usn - usnReduction, 0) + insurance;
+    
+    handleError(error, context) {
+      console.error(`Error in ${context}:`, error);
+      
+      let message = 'Произошла ошибка при расчете налогов';
+      
+      if (error.response) {
+        // Обработка ошибок API
+        switch (error.response.status) {
+          case 400:
+            message = 'Некорректные данные для расчета';
+            if (error.response.data.errors) {
+              this.fieldErrors = error.response.data.errors;
+            }
+            break;
+          case 500:
+            message = 'Ошибка сервера. Пожалуйста, попробуйте позже';
+            break;
+          default:
+            message = error.response.data?.message || message;
+        }
+      } else if (error.request) {
+        message = 'Ошибка сети. Проверьте подключение к интернету';
+      } else if (error.message) {
+        message = error.message;
       }
-      results.usn = usn;
-      results.insurance = insurance;
-      results.total = total;
-      results.usnReduction = usnReduction;
-
-      // НПД
-      const npdFromIndividuals = this.incomeFromIndividuals * 0.04;
-      const npdFromEntities = this.incomeFromEntities * 0.06;
-      const npd = npdFromIndividuals + npdFromEntities;
-      results.npd = npd;
-      results.npdFromIndividuals = npdFromIndividuals;
-      results.npdFromEntities = npdFromEntities;
-
-      this.results = results;
-      this.updateChart([
-        { label: 'НДФЛ', data: [results.ndfl], backgroundColor: '#4CAF50' }, // Зеленый
-        { label: 'УСН', data: [usn], backgroundColor: '#2196F3' }, // Синий
-        { label: 'Страховые взносы', data: [insurance], backgroundColor: '#FF9800' }, // Оранжевый
-        { label: 'Вычет', data: [usnReduction], backgroundColor: '#8BC34A' }, // Светло-зеленый
-        { label: 'УСН Итого', data: [total], backgroundColor: '#F44336' }, // Красный
-        { label: 'НПД', data: [npd], backgroundColor: '#E91E63' }, // Розовый
-      ]);
+      
+      this.errorMessage = message;
+      this.results = null;
+      this.chartData = { labels: [], datasets: [] };
     },
+    
     saveData() {
       const data = {
         status: this.status,
@@ -412,20 +640,26 @@ export default {
       };
       localStorage.setItem('taxCalculatorData', JSON.stringify(data));
     },
+    
     loadSavedData() {
-      const savedData = localStorage.getItem('taxCalculatorData');
-      if (savedData) {
-        const data = JSON.parse(savedData);
-        this.status = data.status;
-        this.taxType = data.taxType;
-        this.income = data.income;
-        this.expenses = data.expenses;
-        this.incomeFromIndividuals = data.incomeFromIndividuals;
-        this.incomeFromEntities = data.incomeFromEntities;
+      try {
+        const savedData = localStorage.getItem('taxCalculatorData');
+        if (savedData) {
+          const data = JSON.parse(savedData);
+          this.status = data.status || 'selfEmployed';
+          this.taxType = data.taxType || 'npd';
+          this.income = data.income || 0;
+          this.expenses = data.expenses || 0;
+          this.incomeFromIndividuals = data.incomeFromIndividuals || 0;
+          this.incomeFromEntities = data.incomeFromEntities || 0;
+        }
+      } catch (e) {
+        console.error('Error loading saved data:', e);
+        localStorage.removeItem('taxCalculatorData');
       }
     },
+    
     clearData() {
-      // Очистка данных и localStorage
       this.status = 'selfEmployed';
       this.taxType = 'npd';
       this.income = 0;
@@ -436,116 +670,180 @@ export default {
       this.limitWarning = null;
       this.comparisonMode = false;
       this.chartData = { labels: [], datasets: [] };
+      this.clearErrors();
       localStorage.removeItem('taxCalculatorData');
-      this.$refs.form.resetValidation(); // Сброс валидации формы
+      
+      if (this.$refs.form) {
+        this.$refs.form.resetValidation();
+      }
     },
+    
     updateChart(datasets) {
       this.chartData = {
         labels: ['Налоги'],
-        datasets: datasets.filter(d => d.data[0] > 0),
+        datasets: datasets.filter(d => d.data[0] > 0).map(dataset => ({
+          ...dataset,
+          borderRadius: 4,
+          barPercentage: 0.8,
+          categoryPercentage: 0.9
+        }))
       };
     },
-  },
+    
+    formatCurrency(value) {
+      return value.toLocaleString('ru-RU') + ' ₽';
+    }
+  }
 };
 </script>
 
 <style scoped>
-/* Заголовок */
+/* Основные стили */
 .text-h4 {
-  font-weight: 500;
+  font-weight: 600;
   color: #2c3e50;
   text-align: center;
+  margin-top: 20px;
 }
 
 /* Карточка формы */
 .form-card {
-  padding: 20px;
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  background-color: #ffffff;
+  margin-bottom: 24px;
+}
+
+/* Поля ввода */
+.v-select,
+.v-text-field {
+  max-width: 500px;
+  margin: 0 auto 16px;
+}
+
+/* Группа кнопок */
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.action-btn {
+  min-width: 180px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Карточки результатов */
+.result-card,
+.chart-card {
+  margin-top: 24px;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   background-color: #ffffff;
 }
 
-/* Поля ввода и селект */
-.v-select,
-.v-text-field {
-  max-width: 400px;
-  margin: 0 auto;
-}
-
-/* Кнопка "Рассчитать" */
-.calculate-btn {
-  display: inline-block;
-  margin: 20px 5px 0;
-  padding: 10px 20px;
-  font-size: 16px;
-  border-radius: 6px;
-  text-transform: none;
-  transition: background-color 0.3s;
-}
-
-.calculate-btn:hover {
-  background-color: #1976d2 !important; /* Для primary */
-}
-
-/* Карточка результатов */
-.result-card,
-.chart-card {
-  margin-top: 20px;
-  padding: 15px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  background-color: #f9f9f9;
-}
-
-/* Заголовок результатов */
 .result-title {
   font-size: 20px;
-  color: #34495e;
+  font-weight: 600;
+  color: #2c3e50;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 16px;
 }
 
-/* Текст результатов */
 .result-text {
   font-size: 16px;
   color: #333;
-  line-height: 1.6;
 }
 
-/* Суммы в результатах */
+.result-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.result-item.total {
+  font-weight: 600;
+  border-top: 2px solid #eee;
+  margin-top: 8px;
+  padding-top: 12px;
+}
+
 .amount {
-  font-weight: bold;
-  color: #2980b9;
+  font-weight: 500;
+  color: #1e88e5;
 }
 
-/* Итоговая сумма */
 .amount.total {
-  color: #e74c3c;
+  color: #e53935;
   font-size: 18px;
 }
 
-/* Адаптивность и высота диаграммы */
-.chart-card {
-  height: 400px; /* Десктоп */
+/* Контейнер диаграммы */
+.chart-container {
+  position: relative;
+  height: 400px;
+  width: 100%;
 }
 
+/* Адаптивные стили */
 @media (max-width: 960px) {
-  .chart-card {
-    height: 350px; /* Планшет */
+  .form-card {
+    padding: 20px;
+  }
+  
+  .button-group {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .action-btn {
+    width: 100%;
+    max-width: 300px;
+  }
+  
+  .chart-container {
+    height: 350px;
   }
 }
 
 @media (max-width: 600px) {
+  .text-h4 {
+    font-size: 1.5rem;
+  }
+  
+  .form-card {
+    padding: 16px;
+  }
+  
   .v-select,
   .v-text-field {
-    max-width: 100%;
+    margin-bottom: 12px;
   }
-
-  .calculate-btn {
-    width: 100%;
-    margin: 10px 0;
+  
+  .result-title {
+    font-size: 18px;
   }
-
-  .chart-card {
-    height: 300px; /* Мобильные устройства */
+  
+  .result-text {
+    font-size: 15px;
+  }
+  
+  .chart-container {
+    height: 300px;
   }
 }
 </style>

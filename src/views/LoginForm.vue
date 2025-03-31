@@ -2,80 +2,138 @@
   <v-container class="login-container">
     <v-row justify="center" align="center" class="fill-height">
       <v-col cols="12" sm="8" md="6" lg="4" class="login-col">
-        <v-snackbar v-model="showError" color="error" :timeout="5000" top centered>
-          {{ errorMessage }}
+        <!-- Уведомления об ошибках и успехе -->
+        <v-snackbar
+          v-model="snackbar.show"
+          :timeout="snackbar.timeout"
+          :color="snackbar.color"
+          top
+          centered
+          elevation="24"
+        >
+          <div class="snackbar-content">
+            <v-icon left>{{ snackbar.icon }}</v-icon>
+            <div>
+              <div class="snackbar-title">{{ snackbar.title }}</div>
+              <div class="snackbar-message">{{ snackbar.message }}</div>
+            </div>
+          </div>
+          <template v-slot:action="{ attrs }">
+            <v-btn
+              icon
+              v-bind="attrs"
+              @click="snackbar.show = false"
+            >
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </template>
         </v-snackbar>
-        <v-snackbar v-model="showSuccess" color="success" :timeout="3000" top centered>
-          {{ successMessage }}
-        </v-snackbar>
+
+        <!-- Основная форма входа -->
         <v-card class="login-card" elevation="8">
-          <v-card-title class="login-title">Вход</v-card-title>
+          <div class="login-header">
+            <v-img
+              src="@/assets/logo.png"
+              contain
+              height="60"
+              class="logo"
+            ></v-img>
+            <v-card-title class="login-title">Вход в систему</v-card-title>
+          </div>
+
           <v-card-text>
             <v-form @submit.prevent="login" ref="form" v-model="valid">
+              <!-- Поле email -->
               <v-text-field
                 v-model="email"
                 label="Email"
                 type="email"
                 required
-                prepend-icon="mdi-email"
+                prepend-inner-icon="mdi-email-outline"
+                outlined
+                dense
                 class="input-field"
-                :rules="[rules.required, rules.email]"
+                :rules="emailRules"
+                :error-messages="fieldErrors.email"
+                @input="clearFieldError('email')"
                 autofocus
                 aria-label="Введите ваш email"
+                placeholder="example@domain.com"
               />
+
+              <!-- Поле телефона -->
               <v-text-field
                 v-model="phone"
                 label="Телефон"
-                prepend-icon="mdi-phone"
+                prepend-inner-icon="mdi-phone-outline"
+                outlined
+                dense
                 class="input-field"
-                :rules="[rules.required, rules.phone]"
-                :input-mask="phoneMask"
-                @focus="phoneMask = ''"
-                @blur="phoneMask = '+7(###) ###-##-##'"
-                placeholder="+7(ххх) ххх-хх-хх"
-                aria-label="Введите ваш номер телефона в формате +7(ххх) ххх-хх-хх"
+                :rules="phoneRules"
+                :error-messages="fieldErrors.phone"
+                @input="handlePhoneInput"
+                @focus="phoneFocused = true"
+                @blur="phoneFocused = false"
+                aria-label="Введите ваш номер телефона"
+                placeholder="+7 (___) ___-__-__"
               />
+
+              <!-- Поле пароля -->
               <v-text-field
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
                 label="Пароль"
                 required
-                prepend-icon="mdi-lock"
-                append-icon="mdi-eye"
+                prepend-inner-icon="mdi-lock-outline"
+                :append-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
                 @click:append="showPassword = !showPassword"
+                outlined
+                dense
                 class="input-field"
-                :rules="[rules.required, rules.minLength]"
+                :rules="passwordRules"
+                :error-messages="fieldErrors.password"
+                @input="clearFieldError('password')"
                 aria-label="Введите ваш пароль"
               />
+
+              <!-- Кнопка входа -->
               <v-btn
                 type="submit"
                 color="primary"
                 block
+                large
                 class="login-btn"
-                :disabled="!valid"
+                :disabled="!valid || loading"
                 :loading="loading"
-                aria-label="Войти в аккаунт"
+                aria-label="Войти в систему"
               >
+                <v-icon left>mdi-login</v-icon>
                 Войти
               </v-btn>
-              <v-btn
-                text
-                block
-                class="forgot-password-btn"
-                @click="requestResetPassword"
-                aria-label="Восстановить пароль"
-              >
-                Забыли пароль?
-              </v-btn>
-              <v-btn
-                text
-                block
-                class="register-btn"
-                @click="$router.push('/register')"
-                aria-label="Перейти к регистрации"
-              >
-                Зарегистрироваться
-              </v-btn>
+
+              <!-- Дополнительные действия -->
+              <div class="actions">
+                <v-btn
+                  text
+                  small
+                  class="action-btn"
+                  @click="requestResetPassword"
+                  :disabled="loading"
+                  aria-label="Восстановить пароль"
+                >
+                  Забыли пароль?
+                </v-btn>
+                <v-btn
+                  text
+                  small
+                  class="action-btn"
+                  @click="$router.push('/register')"
+                  :disabled="loading"
+                  aria-label="Зарегистрироваться"
+                >
+                  Создать аккаунт
+                </v-btn>
+              </div>
             </v-form>
           </v-card-text>
         </v-card>
@@ -86,188 +144,252 @@
 
 <script>
 import { useAuthStore } from '@/stores/auth';
-import { requestPasswordReset } from '@/api/index';
+import { requestPasswordReset } from '@/api/auth';
+import { mapPhoneNumber } from '@/utils/format';
 
 export default {
   name: 'LoginForm',
   data() {
     return {
       valid: false,
+      loading: false,
       email: '',
       phone: '',
       password: '',
       showPassword: false,
-      phoneMask: '+7(###) ###-##-##',
-      loading: false,
-      showError: false,
-      showSuccess: false,
-      errorMessage: 'Ошибка входа: неверные данные',
-      successMessage: 'Успешный вход! Перенаправляем...',
-      rules: {
-        required: value => !!value || 'Это поле обязательно',
-        email: value => {
-          const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          return pattern.test(value) || 'Неверный формат email';
-        },
-        phone: value => {
-          const cleaned = value.replace(/\D/g, '');
-          return (cleaned.length === 11 && cleaned.startsWith('7')) || 'Номер должен быть в формате +7(ххх) ххх-хх-хх';
-        },
-        minLength: value => value.length >= 6 || 'Пароль должен содержать минимум 6 символов',
+      phoneFocused: false,
+      
+      // Обработка ошибок
+      snackbar: {
+        show: false,
+        title: '',
+        message: '',
+        color: 'error',
+        icon: 'mdi-alert-circle',
+        timeout: 6000
       },
+      fieldErrors: {
+        email: [],
+        phone: [],
+        password: []
+      },
+
+      // Правила валидации
+      emailRules: [
+        v => !!v || 'Email обязателен',
+        v => /.+@.+\..+/.test(v) || 'Введите корректный email'
+      ],
+      phoneRules: [
+        v => !!v || 'Телефон обязателен',
+        v => {
+          const cleaned = v.replace(/\D/g, '');
+          return cleaned.length >= 11 || 'Введите корректный номер';
+        }
+      ],
+      passwordRules: [
+        v => !!v || 'Пароль обязателен',
+        v => v.length >= 6 || 'Минимум 6 символов',
+        v => /[A-Z]/.test(v) || 'Хотя бы одна заглавная буква',
+        v => /\d/.test(v) || 'Хотя бы одна цифра'
+      ]
     };
+  },
+  computed: {
+    formattedPhone() {
+      return this.phoneFocused ? this.phone : mapPhoneNumber(this.phone);
+    }
   },
   methods: {
     async login() {
-      if (this.$refs.form.validate()) {
-        this.loading = true;
-        const authStore = useAuthStore();
-        try {
-          await authStore.login(this.email, this.password, this.phone);
-          this.showSuccess = true;
-          setTimeout(() => {
-            this.$router.push('/dashboard');
-          }, 1500);
-        } catch (error) {
-          this.errorMessage = 'Ошибка входа: неверные данные';
-          this.showError = true;
-          console.error('Ошибка входа:', error);
-        } finally {
-          this.loading = false;
-        }
-      }
-    },
-    async requestResetPassword() {
-      if (!this.email) {
-        this.errorMessage = 'Пожалуйста, введите email для восстановления пароля';
-        this.showError = true;
-        return;
-      }
+      if (!this.$refs.form.validate()) return;
+      
       this.loading = true;
+      this.clearErrors();
+      
       try {
-        const response = await requestPasswordReset(this.email);
-        this.successMessage = response.message;
-        this.showSuccess = true;
+        const authStore = useAuthStore();
+        await authStore.login({
+          email: this.email,
+          phone: this.phone.replace(/\D/g, ''),
+          password: this.password
+        });
+
+        this.showSuccess('Успешный вход', 'Перенаправляем на главную страницу...');
+        setTimeout(() => {
+          this.$router.push('/dashboard');
+        }, 1500);
       } catch (error) {
-        this.errorMessage = error.message || 'Ошибка при запросе сброса пароля';
-        this.showError = true;
-        console.error('Ошибка запроса сброса пароля:', error);
+        this.handleLoginError(error);
       } finally {
         this.loading = false;
       }
     },
-  },
+
+    async requestResetPassword() {
+      if (!this.email) {
+        this.showError('Ошибка', 'Введите email для восстановления пароля');
+        return;
+      }
+
+      this.loading = true;
+      try {
+        await requestPasswordReset(this.email);
+        this.showSuccess(
+          'Запрос отправлен', 
+          'Инструкции по восстановлению пароля отправлены на ваш email'
+        );
+      } catch (error) {
+        this.handleError(
+          error,
+          'Ошибка восстановления',
+          'Не удалось отправить запрос на восстановление пароля'
+        );
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    handlePhoneInput(value) {
+      // Очищаем от всех нецифровых символов
+      let cleaned = value.replace(/\D/g, '');
+      
+      // Если номер начинается с 7 или 8, заменяем на +7
+      if (cleaned.startsWith('8')) {
+        cleaned = '7' + cleaned.substring(1);
+      } else if (!cleaned.startsWith('7')) {
+        cleaned = '7' + cleaned;
+      }
+      
+      // Ограничиваем длину номера
+      if (cleaned.length > 11) {
+        cleaned = cleaned.substring(0, 11);
+      }
+      
+      this.phone = cleaned;
+    },
+
+    handleLoginError(error) {
+      let message = 'Неверный email или пароль';
+      let fieldErrors = {};
+
+      if (error.response) {
+        switch (error.response.status) {
+          case 400:
+            if (error.response.data.errors) {
+              fieldErrors = error.response.data.errors;
+              message = 'Проверьте правильность введённых данных';
+            }
+            break;
+          case 401:
+            message = 'Неверные учетные данные';
+            break;
+          case 403:
+            message = 'Аккаунт не активирован';
+            break;
+          case 429:
+            message = 'Слишком много попыток. Попробуйте позже';
+            break;
+          case 500:
+            message = 'Ошибка сервера. Попробуйте позже';
+            break;
+        }
+      } else if (error.request) {
+        message = 'Ошибка сети. Проверьте подключение';
+      }
+
+      this.fieldErrors = fieldErrors;
+      this.showError('Ошибка входа', message);
+    },
+
+    handleError(error, title, defaultMessage) {
+      console.error(title, error);
+      
+      let message = defaultMessage;
+      if (error.response) {
+        message = error.response.data?.message || 
+                 error.response.data?.detail || 
+                 defaultMessage;
+      } else if (error.message) {
+        message = error.message;
+      }
+
+      this.showError(title, message);
+    },
+
+    showError(title, message) {
+      this.snackbar = {
+        show: true,
+        title,
+        message,
+        color: 'error',
+        icon: 'mdi-alert-circle',
+        timeout: 6000
+      };
+    },
+
+    showSuccess(title, message) {
+      this.snackbar = {
+        show: true,
+        title,
+        message,
+        color: 'success',
+        icon: 'mdi-check-circle',
+        timeout: 4000
+      };
+    },
+
+    clearErrors() {
+      this.fieldErrors = {
+        email: [],
+        phone: [],
+        password: []
+      };
+    },
+
+    clearFieldError(field) {
+      if (this.fieldErrors[field]) {
+        this.fieldErrors[field] = [];
+      }
+    }
+  }
 };
 </script>
 
 <style scoped>
 .login-container {
   height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #eef2f7 0%, #d9e2ec 100%);
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 16px;
 }
 
 .login-col {
-  display: flex;
-  justify-content: center;
+  max-width: 450px;
 }
 
 .login-card {
-  padding: 24px; /* Увеличиваем отступы */
-  border-radius: 16px;
-  background: #ffffff;
-  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+.login-header {
+  padding: 24px 24px 16px;
+  text-align: center;
+  background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%);
+}
+
+.logo {
+  margin: 0 auto 12px;
+  max-width: 120px;
 }
 
 .login-title {
-  font-family: 'Gilroy-ExtraBold', sans-serif;
-  font-size: 1.8rem;
-  color: #1976d2;
-  text-align: center;
-}
-
-.input-field {
-  margin-bottom: 20px; /* Увеличиваем расстояние между полями */
-  font-family: 'Gilroy-Regular', sans-serif;
-}
-
-.login-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
-  margin-top: 16px;
-  background: linear-gradient(135deg, #1976d2, #42a5f5); /* Градиент для кнопки */
   color: white;
-  transition: transform 0.2s ease;
-}
-
-.login-btn:hover {
-  transform: scale(1.02);
-}
-
-.register-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
-  margin-top: 12px;
-  color: #1565c0; /* Более тёмный оттенок для контраста */
-  background: #e3f2fd; /* Лёгкий фон для кнопки */
-  border-radius: 8px;
-  transition: background 0.2s ease;
-}
-
-.register-btn:hover {
-  background: #bbdefb;
-}
-
-/* Адаптация для десктопа */
-@media (min-width: 960px) {
-  .login-card {
-    width: 100%;
-    max-width: 900px;
-  }
-}
-
-/* Адаптация для мобильных устройств (320px) */
-@media (max-width: 320px) {
-  .login-card {
-    padding: 16px;
-    max-width: 280px;
-  }
-  .login-title {
-    font-size: 1.6rem;
-  }
-  .input-field {
-    margin-bottom: 16px;
-    font-size: 1rem; /* Увеличиваем шрифт для лучшей читаемости */
-  }
-  .login-btn,
-  .register-btn {
-    font-size: 1rem;
-    padding: 10px 14px; /* Увеличиваем размер кнопок */
-    margin-top: 12px;
-  }
-}
-
-<style scoped>
-.login-container {
-  height: 100vh;
-}
-
-.login-col {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.login-card {
+  font-size: 1.5rem;
+  font-weight: 600;
   width: 100%;
-  padding: 20px;
-}
-
-.login-title {
-  text-align: center;
-  font-size: 24px;
-  font-weight: bold;
-  padding: 16px 0;
+  padding: 0;
+  margin-bottom: 8px;
 }
 
 .input-field {
@@ -275,34 +397,94 @@ export default {
 }
 
 .login-btn {
-  margin: 20px 0 10px 0;
-  padding: 10px;
-  font-weight: bold;
-}
-
-.forgot-password-btn {
-  margin: 10px 0;
-  color: #1976d2; /* Основной синий цвет Vuetify */
-  text-transform: none;
-  font-size: 14px;
+  margin-top: 8px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  height: 48px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(25, 118, 210, 0.2);
   transition: all 0.3s ease;
 }
 
-.forgot-password-btn:hover {
-  color: #1565c0;
-  background-color: rgba(25, 118, 210, 0.1);
+.login-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 10px rgba(25, 118, 210, 0.3);
+}
+
+.login-btn:active {
+  transform: translateY(0);
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.action-btn {
+  font-size: 0.8rem;
+  color: #1976d2;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  color: #0d47a1;
   text-decoration: underline;
 }
 
-.register-btn {
-  margin: 10px 0;
-  color: #666;
-  text-transform: none;
-  font-size: 14px;
+.snackbar-content {
+  display: flex;
+  align-items: center;
 }
 
-.register-btn:hover {
-  color: #333;
-  background-color: rgba(0, 0, 0, 0.05);
+.snackbar-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.snackbar-message {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+/* Адаптация для мобильных устройств */
+@media (max-width: 600px) {
+  .login-col {
+    padding: 8px;
+  }
+
+  .login-card {
+    border-radius: 8px;
+  }
+
+  .login-header {
+    padding: 16px 16px 12px;
+  }
+
+  .login-title {
+    font-size: 1.3rem;
+  }
+
+  .input-field {
+    margin-bottom: 12px;
+  }
+
+  .login-btn {
+    height: 44px;
+    font-size: 0.9rem;
+  }
+
+  .actions {
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 400px) {
+  .login-title {
+    font-size: 1.2rem;
+  }
 }
 </style>

@@ -3,6 +3,27 @@
     <v-row>
       <v-col>
         <h1 class="clients-title">Клиенты</h1>
+        
+        <!-- Лента состояния операций -->
+        <v-snackbar
+          v-model="snackbar.show"
+          :timeout="snackbar.timeout"
+          :color="snackbar.color"
+          top
+          right
+        >
+          {{ snackbar.message }}
+          <template v-slot:action="{ attrs }">
+            <v-btn
+              icon
+              v-bind="attrs"
+              @click="snackbar.show = false"
+            >
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </template>
+        </v-snackbar>
+
         <v-row class="filter-row" align="center">
           <v-col cols="12" sm="6" md="4">
             <v-text-field
@@ -12,7 +33,8 @@
               outlined
               dense
               clearable
-              @input="filterClients"
+              @input="debounceFilter"
+              :error-messages="fieldErrors.search"
               class="search-field"
             />
           </v-col>
@@ -25,15 +47,38 @@
               dense
               clearable
               @change="filterClients"
+              :error-messages="fieldErrors.filter"
               class="filter-select"
             />
           </v-col>
           <v-col cols="12" sm="6" md="3">
-            <v-btn color="primary" @click="openAddDialog" class="add-btn">
+            <v-btn 
+              color="primary" 
+              @click="openAddDialog" 
+              class="add-btn"
+              :loading="loading"
+            >
               <v-icon left>mdi-plus</v-icon> Добавить клиента
             </v-btn>
           </v-col>
         </v-row>
+
+        <!-- Диалог подтверждения удаления -->
+        <v-dialog v-model="confirmDeleteDialog" max-width="400px" persistent>
+          <v-card class="dialog-card">
+            <v-card-title class="dialog-title">Подтверждение удаления</v-card-title>
+            <v-card-text>
+              Вы уверены, что хотите удалить клиента {{ clientToDelete?.name || '' }}?
+              <br><br>
+              <strong>Это действие нельзя отменить.</strong>
+            </v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn color="grey" text @click="confirmDeleteDialog = false">Отмена</v-btn>
+              <v-btn color="error" @click="confirmDelete" :loading="deleting">Удалить</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
 
         <v-data-table
           :headers="headers"
@@ -44,78 +89,148 @@
           :footer-props="{ 'items-per-page-options': [5, 10, 20, -1] }"
         >
           <template v-slot:item.amount="{ item }">
-            <span>{{ item.amount !== null ? `${item.amount} ₽` : '—' }}</span>
+            <span>{{ item.amount !== null ? `${formatAmount(item.amount)} ₽` : '—' }}</span>
           </template>
+
           <template v-slot:item.actions="{ item }">
-            <v-btn small color="primary" @click="openEditDialog(item)" class="action-btn ma-1">
-              <v-icon small left>mdi-pencil</v-icon>
-              <span class="d-none d-sm-inline">Редактировать</span>
-            </v-btn>
-            <v-btn small color="error" @click="deleteClient(item.client_id)" class="action-btn ma-1">
-              <v-icon small left>mdi-delete</v-icon>
-              <span class="d-none d-sm-inline">Удалить</span>
-            </v-btn>
+            <v-tooltip top>
+              <template v-slot:activator="{ on }">
+                <v-btn 
+                  small 
+                  color="primary" 
+                  @click="openEditDialog(item)" 
+                  class="action-btn ma-1"
+                  v-on="on"
+                  :disabled="loading"
+                >
+                  <v-icon small left>mdi-pencil</v-icon>
+                  <span class="d-none d-sm-inline">Редактировать</span>
+                </v-btn>
+              </template>
+              <span>Редактировать клиента</span>
+            </v-tooltip>
+
+            <v-tooltip top>
+              <template v-slot:activator="{ on }">
+                <v-btn 
+                  small 
+                  color="error" 
+                  @click="initDeleteClient(item)" 
+                  class="action-btn ma-1"
+                  v-on="on"
+                  :disabled="loading"
+                >
+                  <v-icon small left>mdi-delete</v-icon>
+                  <span class="d-none d-sm-inline">Удалить</span>
+                </v-btn>
+              </template>
+              <span>Удалить клиента</span>
+            </v-tooltip>
+          </template>
+
+          <template v-slot:no-data>
+            <div class="no-data-message">
+              <v-icon large color="grey">mdi-account-question</v-icon>
+              <p>Нет данных о клиентах</p>
+              <v-btn color="primary" @click="fetchClients" :loading="loading">
+                <v-icon left>mdi-refresh</v-icon>
+                Обновить
+              </v-btn>
+            </div>
           </template>
         </v-data-table>
       </v-col>
     </v-row>
 
     <!-- Диалог добавления/редактирования -->
-    <v-dialog v-model="dialog" max-width="600px" persistent>
+    <v-dialog v-model="clientDialog" max-width="600px" persistent>
       <v-card class="dialog-card">
         <v-card-title class="dialog-title">
           {{ editMode ? 'Редактировать клиента' : 'Добавить клиента' }}
           <v-spacer />
-          <v-btn icon @click="dialog = false" class="close-btn">
+          <v-btn icon @click="closeDialog" class="close-btn" :disabled="saving">
             <v-icon>mdi-close</v-icon>
           </v-btn>
         </v-card-title>
+        
         <v-card-text>
-          <v-form v-model="valid" ref="form">
+          <v-form v-model="formValid" ref="form">
             <v-text-field
               v-model="form.name"
               label="Имя"
               required
-              :rules="[v => !!v || 'Обязательное поле']"
+              :rules="nameRules"
+              :error-messages="fieldErrors.name"
+              @input="clearFieldError('name')"
               outlined
               dense
               class="form-field"
             />
+            
             <v-text-field
               v-model="form.phone"
               label="Телефон"
+              :rules="phoneRules"
+              :error-messages="fieldErrors.phone"
+              @input="clearFieldError('phone')"
               outlined
               dense
               class="form-field"
             />
+            
             <v-text-field
               v-model="form.email"
               label="Email"
-              :rules="[v => !v || /.+@.+\..+/.test(v) || 'Неверный email']"
+              :rules="emailRules"
+              :error-messages="fieldErrors.email"
+              @input="clearFieldError('email')"
               outlined
               dense
               class="form-field"
             />
+            
             <v-text-field
               v-model="form.amount"
               label="Сумма (₽)"
               type="number"
+              :rules="amountRules"
+              :error-messages="fieldErrors.amount"
+              @input="clearFieldError('amount')"
               outlined
               dense
               class="form-field"
             />
+            
             <v-textarea
               v-model="form.description"
               label="Описание"
+              :rules="descriptionRules"
+              :error-messages="fieldErrors.description"
+              @input="clearFieldError('description')"
               outlined
               rows="3"
               class="form-field"
             />
           </v-form>
         </v-card-text>
+        
         <v-card-actions class="dialog-actions">
-          <v-btn color="grey" text @click="dialog = false">Отмена</v-btn>
-          <v-btn color="primary" @click="saveClient" :disabled="!valid" :loading="saving">Сохранить</v-btn>
+          <v-btn 
+            color="grey" 
+            text 
+            @click="closeDialog" 
+            :disabled="saving"
+          >
+            Отмена
+          </v-btn>
+          <v-btn 
+            color="primary" 
+            @click="saveClient" 
+            :disabled="!formValid || saving" 
+            :loading="saving"
+          >
+            Сохранить
+          </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -124,19 +239,24 @@
 
 <script>
 import { addClient, getClients, updateClient, deleteClient } from '../api';
+import debounce from 'lodash/debounce';
 
 export default {
+  name: 'ClientsList',
   data() {
     return {
       clients: [],
       filteredClients: [],
       loading: false,
       saving: false,
-      dialog: false,
+      deleting: false,
+      clientDialog: false,
+      confirmDeleteDialog: false,
       editMode: false,
-      valid: false,
+      formValid: false,
       searchQuery: '',
       filter: { amount: null },
+      clientToDelete: null,
       form: {
         name: '',
         phone: '',
@@ -144,6 +264,13 @@ export default {
         amount: null,
         description: '',
         client_id: null,
+      },
+      fieldErrors: {},
+      snackbar: {
+        show: false,
+        message: '',
+        color: 'success',
+        timeout: 5000
       },
       headers: [
         { text: 'Имя', value: 'name', sortable: true },
@@ -159,187 +286,426 @@ export default {
         { text: '10,000 - 50,000 ₽', value: '10000-50000' },
         { text: 'Более 50,000 ₽', value: '50000+' },
       ],
+      // Правила валидации
+      nameRules: [
+        v => !!v || 'Имя обязательно',
+        v => (v && v.length <= 100) || 'Максимум 100 символов'
+      ],
+      phoneRules: [
+        v => !v || /^[\d\s+\-()]+$/.test(v) || 'Некорректный номер телефона'
+      ],
+      emailRules: [
+        v => !v || /.+@.+\..+/.test(v) || 'Некорректный email'
+      ],
+      amountRules: [
+        v => !v || v >= 0 || 'Сумма не может быть отрицательной'
+      ],
+      descriptionRules: [
+        v => !v || v.length <= 500 || 'Максимум 500 символов'
+      ],
+      // Таймер для debounce
+      debounceFilter: null
     };
   },
   created() {
+    this.debounceFilter = debounce(this.filterClients, 500);
     this.fetchClients();
   },
   methods: {
     async fetchClients() {
       this.loading = true;
+      this.clearErrors();
+      
       try {
         const filters = {};
-        if (this.searchQuery) filters.name = this.searchQuery;
+        if (this.searchQuery) filters.search = this.searchQuery;
         if (this.filter.amount) {
           const [min, max] = this.filter.amount.split('-');
           filters.amount_min = min || 0;
           filters.amount_max = max || (this.filter.amount === '50000+' ? null : max);
         }
-        this.clients = await getClients(filters);
-        this.filteredClients = this.clients; // Фильтрация теперь на сервере
+        
+        const response = await getClients(filters);
+        
+        if (response.error) {
+          throw new Error(response.error);
+        }
+        
+        this.clients = response.clients || [];
+        this.filteredClients = this.clients;
+        
       } catch (error) {
-        console.error('Ошибка загрузки клиентов:', error);
-        const message = error.response?.data?.detail || 'Не удалось загрузить список клиентов';
-        this.$toast.error(message);
+        this.handleError(
+          error,
+          'Не удалось загрузить клиентов',
+          'Произошла ошибка при загрузке списка клиентов. Пожалуйста, попробуйте позже.'
+        );
       } finally {
         this.loading = false;
       }
     },
+    
     filterClients() {
-      this.fetchClients(); // Вызываем серверную фильтрацию
+      this.fetchClients();
     },
+    
     openAddDialog() {
       this.editMode = false;
-      this.form = { name: '', phone: '', email: '', amount: null, description: '', client_id: null };
-      this.dialog = true;
-      this.$nextTick(() => this.$refs.form.resetValidation());
-    },
-    openEditDialog(item) {
-      this.editMode = true;
-      this.form = { ...item, amount: item.amount !== null ? item.amount : null };
-      this.dialog = true;
-      this.$nextTick(() => this.$refs.form.resetValidation());
-    },
-    async saveClient() {
-      this.saving = true;
-      try {
-        if (this.editMode) {
-          await updateClient(this.form.client_id, this.form);
-          this.$toast.success('Клиент обновлён');
-        } else {
-          await addClient(this.form);
-          this.$toast.success('Клиент добавлен');
+      this.form = { 
+        name: '', 
+        phone: '', 
+        email: '', 
+        amount: null, 
+        description: '', 
+        client_id: null 
+      };
+      this.clientDialog = true;
+      this.$nextTick(() => {
+        if (this.$refs.form) {
+          this.$refs.form.resetValidation();
         }
-        this.dialog = false;
+      });
+    },
+    
+    openEditDialog(client) {
+      this.editMode = true;
+      this.form = { 
+        ...client, 
+        amount: client.amount !== null ? client.amount : null 
+      };
+      this.clientDialog = true;
+      this.$nextTick(() => {
+        if (this.$refs.form) {
+          this.$refs.form.resetValidation();
+        }
+      });
+    },
+    
+    closeDialog() {
+      if (!this.saving) {
+        this.clientDialog = false;
+        this.clearErrors();
+      }
+    },
+    
+    initDeleteClient(client) {
+      this.clientToDelete = client;
+      this.confirmDeleteDialog = true;
+    },
+    
+    async confirmDelete() {
+      if (!this.clientToDelete) return;
+      
+      this.deleting = true;
+      try {
+        const response = await deleteClient(this.clientToDelete.client_id);
+        
+        if (response.error) {
+          throw new Error(response.error);
+        }
+        
+        this.showSnackbar('Клиент успешно удалён', 'success');
         await this.fetchClients();
+        this.confirmDeleteDialog = false;
+        this.clientToDelete = null;
+        
       } catch (error) {
-        console.error('Ошибка сохранения клиента:', error);
-        const message = error.response?.data?.detail || 'Не удалось сохранить клиента';
-        this.$toast.error(message);
+        this.handleError(
+          error,
+          'Не удалось удалить клиента',
+          'Произошла ошибка при удалении клиента. Пожалуйста, попробуйте позже.'
+        );
+      } finally {
+        this.deleting = false;
+      }
+    },
+    
+    async saveClient() {
+      if (!this.formValid) return;
+      
+      this.saving = true;
+      this.clearErrors();
+      
+      try {
+        let response;
+        
+        if (this.editMode) {
+          response = await updateClient(this.form.client_id, this.form);
+        } else {
+          response = await addClient(this.form);
+        }
+        
+        if (response.error) {
+          if (response.errors) {
+            this.fieldErrors = response.errors;
+            throw new Error('Проверьте правильность заполнения полей');
+          }
+          throw new Error(response.error);
+        }
+        
+        this.showSnackbar(
+          this.editMode ? 'Клиент успешно обновлён' : 'Клиент успешно добавлен',
+          'success'
+        );
+        
+        this.clientDialog = false;
+        await this.fetchClients();
+        
+      } catch (error) {
+        this.handleError(
+          error,
+          this.editMode ? 'Ошибка обновления клиента' : 'Ошибка добавления клиента',
+          'Произошла ошибка при сохранении данных клиента. Пожалуйста, проверьте введённые данные и попробуйте снова.'
+        );
       } finally {
         this.saving = false;
       }
     },
-    async deleteClient(clientId) {
-      if (confirm('Вы уверены, что хотите удалить клиента?')) {
-        try {
-          await deleteClient(clientId);
-          this.$toast.success('Клиент удалён');
-          await this.fetchClients();
-        } catch (error) {
-          console.error('Ошибка удаления клиента:', error);
-          const message = error.response?.data?.detail || 'Не удалось удалить клиента';
-          this.$toast.error(message);
-        }
-      }
+    
+    formatAmount(amount) {
+      return new Intl.NumberFormat('ru-RU').format(amount);
     },
-  },
+    
+    handleError(error, defaultMessage, defaultDetails = '') {
+      console.error('Error:', error);
+      
+      let message = defaultMessage;
+      let details = defaultDetails;
+      
+      if (error.response) {
+        // Обработка HTTP ошибок
+        switch(error.response.status) {
+          case 400:
+            message = 'Некорректные данные';
+            if (error.response.data?.errors) {
+              this.fieldErrors = error.response.data.errors;
+            }
+            break;
+          case 401:
+            message = 'Требуется авторизация';
+            details = 'Для выполнения этого действия необходимо войти в систему';
+            this.$router.push('/login');
+            break;
+          case 403:
+            message = 'Доступ запрещен';
+            details = 'У вас недостаточно прав для выполнения этого действия';
+            break;
+          case 404:
+            message = 'Данные не найдены';
+            details = 'Запрошенные данные не существуют или были удалены';
+            break;
+          case 500:
+            message = 'Ошибка сервера';
+            details = 'Произошла внутренняя ошибка сервера. Пожалуйста, попробуйте позже.';
+            break;
+          default:
+            message = error.response.data?.message || 
+                     error.response.data?.detail || 
+                     defaultMessage;
+            details = error.response.data?.errors || defaultDetails;
+        }
+      } else if (error.request) {
+        // Ошибка сети или сервер не ответил
+        message = 'Проблемы с соединением';
+        details = 'Не удалось подключиться к серверу. Проверьте интернет-соединение и попробуйте снова.';
+      } else {
+        // Другие ошибки
+        message = error.message || defaultMessage;
+      }
+      
+      this.showSnackbar(message, 'error');
+    },
+    
+    showSnackbar(message, color = 'success') {
+      this.snackbar = {
+        show: true,
+        message,
+        color,
+        timeout: 5000
+      };
+    },
+    
+    clearErrors() {
+      this.fieldErrors = {};
+    },
+    
+    clearFieldError(field) {
+      if (this.fieldErrors[field]) {
+        delete this.fieldErrors[field];
+      }
+    }
+  }
 };
 </script>
 
 <style scoped>
 .clients-container {
   padding: 24px;
-  background: linear-gradient(135deg, #ffffff 0%, #f0f4f8 100%);
-  border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  animation: fadeIn 0.5s ease-out;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #f5f7fa;
+  border-radius: 12px;
 }
 
 .clients-title {
-  font-family: 'Gilroy-ExtraBold', sans-serif;
-  font-size: 28px;
-  color: #1e88e5;
+  font-size: 2rem;
+  font-weight: 500;
+  color: #1976d2;
   margin-bottom: 20px;
+  text-align: center;
 }
 
 .filter-row {
   margin-bottom: 20px;
 }
 
-.search-field {
-  background: #fff;
-  border-radius: 8px;
-}
-
+.search-field,
 .filter-select {
   background: #fff;
   border-radius: 8px;
 }
 
 .add-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.5px;
   text-transform: none;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.add-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
 .clients-table {
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
 }
 
-.clients-table th {
-  font-family: 'Gilroy-Medium', sans-serif !important;
-  color: #37474f !important;
+.clients-table :deep(.v-data-table-header th) {
+  background-color: #e3f2fd;
+  color: #0d47a1;
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 
-.clients-table td {
-  font-family: 'Gilroy-Regular', sans-serif;
-  color: #546e7a;
+.clients-table :deep(tr:hover) {
+  background-color: #f5f7fa !important;
 }
 
 .action-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.5px;
   text-transform: none;
   border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.no-data-message {
+  text-align: center;
+  padding: 40px 0;
+  color: #78909c;
+}
+
+.no-data-message p {
+  margin: 16px 0;
+  font-size: 1.1rem;
 }
 
 .dialog-card {
-  background: #fff;
   border-radius: 12px;
-  padding: 16px;
+  overflow: hidden;
 }
 
 .dialog-title {
-  font-family: 'Gilroy-ExtraBold', sans-serif;
-  font-size: 20px;
-  color: #1e88e5;
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: #333;
+  background-color: #f5f7fa;
+  padding: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.close-btn {
+  transition: all 0.3s ease;
+}
+
+.close-btn:hover {
+  transform: rotate(90deg);
 }
 
 .form-field {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .dialog-actions {
   padding: 16px;
+  border-top: 1px solid #e0e0e0;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+/* Анимации */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter, .fade-leave-to {
+  opacity: 0;
 }
 
-@media (max-width: 600px) {
+/* Адаптивность */
+@media (max-width: 960px) {
   .clients-container {
     padding: 16px;
   }
+  
   .clients-title {
-    font-size: 24px;
+    font-size: 1.5rem;
   }
+  
   .filter-row {
     flex-direction: column;
   }
+  
   .search-field,
   .filter-select,
   .add-btn {
     margin-bottom: 12px;
     width: 100%;
   }
+  
   .action-btn {
     width: 100%;
+    margin: 4px 0;
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 600px) {
+  .clients-title {
+    font-size: 1.3rem;
+  }
+  
+  .clients-table :deep(.v-data-table-header th),
+  .clients-table :deep(td) {
+    font-size: 0.85rem;
+    padding: 8px 4px;
+  }
+  
+  .action-btn {
+    min-width: 36px;
+    padding: 0 8px;
+  }
+  
+  .action-btn span {
+    display: none;
   }
 }
 </style>
