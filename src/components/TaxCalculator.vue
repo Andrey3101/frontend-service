@@ -20,7 +20,7 @@
         
         <v-card class="form-card">
           <v-card-text>
-            <v-form @submit.prevent="calculateTax" ref="form" lazy-validation>
+            <v-form @submit.prevent="calculateTax" ref="form" v-model="formValid" lazy-validation>
               <!-- Выбор статуса -->
               <v-select
                 v-model="status"
@@ -120,7 +120,7 @@
                 <v-btn
                   color="primary"
                   type="submit"
-                  :disabled="!isFormValid"
+                  :disabled="!formValid"
                   :loading="loading"
                   class="action-btn"
                   elevation="2"
@@ -132,7 +132,7 @@
                   color="primary"
                   outlined
                   @click="compareAllSystems"
-                  :disabled="!isFormValid || loading"
+                  :disabled="!formValid || loading"
                   :loading="comparisonLoading"
                   class="action-btn"
                   elevation="2"
@@ -210,7 +210,7 @@
           </v-card-text>
         </v-card>
       </v-col>
-    </row>
+    </v-row>
 
     <!-- Диаграмма -->
     <v-row v-if="chartData.labels.length > 0 && !loading">
@@ -252,6 +252,7 @@ export default {
   },
   data() {
     return {
+      formValid: false,
       status: 'selfEmployed',
       statuses: [
         { text: 'Самозанятый', value: 'selfEmployed' },
@@ -330,9 +331,6 @@ export default {
     filteredTaxTypes() {
       return this.taxTypes.filter(type => type.statuses.includes(this.status));
     },
-    isFormValid() {
-      return this.$refs.form ? this.$refs.form.validate() : false;
-    },
     usnRate() {
       return this.income - this.expenses > 0 ? 15 : 6;
     },
@@ -385,7 +383,7 @@ export default {
     },
     
     async calculateTax() {
-      if (!this.isFormValid) {
+      if (!this.formValid) {
         this.errorMessage = 'Пожалуйста, исправьте ошибки в форме';
         return;
       }
@@ -501,7 +499,7 @@ export default {
     },
     
     async compareAllSystems() {
-      if (!this.isFormValid) {
+      if (!this.formValid) {
         this.errorMessage = 'Пожалуйста, исправьте ошибки в форме';
         return;
       }

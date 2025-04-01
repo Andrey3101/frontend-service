@@ -11,26 +11,30 @@
     </v-btn>
     
     <v-navigation-drawer
-      v-model="drawer"
+      v-model="localDrawer"
       app
       :temporary="isMobileOrTablet"
-      :fixed="!isMobileOrTablet"
-      :clipped="isMobileOrTablet"
+      :permanent="!isMobileOrTablet"
+      :clipped="false"
       left
       class="sidebar"
-      :width="sidebarWidth"
+      :width="isCollapsed && !isMobileOrTablet ? '80px' : sidebarWidth"
     >
-      <div class="sidebar-header">
+      <div class="sidebar-header" :class="{ 'collapsed-header': isCollapsed && !isMobileOrTablet }">
         <v-btn
-          v-if="!isMobile"
           icon
           @click.stop="toggleDrawer"
           class="menu-toggle-btn"
         >
-          <v-icon color="white">mdi-menu</v-icon>
+          <v-icon color="white">{{ isCollapsed ? 'mdi-menu-open' : 'mdi-menu' }}</v-icon>
         </v-btn>
-        <img src="@/assets/logo.png" alt="Logo" class="logo-icon" />
-        <span class="logo-text">Мой Проект</span>
+        <img
+          v-if="!isCollapsed || isMobileOrTablet"
+          src="@/assets/logo.png"
+          alt="Logo"
+          class="logo-icon"
+        />
+        <span v-if="!isCollapsed || isMobileOrTablet" class="logo-text">Мой Проект</span>
 
         <v-btn
           v-if="isMobileOrTablet"
@@ -52,14 +56,23 @@
               prepend-icon=""
               class="sidebar-item-group"
               :append-icon="null"
+              :disabled="isCollapsed && !isMobileOrTablet"
             >
               <template v-slot:activator="{ props }">
                 <v-list-item v-bind="props" class="sidebar-item">
                   <v-list-item-icon>
                     <img :src="getIcon(item.icon)" class="custom-icon" :alt="item.title" />
                   </v-list-item-icon>
-                  <v-list-item-title class="item-title">{{ item.title }}</v-list-item-title>
-                  <v-icon class="toggle-icon ml-auto">
+                  <v-list-item-title
+                    v-if="!isCollapsed || isMobileOrTablet"
+                    class="item-title"
+                  >
+                    {{ item.title }}
+                  </v-list-item-title>
+                  <v-icon
+                    v-if="!isCollapsed || isMobileOrTablet"
+                    class="toggle-icon ml-auto"
+                  >
                     {{ openSubmenus[item.route] ? 'mdi-chevron-up' : 'mdi-chevron-down' }}
                   </v-icon>
                 </v-list-item>
@@ -94,8 +107,18 @@
               <v-list-item-icon>
                 <img :src="getIcon(item.icon)" class="custom-icon" :alt="item.title" />
               </v-list-item-icon>
-              <v-list-item-title class="item-title">{{ item.title }}</v-list-item-title>
-              <v-icon class="empty-icon">mdi-circle-small</v-icon>
+              <v-list-item-title
+                v-if="!isCollapsed || isMobileOrTablet"
+                class="item-title"
+              >
+                {{ item.title }}
+              </v-list-item-title>
+              <v-icon
+                v-if="!isCollapsed || isMobileOrTablet"
+                class="empty-icon"
+              >
+                mdi-circle-small
+              </v-icon>
             </v-list-item>
           </template>
         </template>
@@ -106,28 +129,39 @@
 
 <script>
 import { computed, reactive } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 export default {
   props: {
     value: Boolean,
-    showMobileButton: Boolean
+    showMobileButton: Boolean,
+    isMobileOrTablet: Boolean, // Passed from App.vue
   },
-  setup(props) {
+  setup(props, { emit }) {
     const route = useRoute();
-    
+    const router = useRouter();
+
     const shouldShowMobileMenuButton = computed(() => {
       return props.showMobileButton;
     });
 
+    // Close sidebar on mobile/tablet after navigation
+    router.afterEach(() => {
+      if (props.isMobileOrTablet) {
+        emit('update:value', false); // Emit event to update parent
+      }
+    });
+
     return {
       shouldShowMobileMenuButton,
-      route
+      route,
+      router,
     };
   },
   data() {
     return {
       localDrawer: false,
+      isCollapsed: false, // For desktop collapse/expand
       openSubmenus: reactive({}),
       menuItems: [
         {
@@ -183,15 +217,25 @@ export default {
         this.openSubmenus[item.route] = false; // Изначально все подменю закрыты
       }
     });
+
+    // Load collapsed state from localStorage
+    const savedCollapsed = localStorage.getItem('sidebarCollapsed');
+    this.isCollapsed = savedCollapsed ? JSON.parse(savedCollapsed) : false;
+
+    // Initialize localDrawer based on props.value
+    this.localDrawer = this.value;
   },
   computed: {
-    drawer: {
+    localDrawer: {
       get() {
-        return this.value || this.localDrawer;
+        return this.value;
       },
       set(val) {
-        this.localDrawer = val;
-        this.$emit('input', val);
+        this.$emit('update:value', val); // Emit event to update parent
+        // Save drawer state for desktop
+        if (!this.isMobileOrTablet) {
+          localStorage.setItem('sidebarDrawer', JSON.stringify(val));
+        }
       },
     },
     isMobile() {
@@ -199,9 +243,6 @@ export default {
     },
     isTablet() {
       return this.$vuetify?.breakpoint?.smOnly || false;
-    },
-    isMobileOrTablet() {
-      return this.isMobile || this.isTablet;
     },
     sidebarWidth() {
       if (this.isMobile) return '100%';
@@ -222,11 +263,18 @@ export default {
       return this.route.path === route || this.route.path.startsWith(route + '/');
     },
     toggleDrawer() {
-      this.drawer = !this.drawer;
+      if (!this.isMobileOrTablet) {
+        // On desktop, toggle collapse state
+        this.isCollapsed = !this.isCollapsed;
+        localStorage.setItem('sidebarCollapsed', JSON.stringify(this.isCollapsed));
+      } else {
+        // On mobile/tablet, toggle the drawer
+        this.localDrawer = !this.localDrawer;
+      }
     },
     closeDrawer() {
       if (this.isMobileOrTablet) {
-        this.drawer = false;
+        this.localDrawer = false;
       }
     },
   },
@@ -247,6 +295,8 @@ export default {
   top: 10px;
   left: 10px;
   z-index: 1001;
+  background-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar-header {
@@ -255,7 +305,15 @@ export default {
   padding: 16px;
   background-color: #34495e;
   min-height: 64px;
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  transition: padding 0.3s ease;
+}
+
+.collapsed-header {
+  padding: 16px 8px;
+  justify-content: center;
 }
 
 .menu-toggle-btn {
@@ -281,7 +339,6 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: opacity 0.3s ease;
 }
 
 .sidebar-list {
@@ -357,7 +414,7 @@ export default {
 /* Мобильные стили */
 @media (max-width: 600px) {
   .sidebar {
-    width: 100% !important;
+    width: 100%;
   }
 
   .sidebar-header {
@@ -396,7 +453,7 @@ export default {
 /* Планшетные стили */
 @media (min-width: 601px) and (max-width: 960px) {
   .sidebar {
-    width: 300px !important;
+    width: 300px;
   }
 
   .sidebar-header {

@@ -49,25 +49,11 @@
                 <div class="avatar-wrapper">
                   <v-avatar size="150" class="profile-avatar">
                     <v-img
-                      :src="profile.avatar || require('@/assets/default-avatar.png')"
+                      :src="profile.avatar || require('@/assets/logo.png')"
                       alt="Аватар профиля"
                     ></v-img>
                   </v-avatar>
-                  <v-btn
-                    v-if="isEditing"
-                    color="primary"
-                    small
-                    fab
-                    absolute
-                    bottom
-                    right
-                    class="avatar-edit-btn"
-                    @click="uploadAvatar"
-                  >
-                    <v-icon>mdi-camera</v-icon>
-                  </v-btn>
                 </div>
-                <input type="file" ref="avatarInput" accept="image/*" style="display: none" @change="handleAvatarChange">
                 
                 <div class="user-meta">
                   <h3 class="user-name">{{ profile.name || 'Без имени' }}</h3>
@@ -307,8 +293,7 @@
 
 <script>
 import { mapGetters } from 'vuex';
-import { getProfile, updateProfile, deleteCompany, logout } from '@/api/profile';
-import { uploadFile } from '@/api/upload';
+import { getProfile, updateProfile, deleteCompany, logoutUser } from '@/api/index.js';
 
 export default {
   name: 'ProfileForm',
@@ -425,47 +410,13 @@ export default {
     async logout() {
       this.logoutLoading = true;
       try {
-        await logout();
+        await logoutUser();
         this.$router.push('/login');
       } catch (error) {
         this.showError('Ошибка', 'Не удалось выйти из профиля', error);
       } finally {
         this.logoutLoading = false;
         this.showLogoutDialog = false;
-      }
-    },
-    
-    uploadAvatar() {
-      this.$refs.avatarInput.click();
-    },
-    
-    async handleAvatarChange(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      
-      if (file.size > 2 * 1024 * 1024) {
-        this.showError('Ошибка', 'Размер файла не должен превышать 2MB');
-        return;
-      }
-      
-      const validTypes = ['image/jpeg', 'image/png'];
-      if (!validTypes.includes(file.type)) {
-        this.showError('Ошибка', 'Допустимы только JPG и PNG изображения');
-        return;
-      }
-      
-      try {
-        this.loading = true;
-        const formData = new FormData();
-        formData.append('avatar', file);
-        
-        const response = await uploadFile(formData);
-        this.profile.avatar = response.url;
-        this.showSuccess('Успешно', 'Аватар обновлён');
-      } catch (error) {
-        this.showError('Ошибка', 'Не удалось загрузить аватар', error);
-      } finally {
-        this.loading = false;
       }
     },
     
@@ -584,12 +535,6 @@ export default {
 .profile-avatar {
   border: 3px solid #1976d2;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.avatar-edit-btn {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
 }
 
 .user-meta {

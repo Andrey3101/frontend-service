@@ -13,10 +13,18 @@ src/
 ├── components/
 │   ├── DraggableItem.vue
 │   ├── DroppableWrapper.vue
-│   ├── Sidebar.vue
+│   ├── SidebarForm.vue
 │   ├── VoiceRecorderForm.vue
-│   ├── Chat.vue
+│   ├── BarChart.vue
+│   ├── ChatForm.vue
 │   ├── TaskDetail.vue
+│   ├── ActsDetail.vue
+│   ├── CompetitorMonitor.vue
+│   ├── TaskForm.vue
+│   ├── UsersDetail.vue
+│   ├── PromotionRecommendations.vue
+│   ├── ReportsDetail.vue
+│   ├── TaxCalculator.vue
 │   └── CommentForm.vue
 ├── router/
 │   └── index.js           
@@ -25,13 +33,17 @@ src/
 ├── stores/
 │   └── auth.js
 ├── views/
-│   ├── Acts.vue
-│   ├── Dashboard.vue
-│   ├── Login.vue
-│   ├── Profile.vue
-│   ├── Tasks.vue          
-│   ├── Users.vue
-│   └── Reports.vue        
+│   ├── ActsList.vue
+│   ├── DashboardPage.vue
+│   ├── LoginForm.vue
+│   ├── ProfileForm.vue
+│   ├── TasksList.vue         
+│   ├── UsersList.vue
+│   ├── ClientsList.vue
+│   ├── NotFound.vue
+│   ├── RegisterForm.vue
+│   ├── ResetPassword.vue
+│   └── ReportList.vue  
 ├── App.vue
 └── main.js
 

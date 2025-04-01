@@ -238,7 +238,7 @@
 </template>
 
 <script>
-import { addClient, getClients, updateClient, deleteClient } from '../api';
+import { addClient, getClients, updateClient, deleteClient } from '@/api/index.js';
 import debounce from 'lodash/debounce';
 
 export default {
@@ -286,7 +286,6 @@ export default {
         { text: '10,000 - 50,000 ₽', value: '10000-50000' },
         { text: 'Более 50,000 ₽', value: '50000+' },
       ],
-      // Правила валидации
       nameRules: [
         v => !!v || 'Имя обязательно',
         v => (v && v.length <= 100) || 'Максимум 100 символов'
@@ -303,7 +302,6 @@ export default {
       descriptionRules: [
         v => !v || v.length <= 500 || 'Максимум 500 символов'
       ],
-      // Таймер для debounce
       debounceFilter: null
     };
   },
@@ -466,14 +464,12 @@ export default {
       return new Intl.NumberFormat('ru-RU').format(amount);
     },
     
-    handleError(error, defaultMessage, defaultDetails = '') {
+    handleError(error, defaultMessage) {
       console.error('Error:', error);
       
       let message = defaultMessage;
-      let details = defaultDetails;
       
       if (error.response) {
-        // Обработка HTTP ошибок
         switch(error.response.status) {
           case 400:
             message = 'Некорректные данные';
@@ -483,33 +479,25 @@ export default {
             break;
           case 401:
             message = 'Требуется авторизация';
-            details = 'Для выполнения этого действия необходимо войти в систему';
             this.$router.push('/login');
             break;
           case 403:
             message = 'Доступ запрещен';
-            details = 'У вас недостаточно прав для выполнения этого действия';
             break;
           case 404:
             message = 'Данные не найдены';
-            details = 'Запрошенные данные не существуют или были удалены';
             break;
           case 500:
             message = 'Ошибка сервера';
-            details = 'Произошла внутренняя ошибка сервера. Пожалуйста, попробуйте позже.';
             break;
           default:
             message = error.response.data?.message || 
                      error.response.data?.detail || 
                      defaultMessage;
-            details = error.response.data?.errors || defaultDetails;
         }
       } else if (error.request) {
-        // Ошибка сети или сервер не ответил
         message = 'Проблемы с соединением';
-        details = 'Не удалось подключиться к серверу. Проверьте интернет-соединение и попробуйте снова.';
       } else {
-        // Другие ошибки
         message = error.message || defaultMessage;
       }
       

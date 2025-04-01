@@ -187,7 +187,7 @@
 </template>
 
 <script>
-import { getActs, updateAct } from '../api';
+import { getActs, updateAct } from '@/api/index.js';
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
@@ -336,7 +336,7 @@ export default {
         
         // Данные
         let y = 30;
-        this.filteredActs.forEach((act, index) => {
+        this.filteredActs.forEach(act => {
           if (y > 280) {
             doc.addPage();
             y = 20;

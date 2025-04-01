@@ -4,7 +4,7 @@
       <v-col>
         <h1 class="dashboard-title">Дашборд</h1>
 
-        <!-- Система уведомлений -->
+        <!-- Система уведомлений (без изменений) -->
         <v-snackbar
           v-model="snackbar.show"
           :timeout="snackbar.timeout"
@@ -22,11 +22,7 @@
             </div>
           </div>
           <template v-slot:action="{ attrs }">
-            <v-btn
-              icon
-              v-bind="attrs"
-              @click="snackbar.show = false"
-            >
+            <v-btn icon v-bind="attrs" @click="snackbar.show = false">
               <v-icon>mdi-close</v-icon>
             </v-btn>
           </template>
@@ -34,13 +30,7 @@
 
         <!-- Основные метрики -->
         <v-row>
-          <v-col
-            v-for="(metric, index) in quickMetrics"
-            :key="index"
-            cols="12"
-            sm="6"
-            md="3"
-          >
+          <v-col v-for="(metric, index) in quickMetrics" :key="index" cols="12" sm="6" md="3">
             <v-card
               class="metric-card"
               :class="`metric-${index}`"
@@ -54,18 +44,11 @@
                     {{ metric.value }}
                     <span v-if="metric.unit" class="metric-unit">{{ metric.unit }}</span>
                   </template>
-                  <v-skeleton-loader
-                    v-else
-                    type="text"
-                    width="80%"
-                  ></v-skeleton-loader>
+                  <v-skeleton-loader v-else type="text" width="80%"></v-skeleton-loader>
                 </div>
                 <v-divider class="my-3"></v-divider>
                 <div class="metric-change">
-                  <v-icon
-                    small
-                    :color="metric.change >= 0 ? 'success' : 'error'"
-                  >
+                  <v-icon small :color="metric.change >= 0 ? 'success' : 'error'">
                     {{ metric.change >= 0 ? 'mdi-arrow-up' : 'mdi-arrow-down' }}
                   </v-icon>
                   <span
@@ -74,8 +57,7 @@
                       'error--text': metric.change < 0
                     }"
                   >
-                    {{ Math.abs(metric.change) }}% 
-                    {{ metric.change >= 0 ? 'рост' : 'снижение' }}
+                    {{ Math.abs(metric.change) }}% {{ metric.change >= 0 ? 'рост' : 'снижение' }}
                   </span>
                 </div>
               </v-card-text>
@@ -92,7 +74,7 @@
               style="animation-delay: 0.2s"
             >
               <v-card-title class="chart-title">
-                Активность за месяц
+                Активность за период
                 <v-spacer></v-spacer>
                 <v-select
                   v-model="activityPeriod"
@@ -112,81 +94,15 @@
                   :chart-options="activityOptions"
                   height="350"
                 />
-                <v-skeleton-loader
-                  v-else
-                  type="image"
-                  height="350"
-                ></v-skeleton-loader>
-              </v-card-text>
-            </v-card>
-          </v-col>
-
-          <v-col cols="12" lg="4">
-            <v-card
-              class="pie-chart-card"
-              v-animate-onscroll="'animated fadeInUp'"
-              style="animation-delay: 0.3s"
-            >
-              <v-card-title class="chart-title">Распределение задач</v-card-title>
-              <v-card-text>
-                <DoughnutChart
-                  v-if="taskDistributionData.labels.length && !loadingTaskDistribution"
-                  :chart-data="taskDistributionData"
-                  :chart-options="doughnutOptions"
-                  height="350"
-                />
-                <v-skeleton-loader
-                  v-else
-                  type="image"
-                  height="350"
-                ></v-skeleton-loader>
+                <v-skeleton-loader v-else type="image" height="350"></v-skeleton-loader>
               </v-card-text>
             </v-card>
           </v-col>
         </v-row>
 
-        <!-- Дополнительные графики и таблицы -->
+        <!-- Таблица последних задач -->
         <v-row class="mt-4">
-          <v-col cols="12" lg="6">
-            <v-card
-              class="secondary-chart-card"
-              v-animate-onscroll="'animated fadeInUp'"
-              style="animation-delay: 0.4s"
-            >
-              <v-card-title class="chart-title">
-                Продуктивность
-                <v-spacer></v-spacer>
-                <v-tooltip top>
-                  <template v-slot:activator="{ on }">
-                    <v-btn
-                      icon
-                      small
-                      v-on="on"
-                      @click="fetchProductivityData"
-                    >
-                      <v-icon>mdi-refresh</v-icon>
-                    </v-btn>
-                  </template>
-                  <span>Обновить данные</span>
-                </v-tooltip>
-              </v-card-title>
-              <v-card-text>
-                <LineChart
-                  v-if="productivityData.labels.length && !loadingProductivity"
-                  :chart-data="productivityData"
-                  :chart-options="lineOptions"
-                  height="300"
-                />
-                <v-skeleton-loader
-                  v-else
-                  type="image"
-                  height="300"
-                ></v-skeleton-loader>
-              </v-card-text>
-            </v-card>
-          </v-col>
-
-          <v-col cols="12" lg="6">
+          <v-col cols="12">
             <v-card
               class="table-card"
               v-animate-onscroll="'animated fadeInUp'"
@@ -216,20 +132,12 @@
                   class="elevation-0"
                 >
                   <template v-slot:item.status="{ item }">
-                    <v-chip
-                      small
-                      :color="getStatusColor(item.status)"
-                      dark
-                    >
+                    <v-chip small :color="getStatusColor(item.status)" dark>
                       {{ item.status }}
                     </v-chip>
                   </template>
                   <template v-slot:item.actions="{ item }">
-                    <v-btn
-                      icon
-                      small
-                      @click="viewTask(item)"
-                    >
+                    <v-btn icon small @click="viewTask(item)">
                       <v-icon>mdi-eye</v-icon>
                     </v-btn>
                   </template>
@@ -238,94 +146,31 @@
             </v-card>
           </v-col>
         </v-row>
-
-        <!-- Административные виджеты -->
-        <template v-if="isAdmin">
-          <v-row class="mt-4">
-            <v-col cols="12">
-              <v-card
-                class="admin-card"
-                v-animate-onscroll="'animated fadeInUp'"
-                style="animation-delay: 0.6s"
-              >
-                <v-card-title class="chart-title">
-                  <v-icon left>mdi-shield-account</v-icon>
-                  Административная панель
-                </v-card-title>
-                <v-tabs v-model="adminTab" grow>
-                  <v-tab>Статистика пользователей</v-tab>
-                  <v-tab>Системные метрики</v-tab>
-                </v-tabs>
-                <v-tabs-items v-model="adminTab">
-                  <v-tab-item>
-                    <v-card-text>
-                      <AdminUsersStats
-                        v-if="!loadingAdminData"
-                        :users="adminData.users"
-                      />
-                      <v-skeleton-loader
-                        v-else
-                        type="table"
-                      ></v-skeleton-loader>
-                    </v-card-text>
-                  </v-tab-item>
-                  <v-tab-item>
-                    <v-card-text>
-                      <SystemMetrics
-                        v-if="!loadingAdminData"
-                        :metrics="adminData.system"
-                      />
-                      <v-skeleton-loader
-                        v-else
-                        type="table"
-                      ></v-skeleton-loader>
-                    </v-card-text>
-                  </v-tab-item>
-                </v-tabs-items>
-              </v-card>
-            </v-col>
-          </v-row>
-        </template>
       </v-col>
     </v-row>
   </v-container>
 </template>
 
 <script>
-import BarChart from '@/components/charts/BarChart.vue';
-import LineChart from '@/components/charts/LineChart.vue';
-import DoughnutChart from '@/components/charts/DoughnutChart.vue';
-import AdminUsersStats from '@/components/dashboard/AdminUsersStats.vue';
-import SystemMetrics from '@/components/dashboard/SystemMetrics.vue';
+import BarChart from '@/components/BarChart.vue';
 import {
   getDashboardMetrics,
   getActivityData,
-  getTaskDistribution,
-  getProductivityData,
-  getRecentTasks,
-  getAdminDashboardData
-} from '@/api/dashboard';
+  getRecentTasks
+} from '@/api/index.js';
+import { mapGetters } from 'vuex';
 
 export default {
   name: 'DashboardPage',
   components: {
-    BarChart,
-    LineChart,
-    DoughnutChart,
-    AdminUsersStats,
-    SystemMetrics
+    BarChart
   },
   data() {
     return {
-      // Состояние загрузки
       loadingQuickMetrics: true,
       loadingActivity: true,
-      loadingTaskDistribution: true,
-      loadingProductivity: true,
       loadingTasks: true,
-      loadingAdminData: true,
 
-      // Уведомления
       snackbar: {
         show: false,
         title: '',
@@ -335,15 +180,13 @@ export default {
         timeout: 6000
       },
 
-      // Основные метрики
       quickMetrics: [
-        { title: 'Завершено задач', value: 0, change: 0, unit: 'шт.' },
+        { title: 'Всего задач', value: 0, change: 0, unit: 'шт.' },
         { title: 'Новых клиентов', value: 0, change: 0, unit: 'чел.' },
         { title: 'Общая сумма', value: 0, change: 0, unit: '₽' },
         { title: 'Продуктивность', value: 0, change: 0, unit: '%' }
       ],
 
-      // График активности
       activityPeriod: 'month',
       periods: [
         { text: 'Неделя', value: 'week' },
@@ -361,9 +204,7 @@ export default {
           legend: { position: 'top' },
           tooltip: {
             callbacks: {
-              label: (context) => {
-                return `${context.dataset.label}: ${context.raw} задач`;
-              }
+              label: (context) => `${context.dataset.label}: ${context.raw} задач`
             }
           }
         },
@@ -373,54 +214,6 @@ export default {
         }
       },
 
-      // Распределение задач
-      taskDistributionData: {
-        labels: [],
-        datasets: []
-      },
-      doughnutOptions: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'right' },
-          tooltip: {
-            callbacks: {
-              label: (context) => {
-                const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                const value = context.raw;
-                const percentage = Math.round((value / total) * 100);
-                return `${context.label}: ${value} (${percentage}%)`;
-              }
-            }
-          }
-        }
-      },
-
-      // Продуктивность
-      productivityData: {
-        labels: [],
-        datasets: []
-      },
-      lineOptions: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'top' },
-          tooltip: {
-            callbacks: {
-              label: (context) => {
-                return `${context.dataset.label}: ${context.raw} мин`;
-              }
-            }
-          }
-        },
-        scales: {
-          y: { beginAtZero: true, title: { display: true, text: 'Минуты' } },
-          x: { title: { display: true, text: 'Дата' } }
-        }
-      },
-
-      // Таблица задач
       taskSearch: '',
       taskHeaders: [
         { text: 'Название', value: 'title' },
@@ -428,18 +221,11 @@ export default {
         { text: 'Срок', value: 'due_date' },
         { text: 'Действия', value: 'actions', sortable: false }
       ],
-      tasks: [],
-
-      // Административные данные
-      isAdmin: false,
-      adminTab: null,
-      adminData: {
-        users: [],
-        system: {}
-      }
+      tasks: []
     };
   },
   computed: {
+    ...mapGetters(['isAdmin']),
     filteredTasks() {
       return this.tasks.filter(task => {
         const search = this.taskSearch.toLowerCase();
@@ -451,7 +237,6 @@ export default {
     }
   },
   async created() {
-    this.isAdmin = localStorage.getItem('user_role') === 'admin';
     await this.loadAllData();
   },
   methods: {
@@ -460,14 +245,8 @@ export default {
         await Promise.all([
           this.fetchQuickMetrics(),
           this.fetchActivityData(),
-          this.fetchTaskDistribution(),
-          this.fetchProductivityData(),
           this.fetchRecentTasks()
         ]);
-
-        if (this.isAdmin) {
-          await this.fetchAdminData();
-        }
       } catch (error) {
         this.showError('Ошибка загрузки данных', 'Не удалось загрузить данные дашборда', error);
       }
@@ -475,148 +254,45 @@ export default {
 
     async fetchQuickMetrics() {
       this.loadingQuickMetrics = true;
-      try {
-        const metrics = await getDashboardMetrics();
-        this.quickMetrics = [
-          { 
-            title: 'Завершено задач', 
-            value: metrics.completed_tasks, 
-            change: metrics.tasks_change, 
-            unit: 'шт.' 
-          },
-          { 
-            title: 'Новых клиентов', 
-            value: metrics.new_clients, 
-            change: metrics.clients_change, 
-            unit: 'чел.' 
-          },
-          { 
-            title: 'Общая сумма', 
-            value: metrics.total_amount.toLocaleString(), 
-            change: metrics.amount_change, 
-            unit: '₽' 
-          },
-          { 
-            title: 'Продуктивность', 
-            value: metrics.productivity, 
-            change: metrics.productivity_change, 
-            unit: '%' 
-          }
-        ];
-      } catch (error) {
-        this.showError('Ошибка загрузки метрик', 'Не удалось загрузить основные метрики', error);
-      } finally {
-        this.loadingQuickMetrics = false;
-      }
+      const metrics = await getDashboardMetrics();
+      this.quickMetrics = [
+        { title: 'Всего задач', value: metrics.completed_tasks, change: metrics.tasks_change, unit: 'шт.' },
+        { title: 'Новых клиентов', value: metrics.new_clients, change: metrics.clients_change, unit: 'чел.' },
+        { title: 'Общая сумма', value: metrics.total_amount.toLocaleString(), change: metrics.amount_change, unit: '₽' },
+        { title: 'Продуктивность', value: metrics.productivity, change: metrics.productivity_change, unit: '%' }
+      ];
+      this.loadingQuickMetrics = false;
     },
 
     async fetchActivityData() {
       this.loadingActivity = true;
-      try {
-        const data = await getActivityData(this.activityPeriod);
-        
-        this.activityData = {
-          labels: data.labels,
-          datasets: [
-            {
-              label: 'Завершённые задачи',
-              backgroundColor: '#42A5F5',
-              borderColor: '#1976D2',
-              borderWidth: 2,
-              data: data.completed
-            },
-            {
-              label: 'Созданные задачи',
-              backgroundColor: '#66BB6A',
-              borderColor: '#388E3C',
-              borderWidth: 2,
-              data: data.created
-            }
-          ]
-        };
-      } catch (error) {
-        this.showError('Ошибка загрузки активности', 'Не удалось загрузить данные активности', error);
-      } finally {
-        this.loadingActivity = false;
-      }
-    },
-
-    async fetchTaskDistribution() {
-      this.loadingTaskDistribution = true;
-      try {
-        const data = await getTaskDistribution();
-        
-        this.taskDistributionData = {
-          labels: data.labels,
-          datasets: [
-            {
-              backgroundColor: [
-                '#42A5F5',
-                '#66BB6A',
-                '#FFA726',
-                '#EF5350',
-                '#AB47BC'
-              ],
-              data: data.values
-            }
-          ]
-        };
-      } catch (error) {
-        this.showError('Ошибка загрузки распределения', 'Не удалось загрузить распределение задач', error);
-      } finally {
-        this.loadingTaskDistribution = false;
-      }
-    },
-
-    async fetchProductivityData() {
-      this.loadingProductivity = true;
-      try {
-        const data = await getProductivityData();
-        
-        this.productivityData = {
-          labels: data.labels,
-          datasets: [
-            {
-              label: 'Продуктивность',
-              borderColor: '#7E57C2',
-              backgroundColor: 'rgba(126, 87, 194, 0.1)',
-              borderWidth: 2,
-              pointBackgroundColor: '#7E57C2',
-              pointRadius: 4,
-              pointHoverRadius: 6,
-              fill: true,
-              tension: 0.4,
-              data: data.values
-            }
-          ]
-        };
-      } catch (error) {
-        this.showError('Ошибка загрузки продуктивности', 'Не удалось загрузить данные продуктивности', error);
-      } finally {
-        this.loadingProductivity = false;
-      }
+      const data = await getActivityData(this.activityPeriod);
+      this.activityData = {
+        labels: data.labels,
+        datasets: [
+          {
+            label: 'Завершённые задачи',
+            backgroundColor: '#42A5F5',
+            borderColor: '#1976D2',
+            borderWidth: 2,
+            data: data.completed
+          },
+          {
+            label: 'Созданные задачи',
+            backgroundColor: '#66BB6A',
+            borderColor: '#388E3C',
+            borderWidth: 2,
+            data: data.created
+          }
+        ]
+      };
+      this.loadingActivity = false;
     },
 
     async fetchRecentTasks() {
       this.loadingTasks = true;
-      try {
-        this.tasks = await getRecentTasks();
-      } catch (error) {
-        this.showError('Ошибка загрузки задач', 'Не удалось загрузить последние задачи', error);
-      } finally {
-        this.loadingTasks = false;
-      }
-    },
-
-    async fetchAdminData() {
-      this.loadingAdminData = true;
-      try {
-        this.adminData = await getAdminDashboardData();
-      } catch (error) {
-        this.showError('Ошибка загрузки админ. данных', 'Не удалось загрузить административные данные', error);
-      } finally {
-        this.loadingAdminData = false;
-      }
+      this.tasks = await getRecentTasks();
+      this.loadingTasks = false;
     },
 
     viewTask(task) {
@@ -635,10 +311,9 @@ export default {
 
     showError(title, message, error) {
       console.error(title, error);
-      
       let detailedMessage = message;
       if (error.response) {
-        switch(error.response.status) {
+        switch (error.response.status) {
           case 401:
             this.$router.push('/login');
             return;
@@ -655,7 +330,6 @@ export default {
       } else if (error.message) {
         detailedMessage = `${message}: ${error.message}`;
       }
-
       this.snackbar = {
         show: true,
         title,
@@ -712,7 +386,6 @@ export default {
   border-radius: 3px;
 }
 
-/* Стили для карточек метрик */
 .metric-card {
   height: 100%;
   border-radius: 12px;
@@ -768,12 +441,8 @@ export default {
   font-size: 0.9rem;
 }
 
-/* Стили для карточек графиков */
 .main-chart-card,
-.pie-chart-card,
-.secondary-chart-card,
-.table-card,
-.admin-card {
+.table-card {
   border-radius: 12px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
   transition: all 0.3s ease;
@@ -782,10 +451,7 @@ export default {
 }
 
 .main-chart-card:hover,
-.pie-chart-card:hover,
-.secondary-chart-card:hover,
-.table-card:hover,
-.admin-card:hover {
+.table-card:hover {
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
 }
@@ -807,7 +473,6 @@ export default {
   max-width: 200px;
 }
 
-/* Стили для уведомлений */
 .snackbar-content {
   display: flex;
   align-items: center;
@@ -823,7 +488,6 @@ export default {
   opacity: 0.9;
 }
 
-/* Анимации */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -835,16 +499,13 @@ export default {
   }
 }
 
-/* Адаптивные стили */
 @media (max-width: 1264px) {
   .dashboard-container {
     padding: 16px;
   }
-  
   .dashboard-title {
     font-size: 1.8rem;
   }
-  
   .metric-value {
     font-size: 1.5rem;
   }
@@ -854,11 +515,9 @@ export default {
   .dashboard-title {
     font-size: 1.6rem;
   }
-  
   .metric-card {
     margin-bottom: 16px;
   }
-  
   .period-select {
     max-width: 120px;
   }
@@ -869,11 +528,9 @@ export default {
     font-size: 1.4rem;
     margin-bottom: 16px;
   }
-  
   .chart-title {
     font-size: 1.1rem;
   }
-  
   .period-select,
   .search-field {
     max-width: 100%;

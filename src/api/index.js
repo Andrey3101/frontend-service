@@ -108,6 +108,75 @@ export async function requestPasswordReset(email) {
   }, 'default');
 }
 
+export async function getDashboardMetrics() {
+  // Используем GET /tasks/dashboard как источник метрик
+  const data = await fetchWithCsrf(`${BASE_URLS.tasks}/dashboard`);
+  // Преобразуем данные бэкенда в ожидаемый формат фронтенда
+  return {
+    completed_tasks: data.task_count || 0, // Предполагаем, что task_count включает завершенные задачи
+    new_clients: 0, // Нет данных в текущем эндпоинте, временно 0
+    total_amount: 0, // Нет данных, временно 0
+    productivity: 0, // Нет данных, временно 0
+    tasks_change: 0, // Нет данных об изменении, временно 0
+    clients_change: 0,
+    amount_change: 0,
+    productivity_change: 0
+  };
+}
+
+export async function getActivityData(period) {
+  // Используем GET /tasks/task для статистики активности
+  const data = await fetchWithCsrf(`${BASE_URLS.tasks}/task?period=${period}`);
+  // Преобразуем данные в формат для графика
+  return {
+    labels: data.weeklyTrends?.map(trend => trend.date) || [], // Предполагаем, что weeklyTrends доступен
+    completed: data.weeklyTrends?.map(trend => trend.completed) || [],
+    created: data.weeklyTrends?.map(trend => trend.created) || []
+  };
+}
+
+export async function getTaskDistribution() {
+  // Используем GET /tasks/dashboard для распределения задач по сотрудникам
+  const data = await fetchWithCsrf(`${BASE_URLS.tasks}/dashboard`);
+  // Преобразуем employee_load в формат для круговой диаграммы
+  return {
+    labels: data.employee_load.map(emp => emp.user_id),
+    values: data.employee_load.map(emp => emp.task_count)
+  };
+}
+
+export async function getProductivityData() {
+  // Используем GET /tasks/productivity с периодом week
+  const data = await fetchWithCsrf(`${BASE_URLS.tasks}/productivity?period=week`);
+  // Преобразуем данные в формат для линейного графика
+  const labels = Object.keys(data.task_times || {});
+  const values = Object.values(data.task_times || {});
+  return {
+    labels,
+    values
+  };
+}
+
+export async function getRecentTasks() {
+  // Используем GET /tasks/my с лимитом для получения последних задач
+  return fetchWithCsrf(`${BASE_URLS.tasks}/my?limit=5`);
+}
+
+export async function getAdminDashboardData() {
+  // Комбинируем данные из /tasks/dashboard и /tasks/users
+  const [dashboardData, usersData] = await Promise.all([
+    fetchWithCsrf(`${BASE_URLS.tasks}/dashboard`),
+    fetchWithCsrf(`${BASE_URLS.tasks}/users`)
+  ]);
+  return {
+    users: usersData,
+    system: {
+      task_count: dashboardData.task_count,
+      overdue_tasks: dashboardData.overdue_tasks
+    }
+  };
+}
+
 export async function confirmPasswordReset(token, new_password) {
   return fetchWithTimeout(`${BASE_URLS.auth}/reset-password/confirm`, {
     method: 'POST',

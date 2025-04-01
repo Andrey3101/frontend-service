@@ -118,12 +118,6 @@
                 >
                   <v-icon>mdi-play</v-icon>
                 </v-btn>
-              </template>
-              <span>Начать отслеживание времени</span>
-            </v-tooltip>
-
-            <v-tooltip top>
-              <template v-slot:activator="{ on }">
                 <v-btn
                   v-else
                   icon
@@ -136,7 +130,7 @@
                   <v-icon>mdi-stop</v-icon>
                 </v-btn>
               </template>
-              <span>Остановить отслеживание времени</span>
+              <span>{{ item.isTracking ? 'Остановить отслеживание времени' : 'Начать отслеживание времени' }}</span>
             </v-tooltip>
 
             <span v-if="item.isTracking" class="tracking-time">
@@ -396,8 +390,8 @@
 </template>
 
 <script>
-import { getMyTasks, createTask, updateTask, deleteTask, getUsers } from '../api';
-import { fetchWithCsrf, startTimeTracking, stopTimeTracking, BASE_URLS } from '../api/index';
+import { getMyTasks, createTask, updateTask, deleteTask, getUsers } from '@/api/index.js';
+import { fetchWithCsrf, startTimeTracking, stopTimeTracking, BASE_URLS } from '@/api/index.js';
 
 export default {
   name: 'TasksList',
@@ -586,7 +580,7 @@ export default {
       }
     },
 
-    editTask(task) {
+    handleEditTask(task) {
       this.editTask = { 
         task_id: task.task_id,
         title: task.title,
@@ -791,7 +785,6 @@ export default {
       
       let message = defaultMessage;
       if (error.response) {
-        // Обработка HTTP ошибок
         switch(error.response.status) {
           case 400:
             message = 'Некорректные данные';
@@ -818,10 +811,8 @@ export default {
                      defaultMessage;
         }
       } else if (error.request) {
-        // Ошибка сети или сервер не ответил
         message = 'Проблемы с соединением. Проверьте интернет и попробуйте снова.';
       } else {
-        // Другие ошибки
         message = error.message || defaultMessage;
       }
       

@@ -143,7 +143,7 @@
 <script>
 import { monitorCompetitors } from '@/api/index.js';
 import debounce from 'lodash/debounce';
-import { saveAs } from 'file-saver';
+//import { saveAs } from 'file-saver';
 
 export default {
   name: 'CompetitorMonitor',

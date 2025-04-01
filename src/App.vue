@@ -4,6 +4,7 @@
       v-if="showSidebar"
       v-model="drawer"
       :show-mobile-button="isMobile && showSidebar"
+      :is-mobile-or-tablet="isMobile"
     />
     
     <v-main>
@@ -37,7 +38,7 @@ export default {
   setup() {
     const route = useRoute();
     const authStore = useAuthStore();
-    const drawer = ref(true);
+    const drawer = ref(false); // Default to closed
 
     const isMobile = computed(() => {
       return window.innerWidth < 960;
@@ -54,9 +55,9 @@ export default {
     return {
       drawer,
       isMobile,
-      showSidebar
+      showSidebar,
     };
-  }
+  },
 };
 </script>
 

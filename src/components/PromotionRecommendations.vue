@@ -214,7 +214,7 @@
 <script>
 import { getPromotionRecommendations } from '@/api/index.js';
 import debounce from 'lodash/debounce';
-import { saveAs } from 'file-saver';
+//import { saveAs } from 'file-saver';
 
 export default {
   name: 'PromotionRecommendations',

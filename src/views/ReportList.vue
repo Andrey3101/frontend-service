@@ -156,21 +156,6 @@
               </template>
               <span>Скачать отчет</span>
             </v-tooltip>
-
-            <v-tooltip top v-if="isAdmin">
-              <template v-slot:activator="{ on }">
-                <v-btn 
-                  icon 
-                  small 
-                  @click="confirmDeleteReport(item)"
-                  v-on="on"
-                  :loading="item.deleting"
-                >
-                  <v-icon color="error">mdi-delete</v-icon>
-                </v-btn>
-              </template>
-              <span>Удалить отчет</span>
-            </v-tooltip>
           </template>
         </v-data-table>
 
@@ -299,55 +284,14 @@
             </v-card-actions>
           </v-card>
         </v-dialog>
-
-        <!-- Диалог подтверждения удаления -->
-        <v-dialog v-model="showDeleteDialog" max-width="500px" persistent>
-          <v-card class="dialog-card">
-            <v-card-title class="dialog-title">
-              <v-icon left color="error">mdi-alert</v-icon>
-              Подтверждение удаления
-            </v-card-title>
-            
-            <v-card-text class="dialog-text">
-              Вы уверены, что хотите удалить отчет #{{ reportToDelete?.id }}?
-              <v-alert
-                type="error"
-                dense
-                outlined
-                class="mt-3"
-              >
-                Это действие нельзя отменить!
-              </v-alert>
-            </v-card-text>
-
-            <v-card-actions class="dialog-actions">
-              <v-spacer />
-              <v-btn 
-                color="grey" 
-                text 
-                @click="showDeleteDialog = false"
-                :disabled="deleting"
-              >
-                Отмена
-              </v-btn>
-              <v-btn 
-                color="error" 
-                @click="deleteReport"
-                :loading="deleting"
-              >
-                Удалить
-              </v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
       </v-col>
     </v-row>
   </v-container>
 </template>
 
 <script>
-import { getReports, generateReport, getReport, deleteReport, getUsers } from '@/api/reports';
-import { saveAs } from 'file-saver';
+import { getReports, generateReport, getReport, getUsers } from '@/api';
+//import { saveAs } from 'file-saver';
 import dayjs from 'dayjs';
 import { mapGetters } from 'vuex';
 
@@ -359,15 +303,12 @@ export default {
       users: [],
       loading: false,
       generating: false,
-      deleting: false,
       searchQuery: '',
       showGenerateForm: false,
       showReport: false,
-      showDeleteDialog: false,
       dateMenu: false,
       generateValid: false,
       selectedReport: null,
-      reportToDelete: null,
       exportFormat: 'pdf',
       exportLoading: {
         pdf: false,
@@ -392,7 +333,6 @@ export default {
         { text: 'Финансовый отчет', value: 'financial' }
       ],
       statuses: ['Новая', 'В работе', 'Завершена', 'Отменена'],
-      // Обработка ошибок
       snackbar: {
         show: false,
         title: '',
@@ -410,8 +350,7 @@ export default {
       return this.reports.map(report => ({
         ...report,
         loading: false,
-        downloading: false,
-        deleting: false
+        downloading: false
       }));
     },
     formattedDateRange() {
@@ -429,35 +368,22 @@ export default {
   },
   methods: {
     async loadData() {
-      try {
-        this.loading = true;
-        await Promise.all([this.fetchReports(), this.fetchUsers()]);
-      } catch (error) {
-        this.handleError('Ошибка загрузки', 'Не удалось загрузить данные', error);
-      } finally {
-        this.loading = false;
-      }
+      this.loading = true;
+      await Promise.all([this.fetchReports(), this.fetchUsers()]);
+      this.loading = false;
     },
     async fetchReports() {
-      try {
-        const response = await getReports();
-        this.reports = response.map(report => ({
-          id: report.id,
-          type: this.getReportType(report.type),
-          status: report.status,
-          created_at: report.created_at,
-          content: report.content
-        }));
-      } catch (error) {
-        throw error;
-      }
+      const response = await getReports();
+      this.reports = response.map(report => ({
+        id: report.id,
+        type: this.getReportType(report.type),
+        status: report.status,
+        created_at: report.created_at,
+        content: report.content
+      }));
     },
     async fetchUsers() {
-      try {
-        this.users = await getUsers();
-      } catch (error) {
-        throw error;
-      }
+      this.users = await getUsers();
     },
     getReportType(type) {
       const types = {
@@ -482,140 +408,90 @@ export default {
       if (!this.$refs.generateForm.validate()) return;
       
       this.generating = true;
-      try {
-        const params = {
-          type: this.reportFilter.type,
-          filters: {
-            status: this.reportFilter.status === 'Все' ? null : this.reportFilter.status,
-            assignee_id: this.reportFilter.assignee,
-            date_from: this.formattedDateRange?.start,
-            date_to: this.formattedDateRange?.end
-          }
-        };
+      const params = {
+        type: this.reportFilter.type,
+        filters: {
+          status: this.reportFilter.status === 'Все' ? null : this.reportFilter.status,
+          assignee_id: this.reportFilter.assignee,
+          date_from: this.formattedDateRange?.start,
+          date_to: this.formattedDateRange?.end
+        }
+      };
 
-        await generateReport(params);
-        await this.fetchReports();
-        this.showGenerateForm = false;
-        this.showSuccess('Успешно', 'Отчет успешно создан');
-      } catch (error) {
-        this.handleError('Ошибка генерации', 'Не удалось создать отчет', error);
-      } finally {
-        this.generating = false;
-      }
+      await generateReport(params);
+      await this.fetchReports();
+      this.showGenerateForm = false;
+      this.showSuccess('Успешно', 'Отчет успешно создан');
+      this.generating = false;
     },
     cancelGenerate() {
       this.showGenerateForm = false;
       this.$refs.generateForm.reset();
     },
     async viewReport(report) {
-      try {
-        report.loading = true;
-        const response = await getReport(report.id);
-        this.selectedReport = {
-          ...report,
-          content: response.content || 'Нет содержимого'
-        };
-        this.showReport = true;
-      } catch (error) {
-        this.handleError('Ошибка', 'Не удалось загрузить отчет', error);
-      } finally {
-        report.loading = false;
-      }
+      report.loading = true;
+      const response = await getReport(report.id);
+      this.selectedReport = {
+        ...report,
+        content: response.content || 'Нет содержимого'
+      };
+      this.showReport = true;
+      report.loading = false;
     },
     async downloadReport(report) {
-      try {
-        report.downloading = true;
-        const response = await getReport(report.id, true);
-        
-        // Создаем Blob из ответа
-        const blob = new Blob([response], { type: 'application/pdf' });
-        saveAs(blob, `report_${report.id}.pdf`);
-        
-        this.showSuccess('Успешно', 'Отчет скачивается');
-      } catch (error) {
-        this.handleError('Ошибка', 'Не удалось скачать отчет', error);
-      } finally {
-        report.downloading = false;
-        if (this.selectedReport?.id === report.id) {
-          this.selectedReport.downloading = false;
-        }
+      report.downloading = true;
+      const response = await getReport(report.id, true);
+      const blob = new Blob([response], { type: 'application/pdf' });
+      saveAs(blob, `report_${report.id}.pdf`);
+      this.showSuccess('Успешно', 'Отчет скачивается');
+      report.downloading = false;
+      if (this.selectedReport?.id === report.id) {
+        this.selectedReport.downloading = false;
       }
     },
-    confirmDeleteReport(report) {
-      this.reportToDelete = report;
-      this.showDeleteDialog = true;
-    },
-    async deleteReport() {
-      if (!this.reportToDelete) return;
-      
-      this.deleting = true;
-      try {
-        await deleteReport(this.reportToDelete.id);
-        await this.fetchReports();
-        this.showDeleteDialog = false;
-        this.showSuccess('Успешно', 'Отчет удален');
-      } catch (error) {
-        this.handleError('Ошибка', 'Не удалось удалить отчет', error);
-      } finally {
-        this.deleting = false;
-      }
-    },
-    exportToPDF() {
+    async exportToPDF() {
       this.exportLoading.pdf = true;
-      try {
-        const doc = new jsPDF();
-        doc.setFont('helvetica');
-        doc.setFontSize(12);
-        
-        // Заголовок
-        doc.text('Список отчетов', 10, 10);
-        doc.setFontSize(10);
-        doc.text(`Сформировано: ${dayjs().format('DD.MM.YYYY HH:mm')}`, 10, 18);
-        
-        // Данные
-        let y = 30;
-        this.filteredReports.forEach(report => {
-          if (y > 280) {
-            doc.addPage();
-            y = 20;
-          }
-          doc.text(`ID: ${report.id}`, 10, y);
-          doc.text(`Тип: ${report.type}`, 50, y);
-          doc.text(`Дата: ${this.formatDate(report.created_at)}`, 120, y);
-          y += 10;
-        });
-        
-        doc.save(`reports_${dayjs().format('YYYYMMDD_HHmmss')}.pdf`);
-        this.showSuccess('Успешно', 'PDF экспортирован');
-      } catch (error) {
-        this.handleError('Ошибка', 'Не удалось создать PDF', error);
-      } finally {
-        this.exportLoading.pdf = false;
-      }
+      const doc = new jsPDF();
+      doc.setFont('helvetica');
+      doc.setFontSize(12);
+      
+      doc.text('Список отчетов', 10, 10);
+      doc.setFontSize(10);
+      doc.text(`Сформировано: ${dayjs().format('DD.MM.YYYY HH:mm')}`, 10, 18);
+      
+      let y = 30;
+      this.filteredReports.forEach(report => {
+        if (y > 280) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(`ID: ${report.id}`, 10, y);
+        doc.text(`Тип: ${report.type}`, 50, y);
+        doc.text(`Дата: ${this.formatDate(report.created_at)}`, 120, y);
+        y += 10;
+      });
+      
+      doc.save(`reports_${dayjs().format('YYYYMMDD_HHmmss')}.pdf`);
+      this.showSuccess('Успешно', 'PDF экспортирован');
+      this.exportLoading.pdf = false;
     },
-    exportToExcel() {
+    async exportToExcel() {
       this.exportLoading.xlsx = true;
-      try {
-        const worksheet = XLSX.utils.json_to_sheet(
-          this.filteredReports.map(report => ({
-            'ID': report.id,
-            'Тип': report.type,
-            'Статус': report.status,
-            'Дата создания': this.formatDate(report.created_at)
-          }))
-        );
-        
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Отчеты');
-        XLSX.writeFile(workbook, `reports_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
-        this.showSuccess('Успешно', 'Excel экспортирован');
-      } catch (error) {
-        this.handleError('Ошибка', 'Не удалось создать Excel', error);
-      } finally {
-        this.exportLoading.xlsx = false;
-      }
+      const worksheet = XLSX.utils.json_to_sheet(
+        this.filteredReports.map(report => ({
+          'ID': report.id,
+          'Тип': report.type,
+          'Статус': report.status,
+          'Дата создания': this.formatDate(report.created_at)
+        }))
+      );
+      
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Отчеты');
+      XLSX.writeFile(workbook, `reports_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
+      this.showSuccess('Успешно', 'Excel экспортирован');
+      this.exportLoading.xlsx = false;
     },
-    // Обработка ошибок
     handleError(title, message, error) {
       console.error(title, error);
       

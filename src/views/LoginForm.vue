@@ -144,8 +144,8 @@
 
 <script>
 import { useAuthStore } from '@/stores/auth';
-import { requestPasswordReset } from '@/api/auth';
-import { mapPhoneNumber } from '@/utils/format';
+import { requestPasswordReset } from '@/api/index.js';
+//import { mapPhoneNumber } from '@/utils/format';
 
 export default {
   name: 'LoginForm',
