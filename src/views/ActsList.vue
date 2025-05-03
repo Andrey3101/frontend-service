@@ -62,7 +62,7 @@
 
         <!-- Сообщение об ошибке -->
         <v-dialog v-model="errorModal.show" max-width="500px" persistent>
-          <v-card>
+          <v-card class="dialog-card">
             <v-card-title class="error-title">
               <v-icon color="error" left>mdi-alert-circle</v-icon>
               Ошибка
@@ -73,7 +73,7 @@
                 {{ errorModal.details }}
               </div>
             </v-card-text>
-            <v-card-actions>
+            <v-card-actions class="dialog-actions">
               <v-spacer />
               <v-btn 
                 color="primary" 
@@ -81,6 +81,13 @@
                 @click="errorModal.show = false"
               >
                 Закрыть
+              </v-btn>
+              <v-btn 
+                v-if="errorModal.message.includes('Подписка')"
+                color="primary" 
+                @click="router.push('/profile')"
+              >
+                Оформить подписку
               </v-btn>
             </v-card-actions>
           </v-card>
@@ -187,6 +194,9 @@
 </template>
 
 <script>
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { useToast } from 'vue-toastification';
 import { getActs, updateAct } from '@/api/index.js';
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
@@ -194,55 +204,52 @@ import dayjs from 'dayjs';
 
 export default {
   name: 'ActsList',
-  data() {
-    return {
-      acts: [],
-      loading: false,
-      searchQuery: '',
-      showEditDialog: false,
-      newActType: '',
-      selectedActId: null,
-      exportFormat: 'pdf',
-      editLoading: false,
-      exportLoading: {
-        pdf: false,
-        xlsx: false
-      },
-      errorModal: {
-        show: false,
-        message: '',
-        details: ''
-      },
-      fieldErrors: {},
-      typeRules: [
-        v => !!v || 'Тип акта обязателен',
-        v => (v && v.length <= 100) || 'Максимальная длина 100 символов'
-      ]
-    };
-  },
-  computed: {
-    isMobile() {
-      return this.$vuetify.breakpoint.smAndDown;
-    },
-    filteredActs() {
-      if (!this.searchQuery) return this.acts;
-      const query = this.searchQuery.toLowerCase();
-      return this.acts.filter(
+  setup() {
+    const router = useRouter();
+    const toast = useToast();
+
+    const acts = ref([]);
+    const loading = ref(false);
+    const searchQuery = ref('');
+    const showEditDialog = ref(false);
+    const newActType = ref('');
+    const selectedActId = ref(null);
+    const exportFormat = ref('pdf');
+    const editLoading = ref(false);
+    const exportLoading = ref({
+      pdf: false,
+      xlsx: false
+    });
+    const errorModal = ref({
+      show: false,
+      message: '',
+      details: ''
+    });
+    const fieldErrors = ref({});
+
+    const typeRules = [
+      v => !!v || 'Тип акта обязателен',
+      v => (v && v.length <= 100) || 'Максимальная длина 100 символов'
+    ];
+
+    const isMobile = computed(() => window.innerWidth <= 960);
+
+    const filteredActs = computed(() => {
+      if (!searchQuery.value) return acts.value;
+      const query = searchQuery.value.toLowerCase();
+      return acts.value.filter(
         act => act.id.toString().includes(query) || 
                act.type.toLowerCase().includes(query)
       );
-    },
-    isEditFormValid() {
-      return this.newActType && 
-             this.typeRules.every(rule => rule(this.newActType) === true);
-    }
-  },
-  async created() {
-    await this.fetchActs();
-  },
-  methods: {
-    async fetchActs() {
-      this.loading = true;
+    });
+
+    const isEditFormValid = computed(() => {
+      return newActType.value && 
+             typeRules.every(rule => rule(newActType.value) === true);
+    });
+
+    const fetchActs = async () => {
+      loading.value = true;
       try {
         const response = await getActs();
         
@@ -250,123 +257,122 @@ export default {
           throw new Error(response.error);
         }
         
-        this.acts = (response.acts || []).map(act => ({
+        acts.value = (response.acts || []).map(act => ({
           id: act.document_id,
           type: act.type,
           created_at: act.created_at
         }));
       } catch (error) {
-        this.handleError(
+        handleError(
           error, 
           'Ошибка загрузки актов',
           'Не удалось загрузить список актов. Пожалуйста, попробуйте позже.'
         );
       } finally {
-        this.loading = false;
+        loading.value = false;
       }
-    },
-    
-    viewActDetails(actId) {
-      this.$router.push(`/acts/${actId}`);
-    },
-    
-    handleUpdateAct(actId) {
-      const act = this.acts.find(a => a.id === actId);
+    };
+
+    const viewActDetails = (actId) => {
+      router.push(`/acts/${actId}`);
+    };
+
+    const handleUpdateAct = (actId) => {
+      const act = acts.value.find(a => a.id === actId);
       if (!act) {
-        this.showError(
+        showError(
           'Акт не найден',
           'Выбранный акт не существует или был удален'
         );
         return;
       }
       
-      this.selectedActId = actId;
-      this.newActType = act.type;
-      this.showEditDialog = true;
-      this.clearFieldErrors();
-    },
-    
-    async saveActUpdate() {
-      if (!this.isEditFormValid) return;
+      selectedActId.value = actId;
+      newActType.value = act.type;
+      showEditDialog.value = true;
+      clearFieldErrors();
+    };
+
+    const saveActUpdate = async () => {
+      if (!isEditFormValid.value) return;
       
-      this.editLoading = true;
+      editLoading.value = true;
       try {
-        const response = await updateAct(this.selectedActId, { 
-          type: this.newActType 
+        const response = await updateAct(selectedActId.value, { 
+          type: newActType.value 
         });
         
         if (response.error) {
           if (response.errors) {
-            this.fieldErrors = response.errors;
+            fieldErrors.value = response.errors;
             throw new Error('Проверьте правильность заполнения полей');
           }
           throw new Error(response.error);
         }
         
-        this.$toast.success('Акт успешно обновлен');
-        await this.fetchActs();
-        this.showEditDialog = false;
+        toast.success('Акт успешно обновлен');
+        await fetchActs();
+        showEditDialog.value = false;
       } catch (error) {
-        this.handleError(
+        handleError(
           error,
           'Ошибка обновления акта',
           'Не удалось обновить информацию об акте. Пожалуйста, проверьте данные и попробуйте снова.'
         );
       } finally {
-        this.editLoading = false;
+        editLoading.value = false;
       }
-    },
-    
-    cancelEdit() {
-      this.showEditDialog = false;
-      this.clearFieldErrors();
-    },
-    
-    async exportToPDF() {
-      this.exportLoading.pdf = true;
+    };
+
+    const cancelEdit = () => {
+      showEditDialog.value = false;
+      clearFieldErrors();
+    };
+
+    const exportToPDF = async () => {
+      exportLoading.value.pdf = true;
       try {
         const doc = new jsPDF();
         doc.setFont('helvetica');
         doc.setFontSize(12);
         
-        // Заголовок
         doc.text('Список актов', 10, 10);
         doc.setFontSize(10);
         doc.text(`Сформировано: ${dayjs().format('DD.MM.YYYY HH:mm')}`, 10, 18);
         
-        // Данные
         let y = 30;
-        this.filteredActs.forEach(act => {
+        filteredActs.value.forEach(act => {
           if (y > 280) {
             doc.addPage();
             y = 20;
           }
           doc.text(`ID: ${act.id}`, 10, y);
           doc.text(`Тип: ${act.type}`, 50, y);
-          doc.text(`Дата: ${this.formatDate(act.created_at)}`, 120, y);
+          doc.text(`Дата: ${formatDate(act.created_at)}`, 120, y);
           y += 10;
         });
         
         doc.save(`acts_${dayjs().format('YYYYMMDD_HHmmss')}.pdf`);
+        toast.success('PDF экспортирован');
       } catch (error) {
-        this.handleError(
+        handleError(
           error,
           'Ошибка экспорта в PDF',
           'Не удалось сформировать PDF-документ. Пожалуйста, попробуйте снова.'
         );
       } finally {
-        this.exportLoading.pdf = false;
+        exportLoading.value.pdf = false;
       }
-    },
-    
-    async exportToExcel() {
-      this.exportLoading.xlsx = true;
+    };
+
+    const exportToExcel = async () => {
+      exportLoading.value.xlsx = true;
       try {
         const worksheet = XLSX.utils.json_to_sheet(
-          this.filteredActs.map(act => ({
+          filteredActs.value.map(act => ({
             'ID': act.id,
             'Тип': act.type,
-            'Дата создания': this.formatDate(act.created_at)
+            'Дата создания': formatDate(act.created_at)
           }))
         );
         
@@ -376,88 +382,121 @@ export default {
           workbook, 
           `acts_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`
         );
+        toast.success('Excel экспортирован');
       } catch (error) {
-        this.handleError(
+        handleError(
           error,
           'Ошибка экспорта в Excel',
           'Не удалось сформировать Excel-документ. Пожалуйста, попробуйте снова.'
         );
       } finally {
-        this.exportLoading.xlsx = false;
+        exportLoading.value.xlsx = false;
       }
-    },
-    
-    formatDate(dateString) {
+    };
+
+    const formatDate = (dateString) => {
       return dayjs(dateString).format('DD.MM.YYYY HH:mm');
-    },
-    
-    handleError(error, defaultMessage, defaultDetails = '') {
+    };
+
+    const handleError = (error, defaultMessage, defaultDetails = '') => {
       console.error('Error:', error);
       
       let message = defaultMessage;
       let details = defaultDetails;
       
       if (error.response) {
-        // Обработка HTTP ошибок
         switch(error.response.status) {
           case 400:
             message = 'Некорректные данные';
             if (error.response.data?.errors) {
-              this.fieldErrors = error.response.data.errors;
+              fieldErrors.value = error.response.data.errors;
             }
             break;
           case 401:
             message = 'Требуется авторизация';
-            details = 'Для выполнения этого действия необходимо войти в систему';
-            this.$router.push('/login');
+            details = 'Пожалуйста, войдите снова.';
+            router.push('/login');
+            break;
+          case 402:
+            message = 'Подписка истекла';
+            details = 'Оформите подписку для продолжения работы.';
             break;
           case 403:
             message = 'Доступ запрещен';
-            details = 'У вас недостаточно прав для выполнения этого действия';
+            details = 'У вас недостаточно прав.';
             break;
           case 404:
             message = 'Данные не найдены';
-            details = 'Запрошенные данные не существуют или были удалены';
             break;
           case 500:
             message = 'Ошибка сервера';
-            details = 'Произошла внутренняя ошибка сервера. Пожалуйста, попробуйте позже.';
+            details = 'Попробуйте позже.';
             break;
           default:
-            message = error.response.data?.message || 
-                     error.response.data?.detail || 
-                     defaultMessage;
+            message = error.response.data?.message || error.response.data?.detail || defaultMessage;
             details = error.response.data?.errors || defaultDetails;
         }
       } else if (error.request) {
-        // Ошибка сети или сервер не ответил
         message = 'Проблемы с соединением';
-        details = 'Не удалось подключиться к серверу. Проверьте интернет-соединение и попробуйте снова.';
+        details = 'Проверьте интернет и попробуйте снова.';
       } else {
-        // Другие ошибки
         message = error.message || defaultMessage;
       }
       
-      this.showError(message, details);
-    },
-    
-    showError(message, details = '') {
-      this.errorModal = {
+      showError(message, details);
+    };
+
+    const showError = (message, details = '') => {
+      errorModal.value = {
         show: true,
         message,
         details
       };
-    },
-    
-    clearFieldErrors() {
-      this.fieldErrors = {};
-    },
-    
-    clearFieldError(field) {
-      if (this.fieldErrors[field]) {
-        delete this.fieldErrors[field];
+      toast.error(message);
+    };
+
+    const clearFieldErrors = () => {
+      fieldErrors.value = {};
+    };
+
+    const clearFieldError = (field) => {
+      if (fieldErrors.value[field]) {
+        delete fieldErrors.value[field];
       }
-    }
+    };
+
+    fetchActs();
+
+    return {
+      acts,
+      loading,
+      searchQuery,
+      showEditDialog,
+      newActType,
+      selectedActId,
+      exportFormat,
+      editLoading,
+      exportLoading,
+      errorModal,
+      fieldErrors,
+      typeRules,
+      isMobile,
+      filteredActs,
+      isEditFormValid,
+      fetchActs,
+      viewActDetails,
+      handleUpdateAct,
+      saveActUpdate,
+      cancelEdit,
+      exportToPDF,
+      exportToExcel,
+      formatDate,
+      handleError,
+      showError,
+      clearFieldErrors,
+      clearFieldError,
+      router
+    };
   }
 };
 </script>
@@ -630,7 +669,13 @@ export default {
   font-size: 0.9rem;
 }
 
-/* Адаптивность */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter, .fade-leave-to {
+  opacity: 0;
+}
+
 @media (max-width: 960px) {
   .acts-container {
     padding: 16px;

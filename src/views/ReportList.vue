@@ -290,222 +290,289 @@
 </template>
 
 <script>
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { useToast } from 'vue-toastification';
 import { getReports, generateReport, getReport, getUsers } from '@/api';
-//import { saveAs } from 'file-saver';
+import { useAuthStore } from '@/stores/auth';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
 import dayjs from 'dayjs';
-import { mapGetters } from 'vuex';
 
 export default {
   name: 'ReportList',
-  data() {
-    return {
-      reports: [],
-      users: [],
-      loading: false,
-      generating: false,
-      searchQuery: '',
-      showGenerateForm: false,
-      showReport: false,
-      dateMenu: false,
-      generateValid: false,
-      selectedReport: null,
-      exportFormat: 'pdf',
-      exportLoading: {
-        pdf: false,
-        xlsx: false
-      },
-      reportFilter: {
-        type: 'tasks',
-        status: 'Все',
-        assignee: null,
-        dateRange: [dayjs().subtract(1, 'week').format('YYYY-MM-DD'), dayjs().format('YYYY-MM-DD')]
-      },
-      headers: [
-        { text: 'ID', value: 'id', width: '100px' },
-        { text: 'Тип', value: 'type', width: '120px' },
-        { text: 'Статус', value: 'status', width: '120px' },
-        { text: 'Дата создания', value: 'created_at' },
-        { text: 'Действия', value: 'actions', sortable: false, width: '180px', align: 'right' }
-      ],
-      reportTypes: [
-        { text: 'Отчет по задачам', value: 'tasks' },
-        { text: 'Отчет по времени', value: 'time' },
-        { text: 'Финансовый отчет', value: 'financial' }
-      ],
-      statuses: ['Новая', 'В работе', 'Завершена', 'Отменена'],
-      snackbar: {
-        show: false,
-        title: '',
-        message: '',
-        color: 'error',
-        icon: 'mdi-alert-circle',
-        timeout: 6000
-      },
-      fieldErrors: {}
-    };
-  },
-  computed: {
-    ...mapGetters(['isAdmin']),
-    filteredReports() {
-      return this.reports.map(report => ({
+  setup() {
+    const router = useRouter();
+    const toast = useToast();
+    const authStore = useAuthStore();
+    const generateForm = ref(null);
+
+    const reports = ref([]);
+    const users = ref([]);
+    const loading = ref(false);
+    const generating = ref(false);
+    const searchQuery = ref('');
+    const showGenerateForm = ref(false);
+    const showReport = ref(false);
+    const dateMenu = ref(false);
+    const generateValid = ref(false);
+    const selectedReport = ref(null);
+    const exportFormat = ref('pdf');
+    const exportLoading = ref({
+      pdf: false,
+      xlsx: false
+    });
+    const reportFilter = ref({
+      type: 'tasks',
+      status: 'Все',
+      assignee: null,
+      dateRange: [dayjs().subtract(1, 'week').format('YYYY-MM-DD'), dayjs().format('YYYY-MM-DD')]
+    });
+    const fieldErrors = ref({});
+
+    const headers = ref([
+      { text: 'ID', value: 'id', width: '100px' },
+      { text: 'Тип', value: 'type', width: '120px' },
+      { text: 'Статус', value: 'status', width: '120px' },
+      { text: 'Дата создания', value: 'created_at' },
+      { text: 'Действия', value: 'actions', sortable: false, width: '180px', align: 'right' }
+    ]);
+
+    const reportTypes = ref([
+      { text: 'Отчет по задачам', value: 'tasks' },
+      { text: 'Отчет по времени', value: 'time' },
+      { text: 'Финансовый отчет', value: 'financial' }
+    ]);
+
+    const statuses = ref(['Новая', 'В работе', 'Завершена', 'Отменена']);
+
+    const snackbar = ref({
+      show: false,
+      title: '',
+      message: '',
+      color: 'error',
+      icon: 'mdi-alert-circle',
+      timeout: 6000
+    });
+
+    const isAdmin = computed(() => authStore.user?.role === 'admin');
+
+    const filteredReports = computed(() => {
+      return reports.value.map(report => ({
         ...report,
         loading: false,
         downloading: false
       }));
-    },
-    formattedDateRange() {
-      if (!this.reportFilter.dateRange || this.reportFilter.dateRange.length < 2) 
+    });
+
+    const formattedDateRange = computed(() => {
+      if (!reportFilter.value.dateRange || reportFilter.value.dateRange.length < 2) 
         return null;
       
       return {
-        start: this.reportFilter.dateRange[0],
-        end: this.reportFilter.dateRange[1] || this.reportFilter.dateRange[0]
+        start: reportFilter.value.dateRange[0],
+        end: reportFilter.value.dateRange[1] || reportFilter.value.dateRange[0]
       };
-    }
-  },
-  async created() {
-    await this.loadData();
-  },
-  methods: {
-    async loadData() {
-      this.loading = true;
-      await Promise.all([this.fetchReports(), this.fetchUsers()]);
-      this.loading = false;
-    },
-    async fetchReports() {
-      const response = await getReports();
-      this.reports = response.map(report => ({
-        id: report.id,
-        type: this.getReportType(report.type),
-        status: report.status,
-        created_at: report.created_at,
-        content: report.content
-      }));
-    },
-    async fetchUsers() {
-      this.users = await getUsers();
-    },
-    getReportType(type) {
+    });
+
+    const loadData = async () => {
+      loading.value = true;
+      try {
+        await Promise.all([fetchReports(), fetchUsers()]);
+      } catch (error) {
+        handleError('Ошибка загрузки данных', 'Не удалось загрузить данные отчетов', error);
+      } finally {
+        loading.value = false;
+      }
+    };
+
+    const fetchReports = async () => {
+      try {
+        const response = await getReports();
+        reports.value = response.map(report => ({
+          id: report.id,
+          type: getReportType(report.type),
+          status: report.status,
+          created_at: report.created_at,
+          content: report.content
+        }));
+      } catch (error) {
+        throw error;
+      }
+    };
+
+    const fetchUsers = async () => {
+      try {
+        users.value = await getUsers();
+      } catch (error) {
+        throw error;
+      }
+    };
+
+    const getReportType = (type) => {
       const types = {
         'tasks': 'Задачи',
         'time': 'Время',
         'financial': 'Финансы'
       };
       return types[type] || type;
-    },
-    getStatusColor(status) {
+    };
+
+    const getStatusColor = (status) => {
       const colors = {
         'Готов': 'success',
         'В обработке': 'warning',
         'Ошибка': 'error'
       };
       return colors[status] || 'grey';
-    },
-    formatDate(date) {
+    };
+
+    const formatDate = (date) => {
       return dayjs(date).format('DD.MM.YYYY HH:mm');
-    },
-    async generateReport() {
-      if (!this.$refs.generateForm.validate()) return;
+    };
+
+    const generateReport = async () => {
+      if (!generateForm.value.validate()) return;
       
-      this.generating = true;
+      generating.value = true;
       const params = {
-        type: this.reportFilter.type,
+        type: reportFilter.value.type,
         filters: {
-          status: this.reportFilter.status === 'Все' ? null : this.reportFilter.status,
-          assignee_id: this.reportFilter.assignee,
-          date_from: this.formattedDateRange?.start,
-          date_to: this.formattedDateRange?.end
+          status: reportFilter.value.status === 'Все' ? null : reportFilter.value.status,
+          assignee_id: reportFilter.value.assignee,
+          date_from: formattedDateRange.value?.start,
+          date_to: formattedDateRange.value?.end
         }
       };
 
-      await generateReport(params);
-      await this.fetchReports();
-      this.showGenerateForm = false;
-      this.showSuccess('Успешно', 'Отчет успешно создан');
-      this.generating = false;
-    },
-    cancelGenerate() {
-      this.showGenerateForm = false;
-      this.$refs.generateForm.reset();
-    },
-    async viewReport(report) {
-      report.loading = true;
-      const response = await getReport(report.id);
-      this.selectedReport = {
-        ...report,
-        content: response.content || 'Нет содержимого'
-      };
-      this.showReport = true;
-      report.loading = false;
-    },
-    async downloadReport(report) {
-      report.downloading = true;
-      const response = await getReport(report.id, true);
-      const blob = new Blob([response], { type: 'application/pdf' });
-      saveAs(blob, `report_${report.id}.pdf`);
-      this.showSuccess('Успешно', 'Отчет скачивается');
-      report.downloading = false;
-      if (this.selectedReport?.id === report.id) {
-        this.selectedReport.downloading = false;
+      try {
+        await generateReport(params);
+        await fetchReports();
+        showGenerateForm.value = false;
+        showSuccess('Успешно', 'Отчет успешно создан');
+      } catch (error) {
+        handleError('Ошибка создания отчета', 'Не удалось создать отчет', error);
+      } finally {
+        generating.value = false;
       }
-    },
-    async exportToPDF() {
-      this.exportLoading.pdf = true;
-      const doc = new jsPDF();
-      doc.setFont('helvetica');
-      doc.setFontSize(12);
-      
-      doc.text('Список отчетов', 10, 10);
-      doc.setFontSize(10);
-      doc.text(`Сформировано: ${dayjs().format('DD.MM.YYYY HH:mm')}`, 10, 18);
-      
-      let y = 30;
-      this.filteredReports.forEach(report => {
-        if (y > 280) {
-          doc.addPage();
-          y = 20;
+    };
+
+    const cancelGenerate = () => {
+      showGenerateForm.value = false;
+      generateForm.value?.reset();
+    };
+
+    const viewReport = async (report) => {
+      report.loading = true;
+      try {
+        const response = await getReport(report.id);
+        selectedReport.value = {
+          ...report,
+          content: response.content || 'Нет содержимого'
+        };
+        showReport.value = true;
+      } catch (error) {
+        handleError('Ошибка просмотра отчета', 'Не удалось загрузить содержимое отчета', error);
+      } finally {
+        report.loading = false;
+      }
+    };
+
+    const downloadReport = async (report) => {
+      report.downloading = true;
+      try {
+        const response = await getReport(report.id, true);
+        const blob = new Blob([response], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `report_${report.id}.pdf`;
+        link.click();
+        window.URL.revokeObjectURL(url);
+        showSuccess('Успешно', 'Отчет скачивается');
+      } catch (error) {
+        handleError('Ошибка скачивания отчета', 'Не удалось скачать отчет', error);
+      } finally {
+        report.downloading = false;
+        if (selectedReport.value?.id === report.id) {
+          selectedReport.value.downloading = false;
         }
-        doc.text(`ID: ${report.id}`, 10, y);
-        doc.text(`Тип: ${report.type}`, 50, y);
-        doc.text(`Дата: ${this.formatDate(report.created_at)}`, 120, y);
-        y += 10;
-      });
-      
-      doc.save(`reports_${dayjs().format('YYYYMMDD_HHmmss')}.pdf`);
-      this.showSuccess('Успешно', 'PDF экспортирован');
-      this.exportLoading.pdf = false;
-    },
-    async exportToExcel() {
-      this.exportLoading.xlsx = true;
-      const worksheet = XLSX.utils.json_to_sheet(
-        this.filteredReports.map(report => ({
-          'ID': report.id,
-          'Тип': report.type,
-          'Статус': report.status,
-          'Дата создания': this.formatDate(report.created_at)
-        }))
-      );
-      
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Отчеты');
-      XLSX.writeFile(workbook, `reports_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
-      this.showSuccess('Успешно', 'Excel экспортирован');
-      this.exportLoading.xlsx = false;
-    },
-    handleError(title, message, error) {
+      }
+    };
+
+    const exportToPDF = async () => {
+      exportLoading.value.pdf = true;
+      try {
+        const doc = new jsPDF();
+        doc.setFont('helvetica');
+        doc.setFontSize(12);
+        
+        doc.text('Список отчетов', 10, 10);
+        doc.setFontSize(10);
+        doc.text(`Сформировано: ${dayjs().format('DD.MM.YYYY HH:mm')}`, 10, 18);
+        
+        let y = 30;
+        filteredReports.value.forEach(report => {
+          if (y > 280) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.text(`ID: ${report.id}`, 10, y);
+          doc.text(`Тип: ${report.type}`, 50, y);
+          doc.text(`Дата: ${formatDate(report.created_at)}`, 120, y);
+          y += 10;
+        });
+        
+        doc.save(`reports_${dayjs().format('YYYYMMDD_HHmmss')}.pdf`);
+        showSuccess('Успешно', 'PDF экспортирован');
+      } catch (error) {
+        handleError('Ошибка экспорта в PDF', 'Не удалось экспортировать в PDF', error);
+      } finally {
+        exportLoading.value.pdf = false;
+      }
+    };
+
+    const exportToExcel = async () => {
+      exportLoading.value.xlsx = true;
+      try {
+        const worksheet = XLSX.utils.json_to_sheet(
+          filteredReports.value.map(report => ({
+            'ID': report.id,
+            'Тип': report.type,
+            'Статус': report.status,
+            'Дата создания': formatDate(report.created_at)
+          }))
+        );
+        
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Отчеты');
+        XLSX.writeFile(workbook, `reports_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
+        showSuccess('Успешно', 'Excel экспортирован');
+      } catch (error) {
+        handleError('Ошибка экспорта в Excel', 'Не удалось экспортировать в Excel', error);
+      } finally {
+        exportLoading.value.xlsx = false;
+      }
+    };
+
+    const handleError = (title, message, error) => {
       console.error(title, error);
       
       let detailedMessage = message;
       if (error.response) {
         switch(error.response.status) {
           case 400:
-            if (error.response.data.errors) {
-              this.fieldErrors = error.response.data.errors;
+            if (error.response.data?.errors) {
+              fieldErrors.value = error.response.data.errors;
               detailedMessage = 'Проверьте правильность введенных данных';
             }
             break;
           case 401:
             detailedMessage = 'Требуется авторизация';
+            router.push('/login');
+            break;
+          case 402:
+            detailedMessage = 'Подписка истекла. Оформите подписку для продолжения.';
             break;
           case 403:
             detailedMessage = 'Доступ запрещен';
@@ -516,17 +583,21 @@ export default {
           case 500:
             detailedMessage = 'Ошибка сервера';
             break;
+          default:
+            detailedMessage = error.response.data?.message || error.response.data?.detail || message;
         }
       } else if (error.message) {
         detailedMessage = error.message;
       }
       
-      this.showSnackbar(title, detailedMessage, 'error');
-    },
-    showSuccess(title, message) {
-      this.showSnackbar(title, message, 'success');
-    },
-    showSnackbar(title, message, type = 'info') {
+      showSnackbar(title, detailedMessage, 'error');
+    };
+
+    const showSuccess = (title, message) => {
+      showSnackbar(title, message, 'success');
+    };
+
+    const showSnackbar = (title, message, type = 'info') => {
       const icons = {
         error: 'mdi-alert-circle',
         success: 'mdi-check-circle',
@@ -539,7 +610,7 @@ export default {
         info: 'info'
       };
       
-      this.snackbar = {
+      snackbar.value = {
         show: true,
         title,
         message,
@@ -547,7 +618,50 @@ export default {
         icon: icons[type],
         timeout: type === 'error' ? 6000 : 4000
       };
-    }
+    };
+
+    loadData();
+
+    return {
+      reports,
+      users,
+      loading,
+      generating,
+      searchQuery,
+      showGenerateForm,
+      showReport,
+      dateMenu,
+      generateValid,
+      selectedReport,
+      exportFormat,
+      exportLoading,
+      reportFilter,
+      headers,
+      reportTypes,
+      statuses,
+      snackbar,
+      fieldErrors,
+      isAdmin,
+      filteredReports,
+      formattedDateRange,
+      loadData,
+      fetchReports,
+      fetchUsers,
+      getReportType,
+      getStatusColor,
+      formatDate,
+      generateReport,
+      cancelGenerate,
+      viewReport,
+      downloadReport,
+      exportToPDF,
+      exportToExcel,
+      handleError,
+      showSuccess,
+      showSnackbar,
+      generateForm,
+      router
+    };
   }
 };
 </script>
@@ -659,6 +773,13 @@ export default {
 
 .snackbar-message {
   font-size: 0.9rem;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter, .fade-leave-to {
+  opacity: 0;
 }
 
 @media (max-width: 960px) {

@@ -11,6 +11,12 @@ const TIMEOUTS = {
   register: 15000,
   googleAuth: 8000,
   googleCallback: 12000,
+  subscription: 15000,
+  attachCard: 15000,
+  detachCard: 15000,
+  getCards: 10000,
+  getPayments: 10000,
+  activateTrial: 10000
 };
 
 async function fetchWithTimeout(url, options = {}, timeoutKey = 'default') {
@@ -44,6 +50,57 @@ async function fetchWithTimeout(url, options = {}, timeoutKey = 'default') {
   } catch (error) {
     clearTimeout(timeoutId);
     console.error(`Fetch error (timeout: ${timeout}ms):`, error);
+    if (error.name === 'AbortError') {
+      toast.error('Превышено время ожидания запроса');
+    } else if (error.message.includes('Failed to fetch')) {
+      toast.error('Ошибка сети. Проверьте подключение к интернету.');
+    }
+    throw error;
+  }
+}
+
+async function fetchWithCsrf(url, options = {}, action = '') {
+  const token = localStorage.getItem('token');
+  const csrfToken = localStorage.getItem('csrf_token');
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+    ...options.headers,
+  };
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('csrf_token');
+        localStorage.removeItem('user_id');
+        localStorage.removeItem('user_role');
+        toast.error('Сессия истекла. Пожалуйста, войдите снова.');
+        router.push('/login');
+      } else if (response.status === 402) {
+        toast.error('Подписка истекла. Пожалуйста, оформите подписку.');
+        router.push('/profile');
+        throw new Error('Subscription required');
+      } else if (response.status === 403) {
+        toast.error('Доступ запрещен');
+      } else if (response.status === 429) {
+        toast.error('Слишком много запросов. Попробуйте позже.');
+      }
+
+      throw new Error(data.message || data.detail || `Error in ${action}`);
+    }
+
+    return data;
+  } catch (error) {
     throw error;
   }
 }
@@ -79,26 +136,11 @@ export async function googleCallback(code, state) {
   return response;
 }
 
-async function fetchWithCsrf(url, options = {}) {
-  const token = localStorage.getItem('token');
-  const csrfToken = localStorage.getItem('csrf_token');
-  const headers = {
-    'Authorization': `Bearer ${token}`,
-    'X-CSRF-Token': csrfToken,
-    'Content-Type': 'application/json',
-    ...options.headers,
-  };
-  try {
-    const response = await fetch(url, { ...options, headers });
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Ошибка ${response.status}: ${errorText || response.statusText}`);
-    }
-    return response.json();
-  } catch (error) {
-    console.error('Fetch error:', error);
-    throw error;
-  }
+export async function initiatePayment(paymentData) {
+  return fetchWithCsrf(`${BASE_URLS.payment}/initiate`, {
+    method: 'POST',
+    body: JSON.stringify(paymentData),
+  }, 'initiatePayment');
 }
 
 export async function requestPasswordReset(email) {
@@ -109,15 +151,13 @@ export async function requestPasswordReset(email) {
 }
 
 export async function getDashboardMetrics() {
-  // Используем GET /tasks/dashboard как источник метрик
   const data = await fetchWithCsrf(`${BASE_URLS.tasks}/dashboard`);
-  // Преобразуем данные бэкенда в ожидаемый формат фронтенда
   return {
-    completed_tasks: data.task_count || 0, // Предполагаем, что task_count включает завершенные задачи
-    new_clients: 0, // Нет данных в текущем эндпоинте, временно 0
-    total_amount: 0, // Нет данных, временно 0
-    productivity: 0, // Нет данных, временно 0
-    tasks_change: 0, // Нет данных об изменении, временно 0
+    completed_tasks: data.task_count || 0,
+    new_clients: 0,
+    total_amount: 0,
+    productivity: 0,
+    tasks_change: 0,
     clients_change: 0,
     amount_change: 0,
     productivity_change: 0
@@ -125,20 +165,16 @@ export async function getDashboardMetrics() {
 }
 
 export async function getActivityData(period) {
-  // Используем GET /tasks/task для статистики активности
   const data = await fetchWithCsrf(`${BASE_URLS.tasks}/task?period=${period}`);
-  // Преобразуем данные в формат для графика
   return {
-    labels: data.weeklyTrends?.map(trend => trend.date) || [], // Предполагаем, что weeklyTrends доступен
+    labels: data.weeklyTrends?.map(trend => trend.date) || [],
     completed: data.weeklyTrends?.map(trend => trend.completed) || [],
     created: data.weeklyTrends?.map(trend => trend.created) || []
   };
 }
 
 export async function getTaskDistribution() {
-  // Используем GET /tasks/dashboard для распределения задач по сотрудникам
   const data = await fetchWithCsrf(`${BASE_URLS.tasks}/dashboard`);
-  // Преобразуем employee_load в формат для круговой диаграммы
   return {
     labels: data.employee_load.map(emp => emp.user_id),
     values: data.employee_load.map(emp => emp.task_count)
@@ -146,9 +182,7 @@ export async function getTaskDistribution() {
 }
 
 export async function getProductivityData() {
-  // Используем GET /tasks/productivity с периодом week
   const data = await fetchWithCsrf(`${BASE_URLS.tasks}/productivity?period=week`);
-  // Преобразуем данные в формат для линейного графика
   const labels = Object.keys(data.task_times || {});
   const values = Object.values(data.task_times || {});
   return {
@@ -158,12 +192,10 @@ export async function getProductivityData() {
 }
 
 export async function getRecentTasks() {
-  // Используем GET /tasks/my с лимитом для получения последних задач
   return fetchWithCsrf(`${BASE_URLS.tasks}/my?limit=5`);
 }
 
 export async function getAdminDashboardData() {
-  // Комбинируем данные из /tasks/dashboard и /tasks/users
   const [dashboardData, usersData] = await Promise.all([
     fetchWithCsrf(`${BASE_URLS.tasks}/dashboard`),
     fetchWithCsrf(`${BASE_URLS.tasks}/users`)
@@ -533,6 +565,49 @@ export async function getAggregatePayroll(period) {
 
 export async function getProductivityReport(userId, period) {
   return fetchWithCsrf(`${BASE_URLS.tasks}/productivity/${userId}?period=${period}`);
+}
+
+export async function getCompanyCards() {
+  return fetchWithTimeout(`${BASE_URLS.auth}/cards`, {}, 'getCards');
+}
+
+export async function getPaymentHistory() {
+  return fetchWithTimeout(`${BASE_URLS.auth}/subscription/payments`, {}, 'getPayments');
+}
+
+export async function attachCard(cardData) {
+  return fetchWithCsrf(`${BASE_URLS.auth}/cards/attach`, {
+    method: 'POST',
+    body: JSON.stringify(cardData),
+  }, 'attachCard');
+}
+
+export async function detachCard(cardData) {
+  return fetchWithCsrf(`${BASE_URLS.auth}/cards/detach`, {
+    method: 'POST',
+    body: JSON.stringify(cardData),
+  }, 'detachCard');
+}
+
+export async function initiateSubscriptionPayment(companyId, cardId = null) {
+  return fetchWithTimeout(`${BASE_URLS.auth}/subscription/initiate`, {
+    method: 'POST',
+    body: JSON.stringify({ company_id: companyId, card_id: cardId }),
+  }, 'subscription');
+}
+
+export async function confirmSubscriptionPayment(paymentId) {
+  return fetchWithTimeout(`${BASE_URLS.auth}/subscription/confirm`, {
+    method: 'POST',
+    body: JSON.stringify({ payment_id: paymentId }),
+  }, 'subscription');
+}
+
+export async function activateTrial(companyId) {
+  return fetchWithCsrf(`${BASE_URLS.auth}/subscription/activate-trial`, {
+    method: 'POST',
+    body: JSON.stringify({ company_id: companyId }),
+  }, 'activateTrial');
 }
 
 export {

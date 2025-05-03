@@ -19,11 +19,7 @@
             </div>
           </div>
           <template v-slot:action="{ attrs }">
-            <v-btn
-              icon
-              v-bind="attrs"
-              @click="snackbar.show = false"
-            >
+            <v-btn icon v-bind="attrs" @click="snackbar.show = false">
               <v-icon>mdi-close</v-icon>
             </v-btn>
           </template>
@@ -31,10 +27,10 @@
 
         <h1 class="page-title">Профиль</h1>
 
-        <v-btn 
-          color="error" 
-          outlined 
-          class="logout-btn" 
+        <v-btn
+          color="error"
+          outlined
+          class="logout-btn"
           @click="confirmLogout"
           :loading="logoutLoading"
         >
@@ -54,7 +50,7 @@
                     ></v-img>
                   </v-avatar>
                 </div>
-                
+
                 <div class="user-meta">
                   <h3 class="user-name">{{ profile.name || 'Без имени' }}</h3>
                   <v-chip small class="role-chip">{{ formatRole(profile.role) }}</v-chip>
@@ -157,6 +153,79 @@
                   ></v-date-picker>
                 </v-menu>
 
+                <!-- Секция подписки -->
+                <v-divider class="my-4"></v-divider>
+                <h3 class="section-title">Статус подписки</h3>
+                <v-alert
+                  :type="subscriptionAlertType"
+                  class="mb-4"
+                  outlined
+                >
+                  {{ subscriptionMessage }}
+                </v-alert>
+                <v-progress-linear
+                  v-if="profile.subscription_status === 'trial' && profile.trial_end"
+                  :value="trialProgress"
+                  color="primary"
+                  class="mb-4"
+                  height="8"
+                  rounded
+                />
+
+                <!-- Информация о карте -->
+                <v-card
+                  v-if="profile.attachedCard"
+                  flat
+                  class="card-info mb-4"
+                  outlined
+                >
+                  <v-card-text>
+                    <div class="card-details">
+                      <v-icon left>mdi-credit-card</v-icon>
+                      <span>Карта: {{ profile.attachedCard.brand }} **** {{ profile.attachedCard.last4 }}</span>
+                    </div>
+                  </v-card-text>
+                  <v-card-actions>
+                    <v-btn
+                      color="error"
+                      text
+                      @click="confirmDetachCard"
+                    >
+                      Открепить карту
+                    </v-btn>
+                  </v-card-actions>
+                </v-card>
+
+                <div class="subscription-buttons">
+                  <v-btn
+                    v-if="!profile.attachedCard"
+                    color="primary"
+                    outlined
+                    class="action-btn"
+                    @click="showAttachCardDialog = true"
+                  >
+                    <v-icon left>mdi-credit-card-plus</v-icon> Прикрепить карту
+                  </v-btn>
+                  <v-btn
+                    color="primary"
+                    outlined
+                    class="action-btn"
+                    @click="showPaymentDialog = true"
+                    v-if="profile.subscription_status === 'expired' || profile.subscription_status === 'trial'"
+                  >
+                    <v-icon left>mdi-credit-card</v-icon> Оформить подписку
+                  </v-btn>
+                  <v-btn
+                    color="primary"
+                    outlined
+                    class="action-btn"
+                    :to="{ name: 'Subscription' }"
+                    v-else
+                  >
+                    <v-icon left>mdi-cog</v-icon> Управление подпиской
+                  </v-btn>
+                </div>
+
                 <div class="button-group">
                   <v-btn
                     v-if="!isEditing"
@@ -216,7 +285,7 @@
               Вы уверены, что хотите сохранить изменения в профиле?
             </v-card-text>
             <v-card-actions class="dialog-actions">
-              <v-spacer/>
+              <v-spacer />
               <v-btn text color="grey" @click="showConfirmDialog = false">
                 Отменить
               </v-btn>
@@ -237,7 +306,7 @@
               Вы уверены, что хотите выйти из профиля?
             </v-card-text>
             <v-card-actions class="dialog-actions">
-              <v-spacer/>
+              <v-spacer />
               <v-btn text color="grey" @click="showLogoutDialog = false">
                 Отменить
               </v-btn>
@@ -271,7 +340,7 @@
               />
             </v-card-text>
             <v-card-actions class="dialog-actions">
-              <v-spacer/>
+              <v-spacer />
               <v-btn text color="grey" @click="showDeleteDialog = false">
                 Отменить
               </v-btn>
@@ -286,212 +355,653 @@
             </v-card-actions>
           </v-card>
         </v-dialog>
+
+        <!-- Диалог прикрепления карты -->
+        <v-dialog v-model="showAttachCardDialog" max-width="500" persistent>
+          <v-card class="dialog-card">
+            <v-card-title class="dialog-title">
+              <v-icon left>mdi-credit-card-plus</v-icon>
+              Прикрепить карту
+            </v-card-title>
+            <v-card-text class="dialog-text">
+              <v-form ref="attachCardForm" v-model="attachCardValid">
+                <v-text-field
+                  v-model="paymentData.cardNumber"
+                  label="Номер карты"
+                  outlined
+                  dense
+                  :rules="cardNumberRules"
+                  :error-messages="paymentErrors.cardNumber"
+                  @input="clearPaymentError('cardNumber')"
+                  class="input-field"
+                />
+                <v-row>
+                  <v-col cols="6">
+                    <v-text-field
+                      v-model="paymentData.expiry"
+                      label="Срок действия (MM/YY)"
+                      outlined
+                      dense
+                      :rules="expiryRules"
+                      :error-messages="paymentErrors.expiry"
+                      @input="clearPaymentError('expiry')"
+                      class="input-field"
+                    />
+                  </v-col>
+                  <v-col cols="6">
+                    <v-text-field
+                      v-model="paymentData.cvc"
+                      label="CVC"
+                      outlined
+                      dense
+                      :rules="cvcRules"
+                      :error-messages="paymentErrors.cvc"
+                      @input="clearPaymentError('cvc')"
+                      class="input-field"
+                    />
+                  </v-col>
+                </v-row>
+              </v-form>
+            </v-card-text>
+            <v-card-actions class="dialog-actions">
+              <v-spacer />
+              <v-btn text color="grey" @click="cancelAttachCard" :disabled="attachCardLoading">
+                Отменить
+              </v-btn>
+              <v-btn
+                color="primary"
+                @click="attachCard"
+                :loading="attachCardLoading"
+                :disabled="!attachCardValid"
+              >
+                Прикрепить
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <!-- Диалог подтверждения открепления карты -->
+        <v-dialog v-model="showDetachCardDialog" max-width="450" persistent>
+          <v-card class="dialog-card">
+            <v-card-title class="dialog-title">
+              Подтверждение открепления
+            </v-card-title>
+            <v-card-text class="dialog-text">
+              Вы уверены, что хотите открепить карту {{ profile.attachedCard?.brand }} **** {{ profile.attachedCard?.last4 }}?
+            </v-card-text>
+            <v-card-actions class="dialog-actions">
+              <v-spacer />
+              <v-btn text color="grey" @click="showDetachCardDialog = false">
+                Отменить
+              </v-btn>
+              <v-btn
+                color="error"
+                @click="detachCard"
+                :loading="detachCardLoading"
+              >
+                Открепить
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+        <!-- Диалог оплаты -->
+        <v-dialog v-model="showPaymentDialog" max-width="500" persistent>
+          <v-card class="dialog-card">
+            <v-card-title class="dialog-title">
+              <v-icon left>mdi-credit-card</v-icon>
+              Оформление подписки
+            </v-card-title>
+            <v-card-text class="dialog-text">
+              <v-form ref="paymentForm" v-model="paymentValid">
+                <v-text-field
+                  v-if="!profile.attachedCard"
+                  v-model="paymentData.cardNumber"
+                  label="Номер карты"
+                  outlined
+                  dense
+                  :rules="cardNumberRules"
+                  :error-messages="paymentErrors.cardNumber"
+                  @input="clearPaymentError('cardNumber')"
+                  class="input-field"
+                />
+                <v-row v-if="!profile.attachedCard">
+                  <v-col cols="6">
+                    <v-text-field
+                      v-model="paymentData.expiry"
+                      label="Срок действия (MM/YY)"
+                      outlined
+                      dense
+                      :rules="expiryRules"
+                      :error-messages="paymentErrors.expiry"
+                      @input="clearPaymentError('expiry')"
+                      class="input-field"
+                    />
+                  </v-col>
+                  <v-col cols="6">
+                    <v-text-field
+                      v-model="paymentData.cvc"
+                      label="CVC"
+                      outlined
+                      dense
+                      :rules="cvcRules"
+                      :error-messages="paymentErrors.cvc"
+                      @input="clearPaymentError('cvc')"
+                      class="input-field"
+                    />
+                  </v-col>
+                </v-row>
+                <v-card
+                  v-if="profile.attachedCard"
+                  flat
+                  class="card-info mb-4"
+                  outlined
+                >
+                  <v-card-text>
+                    <div class="card-details">
+                      <v-icon left>mdi-credit-card</v-icon>
+                      <span>Карта: {{ profile.attachedCard.brand }} **** {{ profile.attachedCard.last4 }}</span>
+                    </div>
+                  </v-card-text>
+                </v-card>
+                <v-select
+                  v-model="paymentData.plan"
+                  :items="subscriptionPlans"
+                  item-text="name"
+                  item-value="id"
+                  label="План подписки"
+                  outlined
+                  dense
+                  :rules="[(v) => !!v || 'Выберите план']"
+                  class="input-field"
+                />
+              </v-form>
+            </v-card-text>
+            <v-card-actions class="dialog-actions">
+              <v-spacer />
+              <v-btn text color="grey" @click="cancelPayment" :disabled="paymentLoading">
+                Отменить
+              </v-btn>
+              <v-btn
+                color="primary"
+                @click="submitPayment"
+                :loading="paymentLoading"
+                :disabled="!paymentValid"
+              >
+                Оплатить
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
       </v-col>
     </v-row>
   </v-container>
 </template>
 
 <script>
-import { mapGetters } from 'vuex';
-import { getProfile, updateProfile, deleteCompany, logoutUser } from '@/api/index.js';
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { getProfile, updateProfile, deleteCompany, logoutUser, initiatePayment, attachCard, detachCard } from '@/api';
 
 export default {
   name: 'ProfileForm',
-  data() {
-    return {
-      valid: false,
-      loading: false,
-      logoutLoading: false,
-      deleteLoading: false,
-      isEditing: false,
-      dobMenu: false,
-      originalProfile: {},
-      profile: {
-        user_id: '',
-        name: '',
-        email: '',
-        role: '',
-        company_name: '',
-        inn: '',
-        phone: '',
-        date_of_birth: '',
-        avatar: '',
-        editable: false
+  setup() {
+    const router = useRouter();
+    const authStore = useAuthStore();
+
+    const valid = ref(false);
+    const loading = ref(false);
+    const logoutLoading = ref(false);
+    const deleteLoading = ref(false);
+    const paymentLoading = ref(false);
+    const attachCardLoading = ref(false);
+    const detachCardLoading = ref(false);
+    const isEditing = ref(false);
+    const dobMenu = ref(false);
+    const showConfirmDialog = ref(false);
+    const showLogoutDialog = ref(false);
+    const showDeleteDialog = ref(false);
+    const showPaymentDialog = ref(false);
+    const showAttachCardDialog = ref(false);
+    const showDetachCardDialog = ref(false);
+    const deleteConfirmation = ref('');
+    const fieldErrors = ref({});
+    const paymentErrors = ref({});
+    const paymentValid = ref(false);
+    const attachCardValid = ref(false);
+    const form = ref(null);
+    const paymentForm = ref(null);
+    const attachCardForm = ref(null);
+
+    const profile = ref({
+      user_id: '',
+      name: '',
+      email: '',
+      role: '',
+      company_name: '',
+      company_id: '',
+      inn: '',
+      phone: '',
+      date_of_birth: '',
+      avatar: '',
+      editable: false,
+      subscription_status: '',
+      trial_end: '',
+      created_at: '',
+      attachedCard: null, // { card_id, last4, brand }
+    });
+
+    const originalProfile = ref({});
+
+    const paymentData = ref({
+      cardNumber: '',
+      expiry: '',
+      cvc: '',
+      plan: '',
+    });
+
+    const subscriptionPlans = ref([
+      { id: 'basic', name: 'Базовый (500 руб/мес)' },
+      { id: 'pro', name: 'Профессиональный (1000 руб/мес)' },
+    ]);
+
+    const snackbar = ref({
+      show: false,
+      title: '',
+      message: '',
+      color: 'info',
+      icon: '',
+      timeout: 5000,
+    });
+
+    const emailRules = [
+      (v) => !!v || 'Email обязателен',
+      (v) => /.+@.+\..+/.test(v) || 'Неверный формат email',
+    ];
+
+    const nameRules = [
+      (v) => !!v || 'Имя обязательно',
+      (v) => v.length >= 2 || 'Минимум 2 символа',
+    ];
+
+    const innRules = [
+      (v) => !v || /^\d{10}$|^\d{12}$/.test(v) || 'ИНН должен содержать 10 или 12 цифр',
+    ];
+
+    const phoneRules = [
+      (v) => !v || /^\+?[0-9\s\-()]{10,17}$/.test(v) || 'Неверный формат телефона',
+    ];
+
+    const cardNumberRules = [
+      (v) => !!v || 'Номер карты обязателен',
+      (v) => /^\d{16}$/.test(v) || 'Номер карты должен содержать 16 цифр',
+    ];
+
+    const expiryRules = [
+      (v) => !!v || 'Срок действия обязателен',
+      (v) => /^\d{2}\/\d{2}$/.test(v) || 'Формат MM/YY',
+      (v) => {
+        const [month, year] = v.split('/');
+        const now = new Date();
+        const expiryDate = new Date(`20${year}`, month - 1);
+        return expiryDate > now || 'Карта истекла';
       },
-      showAlert: false,
-      showConfirmDialog: false,
-      showLogoutDialog: false,
-      showDeleteDialog: false,
-      deleteConfirmation: '',
-      fieldErrors: {},
-      // Rules
-      emailRules: [
-        v => !!v || 'Email обязателен',
-        v => /.+@.+\..+/.test(v) || 'Неверный формат email'
-      ],
-      nameRules: [
-        v => !!v || 'Имя обязательно',
-        v => v.length >= 2 || 'Минимум 2 символа'
-      ],
-      innRules: [
-        v => !v || /^\d{10}$|^\d{12}$/.test(v) || 'ИНН должен содержать 10 или 12 цифр'
-      ],
-      phoneRules: [
-        v => !v || /^\+?[0-9\s\-()]{11,17}$/.test(v) || 'Неверный формат телефона'
-      ],
-      // Snackbar
-      snackbar: {
-        show: false,
-        title: '',
-        message: '',
-        color: 'info',
-        icon: '',
-        timeout: 5000
+    ];
+
+    const cvcRules = [
+      (v) => !!v || 'CVC обязателен',
+      (v) => /^\d{3}$/.test(v) || 'CVC должен содержать 3 цифры',
+    ];
+
+    const isCompanyAdmin = computed(() => profile.value.role === 'admin');
+
+    const subscriptionAlertType = computed(() => {
+      const status = profile.value.subscription_status;
+      if (status === 'active') return 'success';
+      if (status === 'expired') return 'warning';
+      if (status === 'trial') return 'info';
+      return 'info';
+    });
+
+    const subscriptionMessage = computed(() => {
+      const status = profile.value.subscription_status;
+      const trialEnd = profile.value.trial_end;
+      if (status === 'active') {
+        return 'Ваша подписка активна.';
+      } else if (status === 'expired') {
+        return 'Ваш пробный период истек. Оформите подписку для продолжения.';
+      } else if (status === 'trial' && trialEnd) {
+        const endDate = new Date(trialEnd).toLocaleDateString('ru-RU', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        });
+        return `Ваш пробный период активен до ${endDate}.`;
+      }
+      return 'Информация о подписке недоступна.';
+    });
+
+    const trialProgress = computed(() => {
+      const start = new Date(profile.value.created_at || Date.now());
+      const end = new Date(profile.value.trial_end);
+      const total = end - start;
+      const remaining = end - Date.now();
+      return Math.max(0, Math.min(100, (remaining / total) * 100));
+    });
+
+    const loadProfile = async () => {
+      try {
+        await authStore.fetchProfile();
+        profile.value = {
+          ...authStore.user,
+          attachedCard: authStore.user.attachedCard || null,
+        };
+        originalProfile.value = { ...profile.value };
+      } catch (error) {
+        showError('Ошибка загрузки', 'Не удалось загрузить профиль', error);
       }
     };
-  },
-  computed: {
-    ...mapGetters(['currentUser']),
-    isCompanyAdmin() {
-      return this.profile.role === 'admin';
-    }
-  },
-  async created() {
-    await this.loadProfile();
-  },
-  methods: {
-    async loadProfile() {
-      try {
-        const response = await getProfile();
-        this.profile = { ...response };
-        this.originalProfile = { ...response };
-      } catch (error) {
-        this.showError('Ошибка загрузки', 'Не удалось загрузить профиль', error);
+
+    const startEditing = () => {
+      isEditing.value = true;
+    };
+
+    const cancelEditing = () => {
+      profile.value = { ...originalProfile.value };
+      isEditing.value = false;
+      fieldErrors.value = {};
+      form.value?.resetValidation();
+    };
+
+    const confirmSave = () => {
+      if (form.value.validate()) {
+        showConfirmDialog.value = true;
       }
-    },
-    
-    startEditing() {
-      this.isEditing = true;
-    },
-    
-    cancelEditing() {
-      this.profile = { ...this.originalProfile };
-      this.isEditing = false;
-      this.fieldErrors = {};
-      this.$refs.form.resetValidation();
-    },
-    
-    confirmSave() {
-      if (this.$refs.form.validate()) {
-        this.showConfirmDialog = true;
-      }
-    },
-    
-    async saveProfile() {
-      this.loading = true;
+    };
+
+    const saveProfile = async () => {
+      loading.value = true;
       try {
-        await updateProfile(this.profile);
-        this.originalProfile = { ...this.profile };
-        this.isEditing = false;
-        this.showSuccess('Успешно', 'Профиль обновлён');
-        await this.loadProfile(); // Обновляем данные
+        await authStore.updateProfile({
+          email: profile.value.email,
+          name: profile.value.name,
+          company_name: profile.value.company_name,
+          inn: profile.value.inn,
+          phone: profile.value.phone,
+          date_of_birth: profile.value.date_of_birth,
+        });
+        originalProfile.value = { ...profile.value };
+        isEditing.value = false;
+        showSuccess('Успешно', 'Профиль обновлён');
+        await loadProfile();
       } catch (error) {
-        this.handleProfileError(error);
+        handleProfileError(error);
       } finally {
-        this.loading = false;
-        this.showConfirmDialog = false;
+        loading.value = false;
+        showConfirmDialog.value = false;
       }
-    },
-    
-    confirmLogout() {
-      this.showLogoutDialog = true;
-    },
-    
-    async logout() {
-      this.logoutLoading = true;
+    };
+
+    const confirmLogout = () => {
+      showLogoutDialog.value = true;
+    };
+
+    const logout = async () => {
+      logoutLoading.value = true;
       try {
-        await logoutUser();
-        this.$router.push('/login');
+        await authStore.logout();
+        router.push('/login');
       } catch (error) {
-        this.showError('Ошибка', 'Не удалось выйти из профиля', error);
+        showError('Ошибка', 'Не удалось выйти из профиля', error);
       } finally {
-        this.logoutLoading = false;
-        this.showLogoutDialog = false;
+        logoutLoading.value = false;
+        showLogoutDialog.value = false;
       }
-    },
-    
-    async deleteCompany() {
-      if (this.deleteConfirmation !== this.profile.company_name) return;
-      
-      this.deleteLoading = true;
+    };
+
+    const deleteCompany = async () => {
+      if (deleteConfirmation.value !== profile.value.company_name) return;
+      deleteLoading.value = true;
       try {
-        await deleteCompany(this.profile.company_id);
-        this.showSuccess('Успешно', 'Компания удалена');
-        this.$router.push('/login');
+        await deleteCompany(profile.value.company_id);
+        showSuccess('Успешно', 'Компания удалена');
+        router.push('/login');
       } catch (error) {
-        this.showError('Ошибка', 'Не удалось удалить компанию', error);
+        showError('Ошибка', 'Не удалось удалить компанию', error);
       } finally {
-        this.deleteLoading = false;
-        this.showDeleteDialog = false;
-        this.deleteConfirmation = '';
+        deleteLoading.value = false;
+        showDeleteDialog.value = false;
+        deleteConfirmation.value = '';
       }
-    },
-    
-    formatRole(role) {
+    };
+
+    const attachCard = async () => {
+      if (!attachCardForm.value.validate()) return;
+      attachCardLoading.value = true;
+      try {
+        const response = await attachCard({
+          card_number: paymentData.value.cardNumber.replace(/\s/g, ''),
+          expiry: paymentData.value.expiry,
+          cvc: paymentData.value.cvc,
+        });
+        profile.value.attachedCard = {
+          card_id: response.card_id,
+          last4: response.last4,
+          brand: response.brand,
+        };
+        showSuccess('Успех', 'Карта успешно прикреплена');
+        showAttachCardDialog.value = false;
+        attachCardForm.value.reset();
+      } catch (error) {
+        handleCardError(error, 'Ошибка прикрепления карты', 'Не удалось прикрепить карту');
+      } finally {
+        attachCardLoading.value = false;
+      }
+    };
+
+    const confirmDetachCard = () => {
+      showDetachCardDialog.value = true;
+    };
+
+    const detachCard = async () => {
+      detachCardLoading.value = true;
+      try {
+        await detachCard(profile.value.attachedCard.card_id);
+        profile.value.attachedCard = null;
+        showSuccess('Успех', 'Карта успешно откреплена');
+        showDetachCardDialog.value = false;
+      } catch (error) {
+        handleCardError(error, 'Ошибка открепления карты', 'Не удалось открепить карту');
+      } finally {
+        detachCardLoading.value = false;
+      }
+    };
+
+    const submitPayment = async () => {
+      if (!paymentForm.value.validate()) return;
+      paymentLoading.value = true;
+      try {
+        const paymentPayload = {
+          plan: paymentData.value.plan,
+        };
+        if (!profile.value.attachedCard) {
+          paymentPayload.card_number = paymentData.value.cardNumber.replace(/\s/g, '');
+          paymentPayload.expiry = paymentData.value.expiry;
+          paymentPayload.cvc = paymentData.value.cvc;
+        } else {
+          paymentPayload.card_id = profile.value.attachedCard.card_id;
+        }
+        const response = await initiatePayment(paymentPayload);
+        showSuccess('Успех', 'Оплата успешно проведена');
+        await loadProfile();
+        showPaymentDialog.value = false;
+        paymentForm.value.reset();
+      } catch (error) {
+        handlePaymentError(error);
+      } finally {
+        paymentLoading.value = false;
+      }
+    };
+
+    const cancelPayment = () => {
+      showPaymentDialog.value = false;
+      paymentForm.value.reset();
+      paymentErrors.value = {};
+    };
+
+    const cancelAttachCard = () => {
+      showAttachCardDialog.value = false;
+      attachCardForm.value.reset();
+      paymentErrors.value = {};
+    };
+
+    const formatRole = (role) => {
       const roles = {
-        'admin': 'Администратор',
-        'manager': 'Менеджер',
-        'user': 'Пользователь'
+        admin: 'Администратор',
+        manager: 'Менеджер',
+        user: 'Пользователь',
       };
       return roles[role] || role;
-    },
-    
-    handleProfileError(error) {
+    };
+
+    const handleProfileError = (error) => {
       if (error.response && error.response.status === 422) {
-        // Обработка ошибок валидации
-        this.fieldErrors = error.response.data.errors || {};
-        this.showError('Ошибка валидации', 'Проверьте правильность введённых данных');
+        fieldErrors.value = error.response.data.errors || {};
+        showError('Ошибка валидации', 'Проверьте правильность введённых данных');
       } else {
-        this.showError('Ошибка', 'Не удалось сохранить профиль', error);
+        showError('Ошибка', 'Не удалось сохранить профиль', error);
       }
-    },
-    
-    clearFieldError(field) {
-      if (this.fieldErrors[field]) {
-        delete this.fieldErrors[field];
+    };
+
+    const handlePaymentError = (error) => {
+      if (error.response && error.response.status === 422) {
+        paymentErrors.value = error.response.data.errors || {};
+        showError('Ошибка оплаты', 'Проверьте данные карты');
+      } else if (error.response && error.response.status === 402) {
+        showError('Ошибка оплаты', 'Недостаточно средств или карта отклонена');
+      } else {
+        showError('Ошибка', 'Не удалось обработать платеж', error);
       }
-    },
-    
-    showSuccess(title, message) {
-      this.snackbar = {
+    };
+
+    const handleCardError = (error, title, defaultMessage) => {
+      if (error.response && error.response.status === 422) {
+        paymentErrors.value = error.response.data.errors || {};
+        showError(title, 'Проверьте данные карты');
+      } else if (error.response && error.response.status === 402) {
+        showError(title, 'Карта отклонена');
+      } else {
+        showError(title, error.response?.data?.message || defaultMessage, error);
+      }
+    };
+
+    const clearFieldError = (field) => {
+      if (fieldErrors.value[field]) {
+        delete fieldErrors.value[field];
+      }
+    };
+
+    const clearPaymentError = (field) => {
+      if (paymentErrors.value[field]) {
+        delete paymentErrors.value[field];
+      }
+    };
+
+    const showSuccess = (title, message) => {
+      snackbar.value = {
         show: true,
         title,
         message,
         color: 'success',
         icon: 'mdi-check-circle',
-        timeout: 4000
+        timeout: 4000,
       };
-    },
-    
-    showError(title, message, error = null) {
+    };
+
+    const showError = (title, message, error = null) => {
       console.error(title, error);
-      
       if (error?.response?.data?.message) {
         message = error.response.data.message;
       } else if (error?.message) {
         message = error.message;
       }
-      
-      this.snackbar = {
+      snackbar.value = {
         show: true,
         title,
         message,
         color: 'error',
         icon: 'mdi-alert-circle',
-        timeout: 6000
+        timeout: 6000,
       };
-    }
-  }
+    };
+
+    loadProfile();
+
+    return {
+      valid,
+      loading,
+      logoutLoading,
+      deleteLoading,
+      paymentLoading,
+      attachCardLoading,
+      detachCardLoading,
+      isEditing,
+      dobMenu,
+      profile,
+      originalProfile,
+      paymentData,
+      subscriptionPlans,
+      showConfirmDialog,
+      showLogoutDialog,
+      showDeleteDialog,
+      showPaymentDialog,
+      showAttachCardDialog,
+      showDetachCardDialog,
+      deleteConfirmation,
+      fieldErrors,
+      paymentErrors,
+      paymentValid,
+      attachCardValid,
+      snackbar,
+      emailRules,
+      nameRules,
+      innRules,
+      phoneRules,
+      cardNumberRules,
+      expiryRules,
+      cvcRules,
+      isCompanyAdmin,
+      subscriptionAlertType,
+      subscriptionMessage,
+      trialProgress,
+      loadProfile,
+      startEditing,
+      cancelEditing,
+      confirmSave,
+      saveProfile,
+      confirmLogout,
+      logout,
+      deleteCompany,
+      attachCard,
+      confirmDetachCard,
+      detachCard,
+      submitPayment,
+      cancelPayment,
+      cancelAttachCard,
+      formatRole,
+      handleProfileError,
+      handlePaymentError,
+      handleCardError,
+      clearFieldError,
+      clearPaymentError,
+      showSuccess,
+      showError,
+      form,
+      paymentForm,
+      attachCardForm,
+    };
+  },
 };
 </script>
 
@@ -552,8 +1062,33 @@ export default {
   font-weight: 500;
 }
 
+.section-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
 .input-field {
   margin-bottom: 16px;
+}
+
+.card-info {
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.card-details {
+  display: flex;
+  align-items: center;
+  font-size: 1rem;
+  color: #263238;
+}
+
+.subscription-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
 }
 
 .button-group {
@@ -566,10 +1101,17 @@ export default {
 .action-btn {
   flex: 1;
   min-width: 150px;
+  transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .dialog-card {
   border-radius: 12px;
+  overflow: hidden;
 }
 
 .dialog-title {
@@ -603,30 +1145,40 @@ export default {
   font-size: 0.9rem;
 }
 
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter,
+.fade-leave-to {
+  opacity: 0;
+}
+
 @media (max-width: 960px) {
   .profile-container {
     padding: 16px;
   }
-  
+
   .page-title {
     font-size: 1.6rem;
   }
-  
+
   .profile-card {
     padding: 16px;
   }
-  
+
   .logout-btn {
     position: relative;
     top: auto;
     right: auto;
     margin-bottom: 16px;
   }
-  
+
+  .subscription-buttons,
   .button-group {
     flex-direction: column;
   }
-  
+
   .action-btn {
     width: 100%;
   }
@@ -635,6 +1187,14 @@ export default {
 @media (max-width: 600px) {
   .page-title {
     font-size: 1.4rem;
+  }
+
+  .user-name {
+    font-size: 1.2rem;
+  }
+
+  .section-title {
+    font-size: 1.1rem;
   }
 }
 </style>

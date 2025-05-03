@@ -9,6 +9,23 @@
     
     <v-main>
       <v-container fluid class="main-container" :class="{ 'mobile-padding': isMobile }">
+        <v-alert
+          v-if="showSubscriptionAlert"
+          type="warning"
+          dismissible
+          class="mb-4"
+          @click:dismiss="dismissSubscriptionAlert"
+        >
+          {{ subscriptionAlertMessage }}
+          <v-btn
+            color="primary"
+            small
+            class="ml-2"
+            :to="{ name: 'Subscription' }"
+          >
+            Оформить подписку
+          </v-btn>
+        </v-alert>
         <router-view />
         
         <VoiceRecorderForm
@@ -38,24 +55,56 @@ export default {
   setup() {
     const route = useRoute();
     const authStore = useAuthStore();
-    const drawer = ref(false); // Default to closed
+    const drawer = ref(false);
+    const isDismissed = ref(false);
 
     const isMobile = computed(() => {
       return window.innerWidth < 960;
     });
 
     const isAuthPage = computed(() => {
-      return ['/login', '/register'].some(path => route.path.startsWith(path));
+      return ['/login', '/register', '/reset-password'].some(path => route.path.startsWith(path));
     });
 
     const showSidebar = computed(() => {
       return authStore.isAuthenticated && !isAuthPage.value;
     });
 
+    const showSubscriptionAlert = computed(() => {
+      if (!authStore.isAuthenticated || isAuthPage.value || isDismissed.value) return false;
+      const status = authStore.profile?.subscription_status;
+      return status === 'expired' || (status === 'trial' && isTrialEndingSoon());
+    });
+
+    const subscriptionAlertMessage = computed(() => {
+      const status = authStore.profile?.subscription_status;
+      if (status === 'expired') {
+        return 'Ваш пробный период истек. Оформите подписку, чтобы продолжить пользоваться сервисом.';
+      } else if (status === 'trial') {
+        const trialEnd = new Date(authStore.profile?.trial_end);
+        const daysLeft = Math.ceil((trialEnd - new Date()) / (1000 * 60 * 60 * 24));
+        return `Ваш пробный период заканчивается через ${daysLeft} дн. Оформите подписку, чтобы избежать ограничений.`;
+      }
+      return '';
+    });
+
+    const isTrialEndingSoon = () => {
+      const trialEnd = new Date(authStore.profile?.trial_end);
+      const daysLeft = (trialEnd - new Date()) / (1000 * 60 * 60 * 24);
+      return daysLeft <= 2; // Показывать уведомление за 2 дня до окончания
+    };
+
+    const dismissSubscriptionAlert = () => {
+      isDismissed.value = true;
+    };
+
     return {
       drawer,
       isMobile,
       showSidebar,
+      showSubscriptionAlert,
+      subscriptionAlertMessage,
+      dismissSubscriptionAlert,
     };
   },
 };

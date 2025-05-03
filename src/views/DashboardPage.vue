@@ -4,7 +4,7 @@
       <v-col>
         <h1 class="dashboard-title">Дашборд</h1>
 
-        <!-- Система уведомлений (без изменений) -->
+        <!-- Система уведомлений -->
         <v-snackbar
           v-model="snackbar.show"
           :timeout="snackbar.timeout"
@@ -152,154 +152,164 @@
 </template>
 
 <script>
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
 import BarChart from '@/components/BarChart.vue';
-import {
-  getDashboardMetrics,
-  getActivityData,
-  getRecentTasks
-} from '@/api/index.js';
-import { mapGetters } from 'vuex';
+import { getDashboardMetrics, getActivityData, getRecentTasks } from '@/api/index.js';
+import { useAuthStore } from '@/stores/auth';
 
 export default {
   name: 'DashboardPage',
   components: {
     BarChart
   },
-  data() {
-    return {
-      loadingQuickMetrics: true,
-      loadingActivity: true,
-      loadingTasks: true,
+  setup() {
+    const router = useRouter();
+    const authStore = useAuthStore();
 
-      snackbar: {
-        show: false,
-        title: '',
-        message: '',
-        color: 'error',
-        icon: 'mdi-alert-circle',
-        timeout: 6000
-      },
+    const loadingQuickMetrics = ref(true);
+    const loadingActivity = ref(true);
+    const loadingTasks = ref(true);
 
-      quickMetrics: [
-        { title: 'Всего задач', value: 0, change: 0, unit: 'шт.' },
-        { title: 'Новых клиентов', value: 0, change: 0, unit: 'чел.' },
-        { title: 'Общая сумма', value: 0, change: 0, unit: '₽' },
-        { title: 'Продуктивность', value: 0, change: 0, unit: '%' }
-      ],
+    const snackbar = ref({
+      show: false,
+      title: '',
+      message: '',
+      color: 'error',
+      icon: 'mdi-alert-circle',
+      timeout: 6000
+    });
 
-      activityPeriod: 'month',
-      periods: [
-        { text: 'Неделя', value: 'week' },
-        { text: 'Месяц', value: 'month' },
-        { text: 'Квартал', value: 'quarter' }
-      ],
-      activityData: {
-        labels: [],
-        datasets: []
-      },
-      activityOptions: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'top' },
-          tooltip: {
-            callbacks: {
-              label: (context) => `${context.dataset.label}: ${context.raw} задач`
-            }
+    const quickMetrics = ref([
+      { title: 'Всего задач', value: 0, change: 0, unit: 'шт.' },
+      { title: 'Новых клиентов', value: 0, change: 0, unit: 'чел.' },
+      { title: 'Общая сумма', value: 0, change: 0, unit: '₽' },
+      { title: 'Продуктивность', value: 0, change: 0, unit: '%' }
+    ]);
+
+    const activityPeriod = ref('month');
+    const periods = ref([
+      { text: 'Неделя', value: 'week' },
+      { text: 'Месяц', value: 'month' },
+      { text: 'Квартал', value: 'quarter' }
+    ]);
+    const activityData = ref({
+      labels: [],
+      datasets: []
+    });
+    const activityOptions = ref({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: (context) => `${context.dataset.label}: ${context.raw} задач`
           }
-        },
-        scales: {
-          y: { beginAtZero: true, title: { display: true, text: 'Количество задач' } },
-          x: { title: { display: true, text: 'Дата' } }
         }
       },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'Количество задач' } },
+        x: { title: { display: true, text: 'Дата' } }
+      }
+    });
 
-      taskSearch: '',
-      taskHeaders: [
-        { text: 'Название', value: 'title' },
-        { text: 'Статус', value: 'status' },
-        { text: 'Срок', value: 'due_date' },
-        { text: 'Действия', value: 'actions', sortable: false }
-      ],
-      tasks: []
-    };
-  },
-  computed: {
-    ...mapGetters(['isAdmin']),
-    filteredTasks() {
-      return this.tasks.filter(task => {
-        const search = this.taskSearch.toLowerCase();
+    const taskSearch = ref('');
+    const taskHeaders = ref([
+      { text: 'Название', value: 'title' },
+      { text: 'Статус', value: 'status' },
+      { text: 'Срок', value: 'due_date' },
+      { text: 'Действия', value: 'actions', sortable: false }
+    ]);
+    const tasks = ref([]);
+
+    const isAdmin = computed(() => authStore.user?.role === 'admin');
+
+    const filteredTasks = computed(() => {
+      return tasks.value.filter(task => {
+        const search = taskSearch.value.toLowerCase();
         return (
           task.title.toLowerCase().includes(search) ||
           task.status.toLowerCase().includes(search)
         );
       });
-    }
-  },
-  async created() {
-    await this.loadAllData();
-  },
-  methods: {
-    async loadAllData() {
+    });
+
+    const loadAllData = async () => {
       try {
         await Promise.all([
-          this.fetchQuickMetrics(),
-          this.fetchActivityData(),
-          this.fetchRecentTasks()
+          fetchQuickMetrics(),
+          fetchActivityData(),
+          fetchRecentTasks()
         ]);
       } catch (error) {
-        this.showError('Ошибка загрузки данных', 'Не удалось загрузить данные дашборда', error);
+        handleError('Ошибка загрузки данных', 'Не удалось загрузить данные дашборда', error);
       }
-    },
+    };
 
-    async fetchQuickMetrics() {
-      this.loadingQuickMetrics = true;
-      const metrics = await getDashboardMetrics();
-      this.quickMetrics = [
-        { title: 'Всего задач', value: metrics.completed_tasks, change: metrics.tasks_change, unit: 'шт.' },
-        { title: 'Новых клиентов', value: metrics.new_clients, change: metrics.clients_change, unit: 'чел.' },
-        { title: 'Общая сумма', value: metrics.total_amount.toLocaleString(), change: metrics.amount_change, unit: '₽' },
-        { title: 'Продуктивность', value: metrics.productivity, change: metrics.productivity_change, unit: '%' }
-      ];
-      this.loadingQuickMetrics = false;
-    },
+    const fetchQuickMetrics = async () => {
+      loadingQuickMetrics.value = true;
+      try {
+        const metrics = await getDashboardMetrics();
+        quickMetrics.value = [
+          { title: 'Всего задач', value: metrics.completed_tasks, change: metrics.tasks_change, unit: 'шт.' },
+          { title: 'Новых клиентов', value: metrics.new_clients, change: metrics.clients_change, unit: 'чел.' },
+          { title: 'Общая сумма', value: metrics.total_amount.toLocaleString(), change: metrics.amount_change, unit: '₽' },
+          { title: 'Продуктивность', value: metrics.productivity, change: metrics.productivity_change, unit: '%' }
+        ];
+      } catch (error) {
+        throw error;
+      } finally {
+        loadingQuickMetrics.value = false;
+      }
+    };
 
-    async fetchActivityData() {
-      this.loadingActivity = true;
-      const data = await getActivityData(this.activityPeriod);
-      this.activityData = {
-        labels: data.labels,
-        datasets: [
-          {
-            label: 'Завершённые задачи',
-            backgroundColor: '#42A5F5',
-            borderColor: '#1976D2',
-            borderWidth: 2,
-            data: data.completed
-          },
-          {
-            label: 'Созданные задачи',
-            backgroundColor: '#66BB6A',
-            borderColor: '#388E3C',
-            borderWidth: 2,
-            data: data.created
-          }
-        ]
-      };
-      this.loadingActivity = false;
-    },
+    const fetchActivityData = async () => {
+      loadingActivity.value = true;
+      try {
+        const data = await getActivityData(activityPeriod.value);
+        activityData.value = {
+          labels: data.labels,
+          datasets: [
+            {
+              label: 'Завершённые задачи',
+              backgroundColor: '#42A5F5',
+              borderColor: '#1976D2',
+              borderWidth: 2,
+              data: data.completed
+            },
+            {
+              label: 'Созданные задачи',
+              backgroundColor: '#66BB6A',
+              borderColor: '#388E3C',
+              borderWidth: 2,
+              data: data.created
+            }
+          ]
+        };
+      } catch (error) {
+        throw error;
+      } finally {
+        loadingActivity.value = false;
+      }
+    };
 
-    async fetchRecentTasks() {
-      this.loadingTasks = true;
-      this.tasks = await getRecentTasks();
-      this.loadingTasks = false;
-    },
+    const fetchRecentTasks = async () => {
+      loadingTasks.value = true;
+      try {
+        tasks.value = await getRecentTasks();
+      } catch (error) {
+        throw error;
+      } finally {
+        loadingTasks.value = false;
+      }
+    };
 
-    viewTask(task) {
-      this.$router.push(`/tasks/${task.id}`);
-    },
+    const viewTask = (task) => {
+      router.push(`/tasks/${task.id}`);
+    };
 
-    getStatusColor(status) {
+    const getStatusColor = (status) => {
       const statusColors = {
         'Новая': 'blue',
         'В работе': 'orange',
@@ -307,16 +317,21 @@ export default {
         'Отменена': 'red'
       };
       return statusColors[status] || 'grey';
-    },
+    };
 
-    showError(title, message, error) {
+    const handleError = (title, message, error) => {
       console.error(title, error);
+      
       let detailedMessage = message;
       if (error.response) {
         switch (error.response.status) {
           case 401:
-            this.$router.push('/login');
-            return;
+            detailedMessage = 'Требуется авторизация';
+            router.push('/login');
+            break;
+          case 402:
+            detailedMessage = 'Подписка истекла. Оформите подписку для продолжения.';
+            break;
           case 403:
             detailedMessage = 'У вас нет прав для просмотра этой информации';
             break;
@@ -326,22 +341,29 @@ export default {
           case 500:
             detailedMessage = 'Ошибка сервера. Пожалуйста, попробуйте позже.';
             break;
+          default:
+            detailedMessage = error.response.data?.message || error.response.data?.detail || message;
         }
       } else if (error.message) {
-        detailedMessage = `${message}: ${error.message}`;
+        detailedMessage = error.message;
       }
-      this.snackbar = {
+      
+      showError(title, detailedMessage);
+    };
+
+    const showError = (title, message) => {
+      snackbar.value = {
         show: true,
         title,
-        message: detailedMessage,
+        message,
         color: 'error',
         icon: 'mdi-alert-circle',
         timeout: 6000
       };
-    },
+    };
 
-    showSuccess(title, message) {
-      this.snackbar = {
+    const showSuccess = (title, message) => {
+      snackbar.value = {
         show: true,
         title,
         message,
@@ -349,7 +371,36 @@ export default {
         icon: 'mdi-check-circle',
         timeout: 4000
       };
-    }
+    };
+
+    loadAllData();
+
+    return {
+      loadingQuickMetrics,
+      loadingActivity,
+      loadingTasks,
+      snackbar,
+      quickMetrics,
+      activityPeriod,
+      periods,
+      activityData,
+      activityOptions,
+      taskSearch,
+      taskHeaders,
+      tasks,
+      isAdmin,
+      filteredTasks,
+      loadAllData,
+      fetchQuickMetrics,
+      fetchActivityData,
+      fetchRecentTasks,
+      viewTask,
+      getStatusColor,
+      handleError,
+      showError,
+      showSuccess,
+      router
+    };
   }
 };
 </script>
@@ -497,6 +548,13 @@ export default {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter, .fade-leave-to {
+  opacity: 0;
 }
 
 @media (max-width: 1264px) {

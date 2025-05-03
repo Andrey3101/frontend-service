@@ -56,6 +56,9 @@
             </v-card-title>
             <v-card-text class="error-message">
               {{ errorMessage }}
+              <div v-if="errorDetails" class="error-details">
+                {{ errorDetails }}
+              </div>
             </v-card-text>
             <v-card-actions>
               <v-spacer></v-spacer>
@@ -65,6 +68,13 @@
                 @click="closeErrorModal"
               >
                 Закрыть
+              </v-btn>
+              <v-btn 
+                v-if="errorMessage.includes('Подписка')"
+                color="primary" 
+                @click="router.push('/profile')"
+              >
+                Оформить подписку
               </v-btn>
             </v-card-actions>
           </v-card>
@@ -390,93 +400,90 @@
 </template>
 
 <script>
-import { getMyTasks, createTask, updateTask, deleteTask, getUsers } from '@/api/index.js';
-import { fetchWithCsrf, startTimeTracking, stopTimeTracking, BASE_URLS } from '@/api/index.js';
+import { ref, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { useToast } from 'vue-toastification';
+import { getMyTasks, createTask, updateTask, deleteTask, getUsers, fetchWithCsrf, startTimeTracking, stopTimeTracking, BASE_URLS } from '@/api/index.js';
 
 export default {
   name: 'TasksList',
-  data() {
-    return {
-      tasks: [],
-      users: [],
-      loading: false,
-      showErrorModal: false,
-      errorMessage: '',
-      fieldErrors: {},
-      showCreateForm: false,
-      showEditForm: false,
-      showDeleteConfirm: false,
-      datePicker: false,
-      editDatePicker: false,
-      deleteTaskId: null,
-      statusFilter: 'Все',
-      assigneeFilter: 'Все',
-      newTask: {
-        title: '',
-        description: '',
-        priority: 'Средний',
-        status: 'Новая',
-        assignee: '',
-        due_date: '',
-      },
-      editTask: {
-        task_id: null,
-        title: '',
-        description: '',
-        priority: 'Средний',
-        status: 'Новая',
-        assignee: '',
-        due_date: '',
-      },
-      headers: [
-        { text: 'Название', value: 'title', sortable: true },
-        { text: 'Статус', value: 'status', sortable: true },
-        { text: 'Исполнитель', value: 'assignee', sortable: true },
-        { text: 'Приоритет', value: 'priority', sortable: true },
-        { text: 'Прогресс', value: 'progress', sortable: false },
-        { text: 'Срок', value: 'due_date', sortable: true },
-        { text: 'Время', value: 'total_time', sortable: true },
-        { text: 'Действия', value: 'actions', sortable: false },
-      ],
-      priorities: ['Низкий', 'Средний', 'Высокий'],
-      statuses: ['Новая', 'В работе', 'Завершена', 'Отменена'],
-      dateRules: [
-        v => !v || /^\d{4}-\d{2}-\d{2}$/.test(v) || 'Дата должна быть в формате YYYY-MM-DD',
-      ],
-      assigneeRules: [
-        v => !!v || 'Выберите исполнителя',
-        v => this.users.some(user => user.email === v) || 'Исполнитель должен быть в списке пользователей',
-      ],
-    };
-  },
-  computed: {
-    isMobile() {
-      return this.$vuetify.breakpoint.smAndDown;
-    },
-    isCreateFormValid() {
-      return this.isFormValid(this.newTask);
-    },
-    isEditFormValid() {
-      return this.isFormValid(this.editTask);
-    },
-    filteredTasks() {
-      return this.tasks.filter(task => {
-        const statusMatch = this.statusFilter === 'Все' || task.status === this.statusFilter;
-        const assigneeMatch = this.assigneeFilter === 'Все' || task.assignee === this.assigneeFilter;
+  setup() {
+    const router = useRouter();
+    const toast = useToast();
+
+    const tasks = ref([]);
+    const users = ref([]);
+    const loading = ref(false);
+    const showErrorModal = ref(false);
+    const errorMessage = ref('');
+    const errorDetails = ref('');
+    const fieldErrors = ref({});
+    const showCreateForm = ref(false);
+    const showEditForm = ref(false);
+    const showDeleteConfirm = ref(false);
+    const datePicker = ref(false);
+    const editDatePicker = ref(false);
+    const deleteTaskId = ref(null);
+    const statusFilter = ref('Все');
+    const assigneeFilter = ref('Все');
+
+    const newTask = ref({
+      title: '',
+      description: '',
+      priority: 'Средний',
+      status: 'Новая',
+      assignee: '',
+      due_date: '',
+    });
+
+    const editTask = ref({
+      task_id: null,
+      title: '',
+      description: '',
+      priority: 'Средний',
+      status: 'Новая',
+      assignee: '',
+      due_date: '',
+    });
+
+    const headers = [
+      { text: 'Название', value: 'title', sortable: true },
+      { text: 'Статус', value: 'status', sortable: true },
+      { text: 'Исполнитель', value: 'assignee', sortable: true },
+      { text: 'Приоритет', value: 'priority', sortable: true },
+      { text: 'Прогресс', value: 'progress', sortable: false },
+      { text: 'Срок', value: 'due_date', sortable: true },
+      { text: 'Время', value: 'total_time', sortable: true },
+      { text: 'Действия', value: 'actions', sortable: false },
+    ];
+
+    const priorities = ['Низкий', 'Средний', 'Высокий'];
+    const statuses = ['Новая', 'В работе', 'Завершена', 'Отменена'];
+
+    const dateRules = [
+      (v) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v) || 'Дата должна быть в формате YYYY-MM-DD',
+    ];
+
+    const assigneeRules = [
+      (v) => !!v || 'Выберите исполнителя',
+      (v) => users.value.some(user => user.email === v) || 'Исполнитель должен быть в списке пользователей',
+    ];
+
+    const isMobile = computed(() => window.innerWidth <= 960);
+
+    const isCreateFormValid = computed(() => isFormValid(newTask.value));
+    const isEditFormValid = computed(() => isFormValid(editTask.value));
+
+    const filteredTasks = computed(() => {
+      return tasks.value.filter(task => {
+        const statusMatch = statusFilter.value === 'Все' || task.status === statusFilter.value;
+        const assigneeMatch = assigneeFilter.value === 'Все' || task.assignee === assigneeFilter.value;
         return statusMatch && assigneeMatch;
       });
-    },
-  },
-  async created() {
-    await this.fetchTasks();
-    await this.fetchUsers();
-  },
-  beforeUnmount() {
-    this.clearAllTimers();
-  },
-  methods: {
-    async fetchTasks() {
-      this.loading = true;
+    });
+
+    const fetchTasks = async () => {
+      loading.value = true;
       try {
         const response = await getMyTasks();
         const activeTracking = await fetchWithCsrf(`${BASE_URLS.auth}/time/active`);
@@ -486,17 +493,17 @@ export default {
           throw new Error(response.error);
         }
         
-        this.tasks = Array.isArray(response?.tasks) 
-          ? this.processTasks(response.tasks, activeTracking, totalTimeResponse) 
+        tasks.value = Array.isArray(response?.tasks) 
+          ? processTasks(response.tasks, activeTracking, totalTimeResponse) 
           : [];
       } catch (error) {
-        this.handleError(error, 'Не удалось загрузить задачи');
+        handleError(error, 'Не удалось загрузить задачи', 'Проверьте соединение или подписку.');
       } finally {
-        this.loading = false;
+        loading.value = false;
       }
-    },
+    };
 
-    processTasks(tasks, activeTracking, totalTimeResponse) {
+    const processTasks = (tasks, activeTracking, totalTimeResponse) => {
       const reversePriorityMap = { 1: 'Низкий', 2: 'Средний', 3: 'Высокий' };
       return tasks.map(task => {
         const active = activeTracking.find(t => t.task_id === task.id);
@@ -536,10 +543,10 @@ export default {
           total_time: totalTime,
         };
       });
-    },
+    };
 
-    async fetchUsers() {
-      this.loading = true;
+    const fetchUsers = async () => {
+      loading.value = true;
       try {
         const response = await getUsers();
         
@@ -547,41 +554,41 @@ export default {
           throw new Error(response.error);
         }
         
-        this.users = Array.isArray(response) ? response : [];
+        users.value = Array.isArray(response) ? response : [];
       } catch (error) {
-        this.handleError(error, 'Не удалось загрузить пользователей');
+        handleError(error, 'Не удалось загрузить пользователей', 'Проверьте соединение или подписку.');
       } finally {
-        this.loading = false;
+        loading.value = false;
       }
-    },
+    };
 
-    async createTask() {
-      if (!this.isCreateFormValid) return;
+    const createTask = async () => {
+      if (!isCreateFormValid.value) return;
       
-      this.loading = true;
+      loading.value = true;
       try {
-        const response = await createTask(this.newTask);
+        const response = await createTask(newTask.value);
         
         if (response.error) {
           if (response.errors) {
-            this.fieldErrors = response.errors;
+            fieldErrors.value = response.errors;
             throw new Error('Проверьте правильность заполнения полей');
           }
           throw new Error(response.error);
         }
         
-        this.$toast.success('Задача успешно создана');
-        await this.fetchTasks();
-        this.cancelCreate();
+        toast.success('Задача успешно создана');
+        await fetchTasks();
+        cancelCreate();
       } catch (error) {
-        this.handleError(error, 'Не удалось создать задачу');
+        handleError(error, 'Не удалось создать задачу', 'Проверьте данные или подписку.');
       } finally {
-        this.loading = false;
+        loading.value = false;
       }
-    },
+    };
 
-    handleEditTask(task) {
-      this.editTask = { 
+    const editTask = (task) => {
+      editTask.value = { 
         task_id: task.task_id,
         title: task.title,
         description: task.description,
@@ -590,62 +597,62 @@ export default {
         assignee: task.assignee,
         due_date: task.due_date
       };
-      this.showEditForm = true;
-    },
+      showEditForm.value = true;
+    };
 
-    async updateTask() {
-      if (!this.isEditFormValid) return;
+    const updateTask = async () => {
+      if (!isEditFormValid.value) return;
       
-      this.loading = true;
+      loading.value = true;
       try {
-        const response = await updateTask(this.editTask.task_id, this.editTask);
+        const response = await updateTask(editTask.value.task_id, editTask.value);
         
         if (response.error) {
           if (response.errors) {
-            this.fieldErrors = response.errors;
+            fieldErrors.value = response.errors;
             throw new Error('Проверьте правильность заполнения полей');
           }
           throw new Error(response.error);
         }
         
-        this.$toast.success('Задача успешно обновлена');
-        await this.fetchTasks();
-        this.cancelEdit();
+        toast.success('Задача успешно обновлена');
+        await fetchTasks();
+        cancelEdit();
       } catch (error) {
-        this.handleError(error, 'Не удалось обновить задачу');
+        handleError(error, 'Не удалось обновить задачу', 'Проверьте данные или подписку.');
       } finally {
-        this.loading = false;
+        loading.value = false;
       }
-    },
+    };
 
-    confirmDeleteTask(taskId) {
-      this.deleteTaskId = taskId;
-      this.showDeleteConfirm = true;
-    },
+    const confirmDeleteTask = (taskId) => {
+      deleteTaskId.value = taskId;
+      showDeleteConfirm.value = true;
+    };
 
-    async deleteTask() {
-      this.loading = true;
+    const deleteTask = async () => {
+      loading.value = true;
       try {
-        const response = await deleteTask(this.deleteTaskId);
+        const response = await deleteTask(deleteTaskId.value);
         
         if (response.error) {
           throw new Error(response.error);
         }
         
-        this.$toast.success('Задача успешно удалена');
-        await this.fetchTasks();
-        this.showDeleteConfirm = false;
-        this.deleteTaskId = null;
+        toast.success('Задача успешно удалена');
+        await fetchTasks();
+        showDeleteConfirm.value = false;
+        deleteTaskId.value = null;
       } catch (error) {
-        this.handleError(error, 'Не удалось удалить задачу');
+        handleError(error, 'Не удалось удалить задачу', 'Проверьте данные или подписку.');
       } finally {
-        this.loading = false;
+        loading.value = false;
       }
-    },
+    };
 
-    cancelCreate() {
-      this.showCreateForm = false;
-      this.newTask = { 
+    const cancelCreate = () => {
+      showCreateForm.value = false;
+      newTask.value = { 
         title: '', 
         description: '', 
         priority: 'Средний', 
@@ -653,12 +660,12 @@ export default {
         assignee: '', 
         due_date: '' 
       };
-      this.clearFieldErrors();
-    },
+      clearFieldErrors();
+    };
 
-    cancelEdit() {
-      this.showEditForm = false;
-      this.editTask = { 
+    const cancelEdit = () => {
+      showEditForm.value = false;
+      editTask.value = { 
         task_id: null,
         title: '', 
         description: '', 
@@ -667,14 +674,14 @@ export default {
         assignee: '', 
         due_date: '' 
       };
-      this.clearFieldErrors();
-    },
+      clearFieldErrors();
+    };
 
-    applyFilters() {
-      this.fetchTasks();
-    },
+    const applyFilters = () => {
+      fetchTasks();
+    };
 
-    async startTracking(task) {
+    const startTracking = async (task) => {
       task.loading = true;
       try {
         const response = await startTimeTracking(task.task_id);
@@ -686,25 +693,25 @@ export default {
         const totalTimeResponse = await fetchWithCsrf(`${BASE_URLS.auth}/time/total?task_id=${task.task_id}`);
         const totalTime = totalTimeResponse.total_time || 0;
         
-        this.$set(task, 'isTracking', true);
-        this.$set(task, 'timeEntryId', response.entry_id);
-        this.$set(task, 'trackingTime', 0);
-        this.$set(task, 'total_time', totalTime);
+        task.isTracking = true;
+        task.timeEntryId = response.entry_id;
+        task.trackingTime = 0;
+        task.total_time = totalTime;
         
         task.timer = setInterval(() => {
           task.trackingTime++;
           task.total_time = totalTime + task.trackingTime;
         }, 1000);
         
-        this.$toast.success('Трекинг времени начат');
+        toast.success('Трекинг времени начат');
       } catch (error) {
-        this.handleError(error, 'Ошибка при запуске трекинга');
+        handleError(error, 'Ошибка при запуске трекинга', 'Проверьте подписку.');
       } finally {
         task.loading = false;
       }
-    },
+    };
 
-    async stopTracking(task) {
+    const stopTracking = async (task) => {
       task.loading = true;
       try {
         const response = await stopTimeTracking(task.timeEntryId);
@@ -714,44 +721,44 @@ export default {
         }
         
         clearInterval(task.timer);
-        this.$set(task, 'isTracking', false);
-        this.$set(task, 'timeEntryId', null);
-        this.$set(task, 'trackingTime', 0);
+        task.isTracking = false;
+        task.timeEntryId = null;
+        task.trackingTime = 0;
         
-        this.$toast.success('Трекинг времени остановлен');
-        await this.fetchTasks();
+        toast.success('Трекинг времени остановлен');
+        await fetchTasks();
       } catch (error) {
-        this.handleError(error, 'Ошибка при остановке трекинга');
+        handleError(error, 'Ошибка при остановке трекинга', 'Проверьте подписку.');
       } finally {
         task.loading = false;
       }
-    },
+    };
 
-    formatTime(seconds) {
+    const formatTime = (seconds) => {
       const h = Math.floor(seconds / 3600);
       const m = Math.floor((seconds % 3600) / 60);
       const s = seconds % 60;
       return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    },
+    };
 
-    clearAllTimers() {
-      this.tasks.forEach(task => {
+    const clearAllTimers = () => {
+      tasks.value.forEach(task => {
         if (task.timer) {
           clearInterval(task.timer);
         }
       });
-    },
+    };
 
-    getPriorityColor(priority) {
+    const getPriorityColor = (priority) => {
       switch (priority) {
         case 'Высокий': return 'red';
         case 'Средний': return 'orange';
         case 'Низкий': return 'green';
         default: return 'grey';
       }
-    },
+    };
 
-    getProgressValue(status) {
+    const getProgressValue = (status) => {
       switch (status) {
         case 'Новая': return 0;
         case 'В работе': return 50;
@@ -759,86 +766,154 @@ export default {
         case 'Отменена': return 0;
         default: return 0;
       }
-    },
+    };
 
-    getProgressColor(status) {
+    const getProgressColor = (status) => {
       switch (status) {
         case 'Завершена': return 'green';
         case 'В работе': return 'blue';
         case 'Отменена': return 'red';
         default: return 'grey';
       }
-    },
+    };
 
-    isFormValid(task) {
+    const isFormValid = (task) => {
       return (
         !!task?.title &&
-        this.dateRules.every(rule => rule(task?.due_date || '') === true) &&
+        dateRules.every(rule => rule(task?.due_date || '') === true) &&
         !!task?.priority &&
         !!task?.status &&
-        this.assigneeRules.every(rule => rule(task?.assignee) === true)
+        assigneeRules.every(rule => rule(task?.assignee) === true)
       );
-    },
+    };
 
-    handleError(error, defaultMessage) {
+    const handleError = (error, defaultMessage, defaultDetails = '') => {
       console.error('Error:', error);
       
       let message = defaultMessage;
+      let details = defaultDetails;
+      
       if (error.response) {
         switch(error.response.status) {
           case 400:
             message = 'Некорректные данные';
             if (error.response.data?.errors) {
-              this.fieldErrors = error.response.data.errors;
+              fieldErrors.value = error.response.data.errors;
             }
             break;
           case 401:
             message = 'Требуется авторизация';
-            this.$router.push('/login');
+            details = 'Пожалуйста, войдите снова.';
+            router.push('/login');
+            break;
+          case 402:
+            message = 'Подписка истекла';
+            details = 'Оформите подписку для продолжения работы.';
             break;
           case 403:
             message = 'Доступ запрещен';
+            details = 'У вас недостаточно прав.';
             break;
           case 404:
             message = 'Данные не найдены';
             break;
           case 500:
             message = 'Ошибка сервера';
+            details = 'Попробуйте позже.';
             break;
           default:
-            message = error.response.data?.message || 
-                     error.response.data?.detail || 
-                     defaultMessage;
+            message = error.response.data?.message || error.response.data?.detail || defaultMessage;
+            details = error.response.data?.errors || defaultDetails;
         }
       } else if (error.request) {
-        message = 'Проблемы с соединением. Проверьте интернет и попробуйте снова.';
+        message = 'Проблемы с соединением';
+        details = 'Проверьте интернет и попробуйте снова.';
       } else {
         message = error.message || defaultMessage;
       }
       
-      this.showError(message);
-    },
+      showError(message, details);
+    };
 
-    showError(message) {
-      this.errorMessage = message;
-      this.showErrorModal = true;
-    },
+    const showError = (message, details = '') => {
+      errorMessage.value = message;
+      errorDetails.value = details;
+      showErrorModal.value = true;
+      toast.error(message);
+    };
 
-    closeErrorModal() {
-      this.showErrorModal = false;
-      this.errorMessage = '';
-    },
+    const closeErrorModal = () => {
+      showErrorModal.value = false;
+      errorMessage.value = '';
+      errorDetails.value = '';
+    };
 
-    clearFieldErrors() {
-      this.fieldErrors = {};
-    },
+    const clearFieldErrors = () => {
+      fieldErrors.value = {};
+    };
 
-    clearFieldError(field) {
-      if (this.fieldErrors[field]) {
-        delete this.fieldErrors[field];
+    const clearFieldError = (field) => {
+      if (fieldErrors.value[field]) {
+        delete fieldErrors.value[field];
       }
-    }
-  }
+    };
+
+    fetchTasks();
+    fetchUsers();
+
+    return {
+      tasks,
+      users,
+      loading,
+      showErrorModal,
+      errorMessage,
+      errorDetails,
+      fieldErrors,
+      showCreateForm,
+      showEditForm,
+      showDeleteConfirm,
+      datePicker,
+      editDatePicker,
+      deleteTaskId,
+      statusFilter,
+      assigneeFilter,
+      newTask,
+      editTask,
+      headers,
+      priorities,
+      statuses,
+      dateRules,
+      assigneeRules,
+      isMobile,
+      isCreateFormValid,
+      isEditFormValid,
+      filteredTasks,
+      fetchTasks,
+      fetchUsers,
+      createTask,
+      editTask,
+      updateTask,
+      confirmDeleteTask,
+      deleteTask,
+      cancelCreate,
+      cancelEdit,
+      applyFilters,
+      startTracking,
+      stopTracking,
+      formatTime,
+      clearAllTimers,
+      getPriorityColor,
+      getProgressValue,
+      getProgressColor,
+      isFormValid,
+      handleError,
+      showError,
+      closeErrorModal,
+      clearFieldErrors,
+      clearFieldError,
+      router,
+    };
+  },
 };
 </script>
 
@@ -903,6 +978,14 @@ export default {
   color: #5f2120;
   font-size: 1rem;
   line-height: 1.5;
+}
+
+.error-details {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #ffebee;
+  border-radius: 4px;
+  font-size: 0.9rem;
 }
 
 .task-table {

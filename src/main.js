@@ -14,7 +14,6 @@ import 'vue-toastification/dist/index.css';
 import './assets/styles.css';
 import './assets/styles/mdi.css';
 
-// Отладочный вывод для проверки компонентов
 console.log('Vuetify components:', components);
 
 const vuetify = createVuetify({

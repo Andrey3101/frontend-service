@@ -16,7 +16,7 @@ import NotFound from '../views/NotFound.vue';
 import CompetitorMonitor from '@/components/CompetitorMonitor.vue';
 import PromotionRecommendations from '@/components/PromotionRecommendations.vue';
 import Clients from '../views/ClientsList.vue';
-
+import SubscriptionForm from '../views/SubscriptionForm.vue';
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -42,16 +42,19 @@ const routes = [
     path: '/clients',
     name: 'Clients',
     component: Clients,
+    meta: { requiresAuth: true }
   },
   { 
     path: '/competitors', 
     name: 'CompetitorMonitor', 
-    component: CompetitorMonitor 
+    component: CompetitorMonitor,
+    meta: { requiresAuth: true }
   },
   { 
     path: '/promotion', 
     name: 'PromotionRecommendations', 
-    component: PromotionRecommendations 
+    component: PromotionRecommendations,
+    meta: { requiresAuth: true }
   },
   { 
     path: '/tasks', 
@@ -95,6 +98,12 @@ const routes = [
     path: '/profile', 
     component: Profile, 
     meta: { requiresAuth: true } 
+  },
+  {
+    path: '/subscription',
+    name: 'Subscription',
+    component: SubscriptionForm,
+    meta: { requiresAuth: true }
   },
   {
     path: '/404',
