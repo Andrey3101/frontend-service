@@ -481,15 +481,33 @@ export default {
     const downloadReport = async (report) => {
       report.downloading = true;
       try {
-        const response = await getReport(report.id, true);
-        const blob = new Blob([response], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `report_${report.id}.pdf`;
-        link.click();
-        window.URL.revokeObjectURL(url);
-        showSuccess('Успешно', 'Отчет скачивается');
+        const response = await getReport(report.id);
+        const doc = new jsPDF();
+        doc.setFont('helvetica');
+        doc.setFontSize(12);
+        
+        doc.text(`Отчет #${report.id}`, 10, 10);
+        doc.setFontSize(10);
+        doc.text(`Тип: ${report.type}`, 10, 20);
+        doc.text(`Статус: ${report.status}`, 10, 30);
+        doc.text(`Дата создания: ${formatDate(report.created_at)}`, 10, 40);
+        
+        if (response.content) {
+          doc.setFontSize(10);
+          const contentLines = doc.splitTextToSize(response.content.replace(/<[^>]+>/g, ''), 180);
+          let y = 50;
+          contentLines.forEach(line => {
+            if (y > 280) {
+              doc.addPage();
+              y = 20;
+            }
+            doc.text(line, 10, y);
+            y += 10;
+          });
+        }
+        
+        doc.save(`report_${report.id}_${dayjs().format('YYYYMMDD_HHmmss')}.pdf`);
+        showSuccess('Успешно', 'Отчет скачан');
       } catch (error) {
         handleError('Ошибка скачивания отчета', 'Не удалось скачать отчет', error);
       } finally {
@@ -573,6 +591,7 @@ export default {
             break;
           case 402:
             detailedMessage = 'Подписка истекла. Оформите подписку для продолжения.';
+            router.push('/subscription');
             break;
           case 403:
             detailedMessage = 'Доступ запрещен';

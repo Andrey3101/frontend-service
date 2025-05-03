@@ -88,7 +88,7 @@ async function fetchWithCsrf(url, options = {}, action = '') {
         router.push('/login');
       } else if (response.status === 402) {
         toast.error('Подписка истекла. Пожалуйста, оформите подписку.');
-        router.push('/profile');
+        router.push('/subscription');
         throw new Error('Subscription required');
       } else if (response.status === 403) {
         toast.error('Доступ запрещен');
@@ -105,6 +105,14 @@ async function fetchWithCsrf(url, options = {}, action = '') {
   }
 }
 
+export async function createAct(actData) {
+  return fetchWithCsrf(`${BASE_URLS.tasks}/documents`, {
+    method: 'POST',
+    body: JSON.stringify(actData),
+  }, 'createAct');
+}
+
+// Остальные функции остаются без изменений
 export async function login(email, password) {
   const response = await fetchWithTimeout(`${BASE_URLS.auth}/login`, {
     method: 'POST',

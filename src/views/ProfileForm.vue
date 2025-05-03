@@ -207,11 +207,20 @@
                     <v-icon left>mdi-credit-card-plus</v-icon> Прикрепить карту
                   </v-btn>
                   <v-btn
+                    v-if="profile.subscription_status === 'trial' && !profile.trial_end && isCompanyAdmin"
+                    color="primary"
+                    outlined
+                    class="action-btn"
+                    :to="{ name: 'Subscription' }"
+                  >
+                    <v-icon left>mdi-rocket-launch</v-icon> Активировать пробный период
+                  </v-btn>
+                  <v-btn
                     color="primary"
                     outlined
                     class="action-btn"
                     @click="showPaymentDialog = true"
-                    v-if="profile.subscription_status === 'expired' || profile.subscription_status === 'trial'"
+                    v-if="profile.subscription_status === 'expired' || (profile.subscription_status === 'trial' && profile.trial_end)"
                   >
                     <v-icon left>mdi-credit-card</v-icon> Оформить подписку
                   </v-btn>
@@ -220,7 +229,7 @@
                     outlined
                     class="action-btn"
                     :to="{ name: 'Subscription' }"
-                    v-else
+                    v-if="profile.subscription_status === 'active'"
                   >
                     <v-icon left>mdi-cog</v-icon> Управление подпиской
                   </v-btn>
@@ -678,6 +687,8 @@ export default {
           day: 'numeric',
         });
         return `Ваш пробный период активен до ${endDate}.`;
+      } else if (status === 'trial' && !trialEnd) {
+        return 'Пробный период доступен для активации.';
       }
       return 'Информация о подписке недоступна.';
     });

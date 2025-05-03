@@ -3,7 +3,7 @@
     <v-row>
       <v-col>
         <h1 class="page-title">Акты</h1>
-        
+
         <!-- Поиск и экспорт -->
         <div class="search-export-container">
           <v-text-field
@@ -16,40 +16,52 @@
             class="search-field"
             :error-messages="fieldErrors.search"
           />
-          
-          <v-btn-toggle v-model="exportFormat" mandatory class="export-toggle">
-            <v-tooltip top>
-              <template v-slot:activator="{ on }">
-                <v-btn 
-                  value="pdf" 
-                  color="primary" 
-                  class="export-btn" 
-                  @click="exportToPDF"
-                  v-on="on"
-                  :loading="exportLoading.pdf"
-                >
-                  <v-icon left>mdi-file-pdf-box</v-icon> PDF
-                </v-btn>
-              </template>
-              <span>Экспорт в PDF</span>
-            </v-tooltip>
-            
-            <v-tooltip top>
-              <template v-slot:activator="{ on }">
-                <v-btn 
-                  value="xlsx" 
-                  color="primary" 
-                  class="export-btn" 
-                  @click="exportToExcel"
-                  v-on="on"
-                  :loading="exportLoading.xlsx"
-                >
-                  <v-icon left>mdi-file-excel</v-icon> XLSX
-                </v-btn>
-              </template>
-              <span>Экспорт в Excel</span>
-            </v-tooltip>
-          </v-btn-toggle>
+
+          <div class="action-buttons">
+            <v-btn 
+              color="primary" 
+              @click="showCreateDialog = true" 
+              class="create-btn"
+              :loading="loading"
+            >
+              <v-icon left>mdi-plus</v-icon> 
+              <span class="btn-text">Создать акт</span>
+            </v-btn>
+
+            <v-btn-toggle v-model="exportFormat" mandatory class="export-toggle">
+              <v-tooltip top>
+                <template v-slot:activator="{ on }">
+                  <v-btn 
+                    value="pdf" 
+                    color="primary" 
+                    class="export-btn" 
+                    @click="exportToPDF"
+                    v-on="on"
+                    :loading="exportLoading.pdf"
+                  >
+                    <v-icon left>mdi-file-pdf-box</v-icon> PDF
+                  </v-btn>
+                </template>
+                <span>Экспорт в PDF</span>
+              </v-tooltip>
+              
+              <v-tooltip top>
+                <template v-slot:activator="{ on }">
+                  <v-btn 
+                    value="xlsx" 
+                    color="primary" 
+                    class="export-btn" 
+                    @click="exportToExcel"
+                    v-on="on"
+                    :loading="exportLoading.xlsx"
+                  >
+                    <v-icon left>mdi-file-excel</v-icon> XLSX
+                  </v-btn>
+                </template>
+                <span>Экспорт в Excel</span>
+              </v-tooltip>
+            </v-btn-toggle>
+          </div>
         </div>
 
         <!-- Индикатор загрузки -->
@@ -85,7 +97,7 @@
               <v-btn 
                 v-if="errorModal.message.includes('Подписка')"
                 color="primary" 
-                @click="router.push('/profile')"
+                @click="router.push('/subscription')"
               >
                 Оформить подписку
               </v-btn>
@@ -145,6 +157,71 @@
           </v-list>
         </v-card>
 
+        <!-- Диалог создания акта -->
+        <v-dialog v-model="showCreateDialog" max-width="500px" persistent>
+          <v-card class="dialog-card">
+            <v-card-title class="dialog-title">
+              <v-icon left>mdi-file-document-plus</v-icon>
+              Создать акт
+            </v-card-title>
+            
+            <v-card-text>
+              <v-form ref="createForm" v-model="createFormValid">
+                <v-text-field
+                  v-model="newAct.type"
+                  label="Тип акта"
+                  outlined
+                  dense
+                  class="input-field"
+                  :rules="typeRules"
+                  :error-messages="fieldErrors.type"
+                  @input="clearFieldError('type')"
+                />
+                <v-text-field
+                  v-model="newAct.title"
+                  label="Название"
+                  outlined
+                  dense
+                  class="input-field"
+                  :rules="titleRules"
+                  :error-messages="fieldErrors.title"
+                  @input="clearFieldError('title')"
+                />
+                <v-textarea
+                  v-model="newAct.description"
+                  label="Описание"
+                  outlined
+                  dense
+                  class="input-field"
+                  :error-messages="fieldErrors.description"
+                  @input="clearFieldError('description')"
+                />
+              </v-form>
+            </v-card-text>
+            
+            <v-card-actions class="dialog-actions">
+              <v-spacer />
+              <v-btn 
+                color="grey" 
+                text 
+                @click="cancelCreate"
+                :disabled="createLoading"
+              >
+                Отмена
+              </v-btn>
+              <v-btn 
+                color="primary" 
+                class="action-btn-primary" 
+                @click="createAct"
+                :loading="createLoading"
+                :disabled="!createFormValid"
+              >
+                Создать
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
         <!-- Диалог редактирования -->
         <v-dialog v-model="showEditDialog" max-width="500px" persistent>
           <v-card class="dialog-card">
@@ -197,7 +274,7 @@
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useToast } from 'vue-toastification';
-import { getActs, updateAct } from '@/api/index.js';
+import { getActs, updateAct, createAct } from '@/api/index.js';
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
@@ -210,12 +287,16 @@ export default {
 
     const acts = ref([]);
     const loading = ref(false);
+    const createLoading = ref(false);
     const searchQuery = ref('');
+    const showCreateDialog = ref(false);
     const showEditDialog = ref(false);
+    const newAct = ref({ type: '', title: '', description: '' });
     const newActType = ref('');
     const selectedActId = ref(null);
     const exportFormat = ref('pdf');
     const editLoading = ref(false);
+    const createFormValid = ref(false);
     const exportLoading = ref({
       pdf: false,
       xlsx: false
@@ -226,10 +307,16 @@ export default {
       details: ''
     });
     const fieldErrors = ref({});
+    const createForm = ref(null);
 
     const typeRules = [
       v => !!v || 'Тип акта обязателен',
       v => (v && v.length <= 100) || 'Максимальная длина 100 символов'
+    ];
+
+    const titleRules = [
+      v => !!v || 'Название обязательно',
+      v => (v && v.length <= 200) || 'Максимальная длина 200 символов'
     ];
 
     const isMobile = computed(() => window.innerWidth <= 960);
@@ -271,6 +358,48 @@ export default {
       } finally {
         loading.value = false;
       }
+    };
+
+    const createAct = async () => {
+      if (!createForm.value.validate()) return;
+      
+      createLoading.value = true;
+      try {
+        const response = await createAct({ 
+          type: newAct.value.type,
+          title: newAct.value.title,
+          description: newAct.value.description
+        });
+        
+        if (response.error) {
+          if (response.errors) {
+            fieldErrors.value = response.errors;
+            throw new Error('Проверьте правильность заполнения полей');
+          }
+          throw new Error(response.error);
+        }
+        
+        toast.success('Акт успешно создан');
+        await fetchActs();
+        showCreateDialog.value = false;
+        newAct.value = { type: '', title: '', description: '' };
+        createForm.value.resetValidation();
+      } catch (error) {
+        handleError(
+          error,
+          'Ошибка создания акта',
+          'Не удалось создать акт. Пожалуйста, проверьте данные и попробуйте снова.'
+        );
+      } finally {
+        createLoading.value = false;
+      }
+    };
+
+    const cancelCreate = () => {
+      showCreateDialog.value = false;
+      newAct.value = { type: '', title: '', description: '' };
+      clearFieldErrors();
+      createForm.value.resetValidation();
     };
 
     const viewActDetails = (actId) => {
@@ -420,6 +549,7 @@ export default {
           case 402:
             message = 'Подписка истекла';
             details = 'Оформите подписку для продолжения работы.';
+            router.push('/subscription');
             break;
           case 403:
             message = 'Доступ запрещен';
@@ -470,20 +600,27 @@ export default {
     return {
       acts,
       loading,
+      createLoading,
       searchQuery,
+      showCreateDialog,
       showEditDialog,
+      newAct,
       newActType,
       selectedActId,
       exportFormat,
       editLoading,
+      createFormValid,
       exportLoading,
       errorModal,
       fieldErrors,
       typeRules,
+      titleRules,
       isMobile,
       filteredActs,
       isEditFormValid,
       fetchActs,
+      createAct,
+      cancelCreate,
       viewActDetails,
       handleUpdateAct,
       saveActUpdate,
@@ -495,7 +632,8 @@ export default {
       showError,
       clearFieldErrors,
       clearFieldError,
-      router
+      router,
+      createForm
     };
   }
 };
