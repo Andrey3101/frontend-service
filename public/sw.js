@@ -1,5 +1,8 @@
-// Service Worker для Self-Employed Platform
-const CACHE_NAME = 'self-employed-v1.0.0';
+/**
+ * Service Worker для PWA функциональности
+ */
+
+const CACHE_NAME = 'self-employed-v1';
 const STATIC_CACHE = 'static-v1';
 const DYNAMIC_CACHE = 'dynamic-v1';
 const API_CACHE = 'api-v1';
@@ -11,128 +14,139 @@ const STATIC_FILES = [
   '/static/js/bundle.js',
   '/static/css/main.css',
   '/manifest.json',
-  '/favicon.ico',
-  '/assets/logo.png'
+  '/favicon.ico'
 ];
 
-// API endpoints для кэширования
-const API_ENDPOINTS = [
-  '/api/auth/profile',
-  '/api/dashboard/metrics',
-  '/api/tasks/recent'
-];
+// Стратегии кэширования
+const CACHE_STRATEGIES = {
+  // Кэш-первый для статических файлов
+  CACHE_FIRST: 'cache-first',
+  // Сеть-первая для API запросов
+  NETWORK_FIRST: 'network-first',
+  // Stale-while-revalidate для динамического контента
+  STALE_WHILE_REVALIDATE: 'stale-while-revalidate'
+};
 
 // Установка Service Worker
-self.addEventListener('install', event => {
+self.addEventListener('install', (event) => {
   console.log('Service Worker: Installing...');
   
   event.waitUntil(
-    Promise.all([
-      // Кэшируем статические файлы
-      caches.open(STATIC_CACHE).then(cache => {
+    caches.open(STATIC_CACHE)
+      .then((cache) => {
         console.log('Service Worker: Caching static files');
         return cache.addAll(STATIC_FILES);
-      }),
-      
-      // Кэшируем API endpoints
-      caches.open(API_CACHE).then(cache => {
-        console.log('Service Worker: Caching API endpoints');
-        return cache.addAll(API_ENDPOINTS);
       })
-    ]).then(() => {
-      console.log('Service Worker: Installed successfully');
-      return self.skipWaiting();
-    })
+      .then(() => {
+        console.log('Service Worker: Static files cached');
+        return self.skipWaiting();
+      })
+      .catch((error) => {
+        console.error('Service Worker: Error caching static files:', error);
+      })
   );
 });
 
 // Активация Service Worker
-self.addEventListener('activate', event => {
+self.addEventListener('activate', (event) => {
   console.log('Service Worker: Activating...');
   
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== STATIC_CACHE && 
-              cacheName !== DYNAMIC_CACHE && 
-              cacheName !== API_CACHE) {
-            console.log('Service Worker: Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => {
-      console.log('Service Worker: Activated successfully');
-      return self.clients.claim();
-    })
+    caches.keys()
+      .then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== STATIC_CACHE && cacheName !== DYNAMIC_CACHE && cacheName !== API_CACHE) {
+              console.log('Service Worker: Deleting old cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      })
+      .then(() => {
+        console.log('Service Worker: Old caches cleaned');
+        return self.clients.claim();
+      })
+      .catch((error) => {
+        console.error('Service Worker: Error cleaning old caches:', error);
+      })
   );
 });
 
-// Перехват сетевых запросов
-self.addEventListener('fetch', event => {
+// Перехват fetch запросов
+self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
   
-  // Стратегии кэширования для разных типов запросов
-  if (request.method === 'GET') {
-    if (url.pathname.startsWith('/api/')) {
-      // API запросы - Network First с fallback на кэш
-      event.respondWith(handleApiRequest(request));
-    } else if (url.pathname.startsWith('/static/') || url.pathname.startsWith('/assets/')) {
-      // Статические файлы - Cache First
-      event.respondWith(handleStaticRequest(request));
-    } else {
-      // HTML страницы - Network First с fallback на кэш
-      event.respondWith(handlePageRequest(request));
-    }
-  }
+  // Определяем стратегию кэширования
+  const strategy = getCacheStrategy(request);
+  
+  event.respondWith(
+    handleRequest(request, strategy)
+      .catch((error) => {
+        console.error('Service Worker: Error handling request:', error);
+        return handleOfflineFallback(request);
+      })
+  );
 });
 
-// Обработка API запросов (Network First)
-async function handleApiRequest(request) {
-  try {
-    // Сначала пытаемся получить данные из сети
-    const networkResponse = await fetch(request);
-    
-    if (networkResponse.ok) {
-      // Клонируем ответ для кэширования
-      const responseClone = networkResponse.clone();
-      
-      // Кэшируем успешный ответ
-      caches.open(API_CACHE).then(cache => {
-        cache.put(request, responseClone);
-      });
-      
-      return networkResponse;
-    }
-  } catch (error) {
-    console.log('Service Worker: Network failed, trying cache:', error);
+// Определение стратегии кэширования
+function getCacheStrategy(request) {
+  const url = new URL(request.url);
+  
+  // Статические файлы
+  if (isStaticFile(request)) {
+    return CACHE_STRATEGIES.CACHE_FIRST;
   }
   
-  // Fallback на кэш
-  const cachedResponse = await caches.match(request);
-  if (cachedResponse) {
-    return cachedResponse;
+  // API запросы
+  if (isAPIRequest(request)) {
+    return CACHE_STRATEGIES.NETWORK_FIRST;
   }
   
-  // Если нет в кэше, возвращаем offline страницу
-  return new Response(
-    JSON.stringify({ 
-      error: 'Offline mode', 
-      message: 'Данные недоступны в офлайн режиме' 
-    }),
-    {
-      status: 503,
-      statusText: 'Service Unavailable',
-      headers: { 'Content-Type': 'application/json' }
-    }
+  // Динамический контент
+  return CACHE_STRATEGIES.STALE_WHILE_REVALIDATE;
+}
+
+// Проверка статических файлов
+function isStaticFile(request) {
+  const url = new URL(request.url);
+  return (
+    request.method === 'GET' &&
+    (url.pathname.endsWith('.js') ||
+     url.pathname.endsWith('.css') ||
+     url.pathname.endsWith('.png') ||
+     url.pathname.endsWith('.jpg') ||
+     url.pathname.endsWith('.svg') ||
+     url.pathname.endsWith('.woff') ||
+     url.pathname.endsWith('.woff2'))
   );
 }
 
-// Обработка статических файлов (Cache First)
-async function handleStaticRequest(request) {
-  const cachedResponse = await caches.match(request);
+// Проверка API запросов
+function isAPIRequest(request) {
+  const url = new URL(request.url);
+  return url.pathname.startsWith('/api/') || url.pathname.startsWith('/reports') || url.pathname.startsWith('/acts');
+}
+
+// Обработка запросов по стратегии
+async function handleRequest(request, strategy) {
+  switch (strategy) {
+    case CACHE_STRATEGIES.CACHE_FIRST:
+      return handleCacheFirst(request);
+    case CACHE_STRATEGIES.NETWORK_FIRST:
+      return handleNetworkFirst(request);
+    case CACHE_STRATEGIES.STALE_WHILE_REVALIDATE:
+      return handleStaleWhileRevalidate(request);
+    default:
+      return fetch(request);
+  }
+}
+
+// Стратегия: кэш-первый
+async function handleCacheFirst(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  const cachedResponse = await cache.match(request);
   
   if (cachedResponse) {
     return cachedResponse;
@@ -141,209 +155,281 @@ async function handleStaticRequest(request) {
   try {
     const networkResponse = await fetch(request);
     if (networkResponse.ok) {
-      const responseClone = networkResponse.clone();
-      caches.open(STATIC_CACHE).then(cache => {
-        cache.put(request, responseClone);
-      });
+      cache.put(request, networkResponse.clone());
     }
     return networkResponse;
   } catch (error) {
-    console.log('Service Worker: Failed to fetch static file:', error);
-    return new Response('Offline', { status: 503 });
+    throw error;
   }
 }
 
-// Обработка HTML страниц (Network First)
-async function handlePageRequest(request) {
+// Стратегия: сеть-первая
+async function handleNetworkFirst(request) {
+  const cache = await caches.open(API_CACHE);
+  
   try {
     const networkResponse = await fetch(request);
-    
     if (networkResponse.ok) {
-      const responseClone = networkResponse.clone();
-      caches.open(DYNAMIC_CACHE).then(cache => {
-        cache.put(request, responseClone);
-      });
-      return networkResponse;
+      cache.put(request, networkResponse.clone());
     }
+    return networkResponse;
   } catch (error) {
-    console.log('Service Worker: Network failed for page:', error);
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    throw error;
   }
+}
+
+// Стратегия: stale-while-revalidate
+async function handleStaleWhileRevalidate(request) {
+  const cache = await caches.open(DYNAMIC_CACHE);
+  const cachedResponse = await cache.match(request);
   
-  // Fallback на кэш
-  const cachedResponse = await caches.match(request);
+  // Возвращаем кэшированный ответ немедленно
+  const fetchPromise = fetch(request).then((networkResponse) => {
+    if (networkResponse.ok) {
+      cache.put(request, networkResponse.clone());
+    }
+    return networkResponse;
+  });
+  
   if (cachedResponse) {
     return cachedResponse;
   }
   
-  // Если нет в кэше, возвращаем offline страницу
-  return caches.match('/offline.html');
+  return fetchPromise;
 }
 
-// Push уведомления
-self.addEventListener('push', event => {
-  console.log('Service Worker: Push event received');
+// Обработка офлайн fallback
+async function handleOfflineFallback(request) {
+  const url = new URL(request.url);
   
-  const options = {
-    body: event.data ? event.data.text() : 'Новое уведомление',
-    icon: '/assets/logo.png',
-    badge: '/assets/badge.png',
-    vibrate: [100, 50, 100],
-    data: {
-      dateOfArrival: Date.now(),
-      primaryKey: 1
-    },
-    actions: [
-      {
-        action: 'explore',
-        title: 'Открыть',
-        icon: '/assets/checkmark.png'
-      },
-      {
-        action: 'close',
-        title: 'Закрыть',
-        icon: '/assets/xmark.png'
-      }
-    ]
-  };
+  // Для навигационных запросов возвращаем офлайн страницу
+  if (request.mode === 'navigate') {
+    const offlineResponse = await caches.match('/offline.html');
+    if (offlineResponse) {
+      return offlineResponse;
+    }
+    
+    // Создаем простую офлайн страницу
+    const offlineHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Офлайн - Self Employed</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .offline-icon { font-size: 64px; margin-bottom: 20px; }
+            .offline-title { font-size: 24px; margin-bottom: 10px; }
+            .offline-message { color: #666; margin-bottom: 20px; }
+            .retry-button { padding: 10px 20px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; }
+          </style>
+        </head>
+        <body>
+          <div class="offline-icon">📱</div>
+          <div class="offline-title">Нет подключения к интернету</div>
+          <div class="offline-message">Проверьте подключение и попробуйте снова</div>
+          <button class="retry-button" onclick="window.location.reload()">Повторить</button>
+        </body>
+      </html>
+    `;
+    
+    return new Response(offlineHTML, {
+      headers: { 'Content-Type': 'text/html' }
+    });
+  }
   
-  event.waitUntil(
-    self.registration.showNotification('Self-Employed Platform', options)
-  );
+  // Для других запросов возвращаем пустой ответ
+  return new Response('Offline', { status: 503 });
+}
+
+// Обработка push уведомлений
+self.addEventListener('push', (event) => {
+  console.log('Service Worker: Push notification received');
+  
+  if (event.data) {
+    const data = event.data.json();
+    const options = {
+      body: data.body || 'Новое уведомление',
+      icon: data.icon || '/favicon.ico',
+      badge: data.badge || '/favicon.ico',
+      tag: data.tag || 'default',
+      data: data.data || {},
+      actions: data.actions || [],
+      requireInteraction: data.requireInteraction || false,
+      silent: data.silent || false
+    };
+    
+    event.waitUntil(
+      self.registration.showNotification(data.title || 'Self Employed', options)
+    );
+  }
 });
 
 // Обработка кликов по уведомлениям
-self.addEventListener('notificationclick', event => {
+self.addEventListener('notificationclick', (event) => {
   console.log('Service Worker: Notification clicked');
   
   event.notification.close();
   
-  if (event.action === 'explore') {
+  if (event.action) {
+    // Обработка действий уведомления
+    handleNotificationAction(event.action, event.notification.data);
+  } else {
+    // Открытие приложения при клике на уведомление
     event.waitUntil(
       clients.openWindow('/')
     );
   }
 });
 
-// Синхронизация в фоне
-self.addEventListener('sync', event => {
+// Обработка действий уведомлений
+function handleNotificationAction(action, data) {
+  switch (action) {
+    case 'view':
+      clients.openWindow(data.url || '/');
+      break;
+    case 'dismiss':
+      // Просто закрываем уведомление
+      break;
+    default:
+      console.log('Unknown notification action:', action);
+  }
+}
+
+// Обработка background sync
+self.addEventListener('sync', (event) => {
   console.log('Service Worker: Background sync:', event.tag);
   
   if (event.tag === 'background-sync') {
-    event.waitUntil(doBackgroundSync());
+    event.waitUntil(
+      performBackgroundSync()
+    );
   }
 });
 
-// Фоновая синхронизация
-async function doBackgroundSync() {
+// Выполнение фоновой синхронизации
+async function performBackgroundSync() {
   try {
-    // Синхронизируем данные с сервером
-    const pendingData = await getPendingData();
-    
-    for (const data of pendingData) {
-      await syncData(data);
-    }
-    
+    // Синхронизация данных
+    await syncOfflineData();
     console.log('Service Worker: Background sync completed');
   } catch (error) {
     console.error('Service Worker: Background sync failed:', error);
   }
 }
 
-// Получение отложенных данных
-async function getPendingData() {
-  const db = await openDB();
-  return await db.getAll('pendingData');
-}
-
-// Синхронизация данных
-async function syncData(data) {
-  try {
-    const response = await fetch(data.url, {
-      method: data.method,
-      headers: data.headers,
-      body: data.body
-    });
-    
-    if (response.ok) {
-      // Удаляем из отложенных данных
-      const db = await openDB();
-      await db.delete('pendingData', data.id);
-    }
-  } catch (error) {
-    console.error('Service Worker: Failed to sync data:', error);
-  }
-}
-
-// Открытие IndexedDB
-async function openDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('SelfEmployedDB', 1);
-    
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
-    
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      
-      // Создаем хранилище для отложенных данных
-      if (!db.objectStoreNames.contains('pendingData')) {
-        const store = db.createObjectStore('pendingData', { keyPath: 'id', autoIncrement: true });
-        store.createIndex('url', 'url', { unique: false });
-        store.createIndex('timestamp', 'timestamp', { unique: false });
+// Синхронизация офлайн данных
+async function syncOfflineData() {
+  const cache = await caches.open(API_CACHE);
+  const requests = await cache.keys();
+  
+  for (const request of requests) {
+    try {
+      const response = await fetch(request);
+      if (response.ok) {
+        // Обновляем кэш
+        cache.put(request, response.clone());
       }
-    };
-  });
+    } catch (error) {
+      console.error('Service Worker: Error syncing request:', error);
+    }
+  }
 }
 
 // Обработка сообщений от основного потока
-self.addEventListener('message', event => {
+self.addEventListener('message', (event) => {
   console.log('Service Worker: Message received:', event.data);
   
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
+  const { type, data } = event.data;
   
-  if (event.data && event.data.type === 'CACHE_URLS') {
-    event.waitUntil(cacheUrls(event.data.urls));
+  switch (type) {
+    case 'SKIP_WAITING':
+      self.skipWaiting();
+      break;
+    case 'GET_CACHE_INFO':
+      getCacheInfo().then((info) => {
+        event.ports[0].postMessage(info);
+      });
+      break;
+    case 'CLEAR_CACHE':
+      clearCache(data.cacheName).then(() => {
+        event.ports[0].postMessage({ success: true });
+      });
+      break;
+    case 'UPDATE_CACHE':
+      updateCache(data.files).then(() => {
+        event.ports[0].postMessage({ success: true });
+      });
+      break;
+    default:
+      console.log('Service Worker: Unknown message type:', type);
   }
 });
 
-// Кэширование URL'ов
-async function cacheUrls(urls) {
-  const cache = await caches.open(DYNAMIC_CACHE);
-  await cache.addAll(urls);
-  console.log('Service Worker: URLs cached:', urls);
+// Получение информации о кэше
+async function getCacheInfo() {
+  const cacheNames = await caches.keys();
+  const cacheInfo = {};
+  
+  for (const cacheName of cacheNames) {
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
+    cacheInfo[cacheName] = {
+      size: keys.length,
+      keys: keys.map(key => key.url)
+    };
+  }
+  
+  return cacheInfo;
+}
+
+// Очистка кэша
+async function clearCache(cacheName) {
+  if (cacheName) {
+    await caches.delete(cacheName);
+  } else {
+    const cacheNames = await caches.keys();
+    await Promise.all(cacheNames.map(name => caches.delete(name)));
+  }
+}
+
+// Обновление кэша
+async function updateCache(files) {
+  const cache = await caches.open(STATIC_CACHE);
+  await cache.addAll(files);
 }
 
 // Периодическая очистка старых кэшей
-self.addEventListener('periodicsync', event => {
-  if (event.tag === 'cleanup-cache') {
-    event.waitUntil(cleanupOldCaches());
-  }
-});
-
-// Очистка старых кэшей
-async function cleanupOldCaches() {
-  const cacheNames = await caches.keys();
-  const now = Date.now();
-  const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 дней
-  
-  for (const cacheName of cacheNames) {
-    if (cacheName !== STATIC_CACHE) {
-      const cache = await caches.open(cacheName);
-      const requests = await cache.keys();
-      
-      for (const request of requests) {
-        const response = await cache.match(request);
-        if (response) {
-          const date = response.headers.get('date');
-          if (date && (now - new Date(date).getTime()) > maxAge) {
-            await cache.delete(request);
+setInterval(async () => {
+  try {
+    const cacheNames = await caches.keys();
+    const now = Date.now();
+    
+    for (const cacheName of cacheNames) {
+      if (cacheName !== STATIC_CACHE && cacheName !== DYNAMIC_CACHE && cacheName !== API_CACHE) {
+        const cache = await caches.open(cacheName);
+        const requests = await cache.keys();
+        
+        for (const request of requests) {
+          const response = await cache.match(request);
+          if (response) {
+            const date = response.headers.get('date');
+            if (date && (now - new Date(date).getTime()) > 7 * 24 * 60 * 60 * 1000) {
+              // Удаляем файлы старше 7 дней
+              await cache.delete(request);
+            }
           }
         }
       }
     }
+  } catch (error) {
+    console.error('Service Worker: Error cleaning old caches:', error);
   }
-  
-  console.log('Service Worker: Cache cleanup completed');
-} 
+}, 24 * 60 * 60 * 1000); // Каждые 24 часа
+
+console.log('Service Worker: Loaded successfully'); 

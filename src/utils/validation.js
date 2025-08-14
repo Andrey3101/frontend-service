@@ -2,6 +2,8 @@
  * Утилиты для валидации входных данных
  */
 
+import { validationI18n } from './validation-i18n';
+
 // Регулярные выражения для валидации
 const PATTERNS = {
   EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
@@ -19,7 +21,15 @@ const PATTERNS = {
   TIME: /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/,
   UUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
   URL: /^https?:\/\/.+/,
-  FILE_EXTENSION: /\.(pdf|doc|docx|xls|xlsx|txt|jpg|jpeg|png|gif)$/i
+  FILE_EXTENSION: /\.(pdf|doc|docx|xls|xlsx|txt|jpg|jpeg|png|gif)$/i,
+  PASSWORD: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
+  POSTAL_CODE: /^\d{6}$/,
+  PASSPORT: /^\d{4}\s\d{6}$/,
+  SNILS: /^\d{3}-\d{3}-\d{3}\s\d{2}$/,
+  IP_ADDRESS: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
+  MAC_ADDRESS: /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
+  HEX_COLOR: /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/,
+  BASE64: /^[A-Za-z0-9+/]*={0,2}$/
 };
 
 // Сообщения об ошибках
@@ -247,14 +257,160 @@ export class Validator {
     if (file) {
       const extension = file.name.split('.').pop().toLowerCase();
       if (!allowedExtensions.includes(extension)) {
-        this.addError(fieldName, ERROR_MESSAGES.INVALID_FILE_EXTENSION);
+        this.addError(fieldName, validationI18n.getMessage('invalid_file_extension'));
         return false;
       }
       
       // Проверка размера файла (максимум 10MB)
       const maxSize = 10 * 1024 * 1024; // 10MB
       if (file.size > maxSize) {
-        this.addError(fieldName, `Размер файла не должен превышать ${maxSize / (1024 * 1024)}MB`);
+        this.addError(fieldName, validationI18n.getMessage('file_size', { maxSize: `${maxSize / (1024 * 1024)}MB` }));
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Валидация пароля
+   */
+  password(value, fieldName) {
+    if (value && !PATTERNS.PASSWORD.test(value)) {
+      this.addError(fieldName, validationI18n.getMessage('password_strength'));
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Валидация совпадения паролей
+   */
+  passwordMatch(value, fieldName, passwordField) {
+    if (value !== passwordField) {
+      this.addError(fieldName, validationI18n.getMessage('password_match'));
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Валидация почтового индекса
+   */
+  postalCode(value, fieldName) {
+    if (value && !PATTERNS.POSTAL_CODE.test(value)) {
+      this.addError(fieldName, validationI18n.getMessage('regex_match'));
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Валидация паспорта
+   */
+  passport(value, fieldName) {
+    if (value && !PATTERNS.PASSPORT.test(value)) {
+      this.addError(fieldName, validationI18n.getMessage('regex_match'));
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Валидация СНИЛС
+   */
+  snils(value, fieldName) {
+    if (value && !PATTERNS.SNILS.test(value)) {
+      this.addError(fieldName, validationI18n.getMessage('regex_match'));
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Валидация IP адреса
+   */
+  ipAddress(value, fieldName) {
+    if (value && !PATTERNS.IP_ADDRESS.test(value)) {
+      this.addError(fieldName, validationI18n.getMessage('regex_match'));
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Валидация MAC адреса
+   */
+  macAddress(value, fieldName) {
+    if (value && !PATTERNS.MAC_ADDRESS.test(value)) {
+      this.addError(fieldName, validationI18n.getMessage('regex_match'));
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Валидация HEX цвета
+   */
+  hexColor(value, fieldName) {
+    if (value && !PATTERNS.HEX_COLOR.test(value)) {
+      this.addError(fieldName, validationI18n.getMessage('regex_match'));
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Валидация Base64
+   */
+  base64(value, fieldName) {
+    if (value && !PATTERNS.BASE64.test(value)) {
+      this.addError(fieldName, validationI18n.getMessage('regex_match'));
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Валидация по регулярному выражению
+   */
+  regex(value, fieldName, pattern, message = null) {
+    if (value && !pattern.test(value)) {
+      this.addError(fieldName, message || validationI18n.getMessage('regex_match'));
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Валидация уникальности значения
+   */
+  async unique(value, fieldName, checkFunction) {
+    if (value) {
+      try {
+        const isUnique = await checkFunction(value);
+        if (!isUnique) {
+          this.addError(fieldName, validationI18n.getMessage('unique_value'));
+          return false;
+        }
+      } catch (error) {
+        console.error('Ошибка проверки уникальности:', error);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Валидация размера массива
+   */
+  arraySize(value, fieldName, min, max) {
+    if (Array.isArray(value)) {
+      if (min && value.length < min) {
+        this.addError(fieldName, validationI18n.getMessage('array_min', { min }));
+        return false;
+      }
+      if (max && value.length > max) {
+        this.addError(fieldName, validationI18n.getMessage('array_max', { max }));
         return false;
       }
     }
