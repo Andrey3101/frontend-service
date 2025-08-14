@@ -17,6 +17,11 @@ import CompetitorMonitor from '@/components/CompetitorMonitor.vue';
 import PromotionRecommendations from '@/components/PromotionRecommendations.vue';
 import Clients from '../views/ClientsList.vue';
 import SubscriptionForm from '../views/SubscriptionForm.vue';
+import AccessibilityManager from '@/components/accessibility/AccessibilityManager.vue';
+import ABTestingManager from '@/components/ab-testing/ABTestingManager.vue';
+import EdgeComputingManager from '@/components/edge-computing/EdgeComputingManager.vue';
+import ThreeJSChart from '@/components/3d-visualization/ThreeJSChart.vue';
+import VoiceControlManager from '@/components/voice-control/VoiceControlManager.vue';
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -103,6 +108,36 @@ const routes = [
     path: '/subscription',
     name: 'Subscription',
     component: SubscriptionForm,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/accessibility',
+    name: 'Accessibility',
+    component: AccessibilityManager,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/ab-testing',
+    name: 'ABTesting',
+    component: ABTestingManager,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/edge-computing',
+    name: 'EdgeComputing',
+    component: EdgeComputingManager,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/3d-visualization',
+    name: '3DVisualization',
+    component: ThreeJSChart,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/voice-control',
+    name: 'VoiceControl',
+    component: VoiceControlManager,
     meta: { requiresAuth: true }
   },
   {

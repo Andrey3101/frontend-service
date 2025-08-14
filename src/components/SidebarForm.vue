@@ -204,6 +204,18 @@ export default {
           ],
         },
         {
+          title: 'Новые функции',
+          route: '/new-features',
+          icon: 'chat.svg',
+          submenu: [
+            { title: 'Доступность', route: '/accessibility' },
+            { title: 'A/B тестирование', route: '/ab-testing' },
+            { title: 'Edge Computing', route: '/edge-computing' },
+            { title: '3D визуализация', route: '/3d-visualization' },
+            { title: 'Голосовое управление', route: '/voice-control' },
+          ],
+        },
+        {
           title: 'Профиль',
           route: '/profile',
           icon: 'profile.svg',

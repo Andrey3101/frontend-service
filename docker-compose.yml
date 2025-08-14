@@ -10,15 +10,14 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-    depends_on:
-      - backend  # Если есть бэкенд
     environment:
       - CHOKIDAR_USEPOLLING=true  # Для работы watch в Docker
+      - VUE_APP_API_GATEWAY=http://localhost:8000
+      - VUE_APP_WS_GATEWAY=ws://localhost:8000
+      - NODE_ENV=development
+    networks:
+      - frontend-network
 
-  # Пример бэкенда (можно удалить, если не нужен)
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
+networks:
+  frontend-network:
+    driver: bridge
