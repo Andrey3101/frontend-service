@@ -11,6 +11,15 @@ import {
   connectRealTimeWebSocket
 } from '@/api';
 
+// Импорт новых сервисов
+import adaptivePerformance from '@/services/adaptive-performance.js';
+import predictivePreloader from '@/services/predictive-preloader.js';
+import distributedProcessing from '@/services/distributed-processing.js';
+import wasmCalculator from '@/wasm/wasm-calculator.js';
+import performanceMetrics from '@/services/performance-metrics.js';
+import cacheService from '@/services/cache.js';
+import redisCache from '@/services/redis-cache.js';
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     user: null,
@@ -21,6 +30,27 @@ export const useAuthStore = defineStore('auth', {
     aiMetrics: null,
     realtimeConnection: null,
     cachedData: new Map(),
+    
+    // Новые сервисы
+    adaptivePerformance: null,
+    predictivePreloader: null,
+    distributedProcessing: null,
+    wasmCalculator: null,
+    performanceMetrics: null,
+    cacheService: null,
+    redisCache: null,
+    
+    // Состояние сервисов
+    servicesInitialized: false,
+    servicesStatus: {
+      adaptivePerformance: 'pending',
+      predictivePreloader: 'pending',
+      distributedProcessing: 'pending',
+      wasmCalculator: 'pending',
+      performanceMetrics: 'pending',
+      cacheService: 'pending',
+      redisCache: 'pending'
+    }
   }),
 
   actions: {
@@ -42,6 +72,9 @@ export const useAuthStore = defineStore('auth', {
         // Инициализируем кэш
         await this.initializeCache();
         
+        // Инициализируем новые сервисы
+        await this.initializeServices();
+        
         return data;
       } catch (error) {
         console.error('Login failed:', error);
@@ -59,6 +92,7 @@ export const useAuthStore = defineStore('auth', {
         await this.fetchSecurityProfile();
         this.connectRealTimeServices();
         await this.initializeCache();
+        await this.initializeServices();
         
         return data;
       } catch (error) {
@@ -77,6 +111,7 @@ export const useAuthStore = defineStore('auth', {
         await this.fetchSecurityProfile();
         this.connectRealTimeServices();
         await this.initializeCache();
+        await this.initializeServices();
         
         return data;
       } catch (error) {
@@ -92,6 +127,7 @@ export const useAuthStore = defineStore('auth', {
         console.error('Logout error:', error);
       } finally {
         this.clearUserData();
+        this.cleanupServices();
       }
     },
 
@@ -318,6 +354,146 @@ export const useAuthStore = defineStore('auth', {
       const diffTime = trialEnd - now;
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return Math.max(0, diffDays);
+    },
+
+    // Инициализация новых сервисов
+    async initializeServices() {
+      try {
+        this.servicesStatus.adaptivePerformance = 'initializing';
+        this.adaptivePerformance = adaptivePerformance;
+        await adaptivePerformance.init();
+        this.servicesStatus.adaptivePerformance = 'ready';
+        
+        this.servicesStatus.predictivePreloader = 'initializing';
+        this.predictivePreloader = predictivePreloader;
+        await predictivePreloader.init();
+        this.servicesStatus.predictivePreloader = 'ready';
+        
+        this.servicesStatus.distributedProcessing = 'initializing';
+        this.distributedProcessing = distributedProcessing;
+        await distributedProcessing.init();
+        this.servicesStatus.distributedProcessing = 'ready';
+        
+        this.servicesStatus.wasmCalculator = 'initializing';
+        this.wasmCalculator = wasmCalculator;
+        await wasmCalculator.init();
+        this.servicesStatus.wasmCalculator = 'ready';
+        
+        this.servicesStatus.performanceMetrics = 'initializing';
+        this.performanceMetrics = performanceMetrics;
+        performanceMetrics.init();
+        this.servicesStatus.performanceMetrics = 'ready';
+        
+        this.servicesStatus.cacheService = 'initializing';
+        this.cacheService = cacheService;
+        cacheService.init();
+        this.servicesStatus.cacheService = 'ready';
+        
+        this.servicesStatus.redisCache = 'initializing';
+        this.redisCache = redisCache;
+        await redisCache.init();
+        this.servicesStatus.redisCache = 'ready';
+        
+        this.servicesInitialized = true;
+        console.log('All services initialized successfully');
+        
+      } catch (error) {
+        console.error('Failed to initialize services:', error);
+        this.servicesStatus = Object.fromEntries(
+          Object.keys(this.servicesStatus).map(key => [key, 'error'])
+        );
+      }
+    },
+
+    // Очистка сервисов при выходе
+    cleanupServices() {
+      try {
+        if (this.adaptivePerformance) {
+          this.adaptivePerformance.cleanup();
+        }
+        if (this.predictivePreloader) {
+          this.predictivePreloader.reset();
+        }
+        if (this.distributedProcessing) {
+          this.distributedProcessing.cleanup();
+        }
+        if (this.performanceMetrics) {
+          this.performanceMetrics.resetMetrics();
+        }
+        if (this.cacheService) {
+          this.cacheService.clear();
+        }
+        if (this.redisCache) {
+          this.redisCache.close();
+        }
+        
+        this.servicesInitialized = false;
+        this.servicesStatus = Object.fromEntries(
+          Object.keys(this.servicesStatus).map(key => [key, 'pending'])
+        );
+        
+      } catch (error) {
+        console.error('Failed to cleanup services:', error);
+      }
+    },
+
+    // Получение статуса сервисов
+    getServicesStatus() {
+      return this.servicesStatus;
+    },
+
+    // Проверка готовности сервисов
+    areServicesReady() {
+      return this.servicesInitialized && 
+             Object.values(this.servicesStatus).every(status => status === 'ready');
+    },
+
+    // Перезапуск сервиса
+    async restartService(serviceName) {
+      if (!this.servicesStatus[serviceName]) {
+        throw new Error(`Unknown service: ${serviceName}`);
+      }
+      
+      try {
+        this.servicesStatus[serviceName] = 'restarting';
+        
+        switch (serviceName) {
+          case 'adaptivePerformance':
+            await this.adaptivePerformance.reload();
+            break;
+          case 'predictivePreloader':
+            this.predictivePreloader.reset();
+            await this.predictivePreloader.init();
+            break;
+          case 'distributedProcessing':
+            this.distributedProcessing.cleanup();
+            await this.distributedProcessing.init();
+            break;
+          case 'wasmCalculator':
+            await this.wasmCalculator.reload();
+            break;
+          case 'performanceMetrics':
+            this.performanceMetrics.resetMetrics();
+            this.performanceMetrics.init();
+            break;
+          case 'cacheService':
+            this.cacheService.clear();
+            this.cacheService.init();
+            break;
+          case 'redisCache':
+            this.redisCache.close();
+            await this.redisCache.init();
+            break;
+        }
+        
+        this.servicesStatus[serviceName] = 'ready';
+        console.log(`Service ${serviceName} restarted successfully`);
+        
+      } catch (error) {
+        console.error(`Failed to restart service ${serviceName}:`, error);
+        this.servicesStatus[serviceName] = 'error';
+        throw error;
+      }
     }
   },
 
@@ -349,6 +525,41 @@ export const useAuthStore = defineStore('auth', {
     cacheInfo: (state) => ({
       size: state.cachedData.size,
       keys: Array.from(state.cachedData.keys())
+    }),
+
+    // Геттеры для новых сервисов
+    servicesReady: (state) => state.servicesInitialized,
+    
+    adaptivePerformanceReady: (state) => state.servicesStatus.adaptivePerformance === 'ready',
+    
+    predictivePreloaderReady: (state) => state.servicesStatus.predictivePreloader === 'ready',
+    
+    distributedProcessingReady: (state) => state.servicesStatus.distributedProcessing === 'ready',
+    
+    wasmCalculatorReady: (state) => state.servicesStatus.wasmCalculator === 'ready',
+    
+    performanceMetricsReady: (state) => state.servicesStatus.performanceMetrics === 'ready',
+    
+    cacheServicesReady: (state) => 
+      state.servicesStatus.cacheService === 'ready' && 
+      state.servicesStatus.redisCache === 'ready',
+    
+    allServicesReady: (state) => 
+      state.servicesInitialized && 
+      Object.values(state.servicesStatus).every(status => status === 'ready'),
+    
+    servicesWithErrors: (state) => 
+      Object.entries(state.servicesStatus)
+        .filter(([_, status]) => status === 'error')
+        .map(([name, _]) => name),
+    
+    servicesStatusSummary: (state) => ({
+      total: Object.keys(state.servicesStatus).length,
+      ready: Object.values(state.servicesStatus).filter(status => status === 'ready').length,
+      pending: Object.values(state.servicesStatus).filter(status => status === 'pending').length,
+      initializing: Object.values(state.servicesStatus).filter(status => status === 'initializing').length,
+      error: Object.values(state.servicesStatus).filter(status => status === 'error').length,
+      restarting: Object.values(state.servicesStatus).filter(status => status === 'restarting').length
     })
   },
 

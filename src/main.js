@@ -14,6 +14,15 @@ import 'vue-toastification/dist/index.css';
 import './assets/styles.css';
 import './assets/styles/mdi.css';
 
+// Импорт новых сервисов
+import adaptivePerformance from './services/adaptive-performance.js';
+import predictivePreloader from './services/predictive-preloader.js';
+import distributedProcessing from './services/distributed-processing.js';
+import wasmCalculator from './wasm/wasm-calculator.js';
+import performanceMetrics from './services/performance-metrics.js';
+import cacheService from './services/cache.js';
+import redisCache from './services/redis-cache.js';
+
 // Создание экземпляра Vuetify с улучшенной конфигурацией
 const vuetify = createVuetify({
   components,
@@ -82,11 +91,49 @@ app.use(Toast, {
   rtl: false
 });
 
+// Инициализация новых сервисов
+const initializeServices = async () => {
+  try {
+    // Инициализация адаптивной производительности
+    await adaptivePerformance.init();
+    console.log('Adaptive Performance initialized');
+    
+    // Инициализация предзагрузки
+    await predictivePreloader.init();
+    console.log('Predictive Preloader initialized');
+    
+    // Инициализация распределенной обработки
+    await distributedProcessing.init();
+    console.log('Distributed Processing initialized');
+    
+    // Инициализация WASM калькулятора
+    await wasmCalculator.init();
+    console.log('WASM Calculator initialized');
+    
+    // Инициализация метрик производительности
+    performanceMetrics.init();
+    console.log('Performance Metrics initialized');
+    
+    // Инициализация кэш сервисов
+    cacheService.init();
+    redisCache.init();
+    console.log('Cache services initialized');
+    
+  } catch (error) {
+    console.error('Failed to initialize services:', error);
+  }
+};
+
 // Глобальная обработка ошибок
 app.config.errorHandler = (err, vm, info) => {
   console.error('Vue Error:', err);
   console.error('Component:', vm);
   console.error('Info:', info);
+  
+  // Отправка ошибки в метрики производительности
+  if (performanceMetrics) {
+    performanceMetrics.trackError(err, vm, info);
+  }
 };
 
 // Глобальная обработка предупреждений
@@ -98,3 +145,17 @@ app.config.warnHandler = (msg, vm, trace) => {
 
 // Монтирование приложения
 app.mount('#app');
+
+// Инициализация сервисов после монтирования
+initializeServices();
+
+// Экспорт сервисов для глобального доступа
+window.selfEmployedServices = {
+  adaptivePerformance,
+  predictivePreloader,
+  distributedProcessing,
+  wasmCalculator,
+  performanceMetrics,
+  cacheService,
+  redisCache
+};

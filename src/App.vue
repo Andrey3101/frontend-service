@@ -45,6 +45,9 @@
     <EdgeComputingManager v-if="isAuthenticated" />
     <VoiceControlManager v-if="isAuthenticated" />
     
+    <!-- Мониторинг сервисов -->
+    <ServicesMonitor v-if="isAuthenticated && showServicesMonitor" />
+    
     <!-- 3D графики (условно) -->
     <ThreeJSChart 
       v-if="isAuthenticated && show3DCharts"
@@ -69,6 +72,7 @@ import ABTestingManager from '@/components/ab-testing/ABTestingManager.vue';
 import EdgeComputingManager from '@/components/edge-computing/EdgeComputingManager.vue';
 import ThreeJSChart from '@/components/3d-visualization/ThreeJSChart.vue';
 import VoiceControlManager from '@/components/voice-control/VoiceControlManager.vue';
+import ServicesMonitor from '@/components/ServicesMonitor.vue';
 import registry from '@/micro-frontends/registry';
 
 export default {
@@ -82,7 +86,8 @@ export default {
     ABTestingManager,
     EdgeComputingManager,
     ThreeJSChart,
-    VoiceControlManager
+    VoiceControlManager,
+    ServicesMonitor
   },
   
   setup() {
@@ -98,6 +103,11 @@ export default {
     });
     const subscriptionDaysLeft = computed(() => authStore.subscriptionDaysLeft);
     const show3DCharts = computed(() => authStore.isAuthenticated);
+    
+    // Показывать мониторинг сервисов только администраторам
+    const showServicesMonitor = computed(() => 
+      authStore.isAuthenticated && authStore.isCompanyAdmin
+    );
     
     // Данные для 3D графиков
     const chartData = computed(() => [
@@ -169,6 +179,7 @@ export default {
       showSubscriptionAlert,
       subscriptionDaysLeft,
       show3DCharts,
+      showServicesMonitor,
       chartData
     };
   }
