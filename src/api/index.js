@@ -555,6 +555,35 @@ export async function createBankAccount(accountData) {
   }, 'bank');
 }
 
+// НОВЫЕ ФУНКЦИИ ДЛЯ БАНКОВСКИХ ПОДКЛЮЧЕНИЙ ЧЕРЕЗ AUTH-SERVICE
+export async function connectBankAccount(bankData) {
+  return apiRequest('/auth/bank/connect', {
+    method: 'POST',
+    body: JSON.stringify(bankData),
+  }, 'auth');
+}
+
+export async function getConnectedBankAccounts() {
+  return apiRequest('/auth/bank/accounts', {}, 'auth');
+}
+
+export async function disconnectBankAccount(connectionId) {
+  return apiRequest(`/auth/bank/accounts/${connectionId}`, {
+    method: 'DELETE',
+  }, 'auth');
+}
+
+export async function requestBankConnection(bankData) {
+  return apiRequest('/auth/bank/request-connection', {
+    method: 'POST',
+    body: JSON.stringify(bankData),
+  }, 'auth');
+}
+
+export async function getBankConnectionStatus(requestId) {
+  return apiRequest(`/auth/bank/connection-status/${requestId}`, {}, 'auth');
+}
+
 export async function getAccountBalance(accountId) {
   return apiRequest(`/bank/accounts/${accountId}/balance`);
 }

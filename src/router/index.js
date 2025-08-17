@@ -28,6 +28,7 @@ import ContractorsPage from '../views/ContractorsPage.vue';
 import ClientAnalysisPage from '../views/ClientAnalysisPage.vue';
 import MeetingsPage from '../views/MeetingsPage.vue';
 import InventoryPage from '../views/InventoryPage.vue';
+import BankAccountsPage from '../views/BankAccountsPage.vue';
 
 const routes = [
   { path: '/', redirect: '/login' },
@@ -91,6 +92,12 @@ const routes = [
     path: '/inventory',
     name: 'Inventory',
     component: InventoryPage,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/bank-accounts',
+    name: 'BankAccounts',
+    component: BankAccountsPage,
     meta: { requiresAuth: true }
   },
   

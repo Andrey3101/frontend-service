@@ -207,6 +207,7 @@ export default {
             { title: 'Анализ клиентов', route: '/client-analysis' },
             { title: 'Планирование встреч', route: '/meetings' },
             { title: 'Управление товарами', route: '/inventory' },
+            { title: 'Банковские счета', route: '/bank-accounts' },
           ],
         },
         {
