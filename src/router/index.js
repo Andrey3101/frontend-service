@@ -23,6 +23,12 @@ import EdgeComputingManager from '@/components/edge-computing/EdgeComputingManag
 import ThreeJSChart from '@/components/3d-visualization/ThreeJSChart.vue';
 import VoiceControlManager from '@/components/voice-control/VoiceControlManager.vue';
 
+// НОВЫЕ СТРАНИЦЫ ДЛЯ НОВЫХ ФИЧ
+import ContractorsPage from '../views/ContractorsPage.vue';
+import ClientAnalysisPage from '../views/ClientAnalysisPage.vue';
+import MeetingsPage from '../views/MeetingsPage.vue';
+import InventoryPage from '../views/InventoryPage.vue';
+
 const routes = [
   { path: '/', redirect: '/login' },
   { path: '/login', component: LoginForm },
@@ -61,6 +67,33 @@ const routes = [
     component: PromotionRecommendations,
     meta: { requiresAuth: true }
   },
+  
+  // НОВЫЕ МАРШРУТЫ ДЛЯ НОВЫХ ФИЧ
+  {
+    path: '/contractors',
+    name: 'Contractors',
+    component: ContractorsPage,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/client-analysis',
+    name: 'ClientAnalysis',
+    component: ClientAnalysisPage,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/meetings',
+    name: 'Meetings',
+    component: MeetingsPage,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/inventory',
+    name: 'Inventory',
+    component: InventoryPage,
+    meta: { requiresAuth: true }
+  },
+  
   { 
     path: '/tasks', 
     component: Tasks, 

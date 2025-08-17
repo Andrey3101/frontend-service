@@ -1171,3 +1171,265 @@ export {
   apiRequest,
   API_BASE_URL
 };
+
+// Функции для работы с новыми фичами финансового сервиса
+
+// Проверка контрагентов по базе ФНС
+export async function checkContractor(contractorData) {
+  return apiRequest('/financial/contractors/check', {
+    method: 'POST',
+    body: JSON.stringify(contractorData),
+  }, 'financial');
+}
+
+export async function getContractor(contractorId) {
+  return apiRequest(`/financial/contractors/${contractorId}`);
+}
+
+// Анализ клиентской базы
+export async function analyzeClient(clientId, analysisPeriod = 'all') {
+  return apiRequest('/financial/clients/analyze', {
+    method: 'POST',
+    body: JSON.stringify({
+      client_id: clientId,
+      analysis_period: analysisPeriod
+    }),
+  }, 'financial');
+}
+
+// Оптимизация бизнеса
+export async function createBusinessOptimization(optimizationData) {
+  return apiRequest('/financial/business/optimize', {
+    method: 'POST',
+    body: JSON.stringify(optimizationData),
+  }, 'financial');
+}
+
+export async function getBusinessOptimizations(optimizationType = null, priority = null) {
+  const params = new URLSearchParams();
+  if (optimizationType) params.append('optimization_type', optimizationType);
+  if (priority) params.append('priority', priority);
+
+  return apiRequest(`/financial/business/optimizations?${params}`);
+}
+
+// Выявление убыточных направлений
+export async function identifyUnprofitableDirections(directionData) {
+  return apiRequest('/financial/business/unprofitable-directions', {
+    method: 'POST',
+    body: JSON.stringify(directionData),
+  }, 'financial');
+}
+
+// Функции для работы с новыми фичами AI сервиса
+
+// Анализ конкурентов в реальном времени
+export async function analyzeCompetitor(competitorData) {
+  return apiRequest('/ai/competitors/analyze', {
+    method: 'POST',
+    body: JSON.stringify(competitorData),
+  }, 'ai');
+}
+
+// Прогнозирование доходов и расходов
+export async function createBusinessForecast(forecastData) {
+  return apiRequest('/ai/business/forecast', {
+    method: 'POST',
+    body: JSON.stringify(forecastData),
+  }, 'ai');
+}
+
+// Рекомендации по оптимизации бизнеса
+export async function generateBusinessRecommendations(recommendationData) {
+  return apiRequest('/ai/business/recommendations', {
+    method: 'POST',
+    body: JSON.stringify(recommendationData),
+  }, 'ai');
+}
+
+export async function getBusinessRecommendations(recommendationType = null, priority = null, status = null) {
+  const params = new URLSearchParams();
+  if (recommendationType) params.append('recommendation_type', recommendationType);
+  if (priority) params.append('priority', priority);
+  if (status) params.append('status', status);
+
+  return apiRequest(`/ai/business/recommendations?${params}`);
+}
+
+// Функции для работы с новыми фичами task сервиса
+
+// Планирование встреч
+export async function createMeeting(meetingData) {
+  return apiRequest('/tasks/meetings', {
+    method: 'POST',
+    body: JSON.stringify(meetingData),
+  }, 'tasks');
+}
+
+export async function getMeetings(startDate = null, endDate = null, meetingType = null) {
+  const params = new URLSearchParams();
+  if (startDate) params.append('start_date', startDate);
+  if (endDate) params.append('end_date', endDate);
+  if (meetingType) params.append('meeting_type', meetingType);
+
+  return apiRequest(`/tasks/meetings?${params}`);
+}
+
+export async function getMeeting(meetingId) {
+  return apiRequest(`/tasks/meetings/${meetingId}`);
+}
+
+export async function updateMeeting(meetingId, meetingData) {
+  return apiRequest(`/tasks/meetings/${meetingId}`, {
+    method: 'PUT',
+    body: JSON.stringify(meetingData),
+  }, 'tasks');
+}
+
+export async function deleteMeeting(meetingId) {
+  return apiRequest(`/tasks/meetings/${meetingId}`, {
+    method: 'DELETE',
+  }, 'tasks');
+}
+
+// Управление важными датами
+export async function createImportantDate(dateData) {
+  return apiRequest('/tasks/important-dates', {
+    method: 'POST',
+    body: JSON.stringify(dateData),
+  }, 'tasks');
+}
+
+export async function getImportantDates(dateType = null, priority = null) {
+  const params = new URLSearchParams();
+  if (dateType) params.append('type', dateType);
+  if (priority) params.append('priority', priority);
+
+  return apiRequest(`/tasks/important-dates?${params}`);
+}
+
+export async function getImportantDate(dateId) {
+  return apiRequest(`/tasks/important-dates/${dateId}`);
+}
+
+export async function updateImportantDate(dateId, dateData) {
+  return apiRequest(`/tasks/important-dates/${dateId}`, {
+    method: 'PUT',
+    body: JSON.stringify(dateData),
+  }, 'tasks');
+}
+
+export async function deleteImportantDate(dateId) {
+  return apiRequest(`/tasks/important-dates/${dateId}`, {
+    method: 'DELETE',
+  }, 'tasks');
+}
+
+// Синхронизация с внешними системами
+export async function createExternalIntegration(integrationData) {
+  return apiRequest('/tasks/integrations', {
+    method: 'POST',
+    body: JSON.stringify(integrationData),
+  }, 'tasks');
+}
+
+export async function getExternalIntegrations() {
+  return apiRequest('/tasks/integrations');
+}
+
+export async function getExternalIntegration(integrationId) {
+  return apiRequest(`/tasks/integrations/${integrationId}`);
+}
+
+export async function updateExternalIntegration(integrationId, integrationData) {
+  return apiRequest(`/tasks/integrations/${integrationId}`, {
+    method: 'PUT',
+    body: JSON.stringify(integrationData),
+  }, 'tasks');
+}
+
+export async function deleteExternalIntegration(integrationId) {
+  return apiRequest(`/tasks/integrations/${integrationId}`, {
+    method: 'DELETE',
+  }, 'tasks');
+}
+
+export async function syncExternalData(integrationId) {
+  return apiRequest(`/tasks/integrations/${integrationId}/sync`, {
+    method: 'POST',
+  }, 'tasks');
+}
+
+// Управление контактами
+export async function createContact(contactData) {
+  return apiRequest('/tasks/contacts', {
+    method: 'POST',
+    body: JSON.stringify(contactData),
+  }, 'tasks');
+}
+
+export async function getContacts(contactType = null, company = null) {
+  const params = new URLSearchParams();
+  if (contactType) params.append('type', contactType);
+  if (company) params.append('company', company);
+
+  return apiRequest(`/tasks/contacts?${params}`);
+}
+
+export async function getContact(contactId) {
+  return apiRequest(`/tasks/contacts/${contactId}`);
+}
+
+export async function updateContact(contactId, contactData) {
+  return apiRequest(`/tasks/contacts/${contactId}`, {
+    method: 'PUT',
+    body: JSON.stringify(contactData),
+  }, 'tasks');
+}
+
+export async function deleteContact(contactId) {
+  return apiRequest(`/tasks/contacts/${contactId}`, {
+    method: 'DELETE',
+  }, 'tasks');
+}
+
+// Функции для работы с новыми фичами documents сервиса
+
+// Учет товаров
+export async function createProduct(productData) {
+  return apiRequest('/documents/products', {
+    method: 'POST',
+    body: JSON.stringify(productData),
+  }, 'documents');
+}
+
+// Транзакции по товарам
+export async function createInventoryTransaction(transactionData) {
+  return apiRequest('/documents/inventory/transactions', {
+    method: 'POST',
+    body: JSON.stringify(transactionData),
+  }, 'documents');
+}
+
+// Прогнозирование спроса
+export async function createDemandForecast(forecastData) {
+  return apiRequest('/documents/inventory/forecast', {
+    method: 'POST',
+    body: JSON.stringify(forecastData),
+  }, 'documents');
+}
+
+// Автоматическое формирование заказов
+export async function generateAutoOrders() {
+  return apiRequest('/documents/inventory/auto-orders', {
+    method: 'POST',
+  }, 'documents');
+}
+
+// Аналитика по товарам
+export async function getInventoryAnalytics(category = null) {
+  const params = new URLSearchParams();
+  if (category) params.append('category', category);
+
+  return apiRequest(`/documents/inventory/analytics?${params}`);
+}

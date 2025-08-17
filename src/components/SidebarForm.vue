@@ -200,7 +200,13 @@ export default {
           submenu: [
             { title: 'Калькулятор налогов', route: '/tax-calculator' },
             { title: 'Анализ конкурентов', route: '/competitor-analysis' },
-            { title: 'Рекомендации', route: '/promotion-recommendations' },
+            { title: 'Рекомендации по продвижению', route: '/promotion' },
+            
+            // НОВЫЕ РАЗДЕЛЫ ДЛЯ НОВЫХ ФИЧ
+            { title: 'Проверка контрагентов', route: '/contractors' },
+            { title: 'Анализ клиентов', route: '/client-analysis' },
+            { title: 'Планирование встреч', route: '/meetings' },
+            { title: 'Управление товарами', route: '/inventory' },
           ],
         },
         {
