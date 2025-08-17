@@ -15,8 +15,30 @@ services:
       - VUE_APP_API_GATEWAY=http://localhost:8000
       - VUE_APP_WS_GATEWAY=ws://localhost:8000
       - NODE_ENV=development
+      # Переменные для новых объединенных сервисов
+      - VUE_APP_SECURITY_CACHE_SERVICE=http://localhost:8017
+      - VUE_APP_VOICE_ANALYTICS_SERVICE=http://localhost:8014
+      - VUE_APP_ENHANCED_AI_SERVICE=http://localhost:8009
+      - VUE_APP_ENHANCED_NOTIFICATION_SERVICE=http://localhost:8010
+      - VUE_APP_ENHANCED_DOCUMENTS_SERVICE=http://localhost:8008
+      - VUE_APP_ENHANCED_FINANCIAL_SERVICE=http://localhost:8007
+      - VUE_APP_BANK_SERVICE=http://localhost:8006
     networks:
       - frontend-network
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+  # API Gateway для проксирования запросов к backend сервисам
+  api-gateway:
+    image: nginx:alpine
+    ports:
+      - "8000:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - frontend-network
+    restart: unless-stopped
 
 networks:
   frontend-network:

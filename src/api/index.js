@@ -1,586 +1,242 @@
-// Новая архитектура API - все через API Gateway
-const BASE_URLS = {
-  // API Gateway - единая точка входа для всех сервисов
-  gateway: 'http://localhost:8000',
+// API конфигурация
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
+
+// Основная функция для API запросов
+async function apiRequest(endpoint, options = {}, service = 'gateway') {
+  const url = service === 'gateway' ? `${API_BASE_URL}${endpoint}` : endpoint;
   
-  // API endpoints через Gateway
-  api: 'http://localhost:8000/api',
-  
-  // WebSocket endpoints для real-time функциональности
-  ws: {
-    gateway: 'ws://localhost:8000/ws',
-    realtime: 'ws://localhost:8000/ws/realtime',
-    voice: 'ws://localhost:8000/ws/voice',
-    notifications: 'ws://localhost:8000/ws/notifications'
-  }
-};
-
-// Улучшенные таймауты для разных типов операций
-const TIMEOUTS = {
-  default: 10000,
-  auth: 5000,
-  data: 15000,
-  ai: 30000,
-  voice: 45000,
-  realtime: 15000,
-  upload: 60000,
-  export: 45000
-};
-
-// Безопасный менеджер токенов с поддержкой refresh
-class SecureTokenManager {
-  constructor() {
-    this.accessToken = null;
-    this.refreshToken = null;
-    this.tokenExpiry = null;
-    this.isRefreshing = false;
-    this.refreshSubscribers = [];
-  }
-
-  setTokens(accessToken, refreshToken, expiresIn = 3600) {
-    this.accessToken = accessToken;
-    this.refreshToken = refreshToken;
-    this.tokenExpiry = Date.now() + (expiresIn * 1000);
-    
-    // Сохраняем в secure storage
-    this.saveToSecureStorage();
-  }
-
-  getAccessToken() {
-    if (this.isTokenExpired()) {
-      return this.refreshAccessToken();
-    }
-    return this.accessToken;
-  }
-
-  isTokenExpired() {
-    return !this.tokenExpiry || Date.now() >= this.tokenExpiry;
-  }
-
-  async refreshAccessToken() {
-    if (this.isRefreshing) {
-      // Если уже обновляем, ждем завершения
-      return new Promise((resolve) => {
-        this.refreshSubscribers.push(resolve);
-      });
-    }
-
-    this.isRefreshing = true;
-
-    try {
-      const response = await fetch(`${BASE_URLS.api}/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          refresh_token: this.refreshToken
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        this.setTokens(data.access_token, this.refreshToken, data.expires_in);
-        
-        // Уведомляем всех подписчиков
-        this.refreshSubscribers.forEach(resolve => resolve(this.accessToken));
-        this.refreshSubscribers = [];
-        
-        return this.accessToken;
-      } else {
-        this.clearTokens();
-        window.location.href = '/login';
-        return null;
-      }
-    } catch (error) {
-      console.error('Token refresh failed:', error);
-      this.clearTokens();
-      window.location.href = '/login';
-      return null;
-    } finally {
-      this.isRefreshing = false;
-    }
-  }
-
-  clearTokens() {
-    this.accessToken = null;
-    this.refreshToken = null;
-    this.tokenExpiry = null;
-    this.clearFromStorage();
-  }
-
-  saveToSecureStorage() {
-    // Используем httpOnly cookies или secure storage
-    // Для демонстрации используем localStorage с дополнительной защитой
-    if (this.accessToken) {
-      localStorage.setItem('access_token', this.accessToken);
-      localStorage.setItem('token_expiry', this.tokenExpiry);
-    }
-    if (this.refreshToken) {
-      localStorage.setItem('refresh_token', this.refreshToken);
-    }
-  }
-
-  loadFromStorage() {
-    try {
-      const accessToken = localStorage.getItem('access_token');
-      const refreshToken = localStorage.getItem('refresh_token');
-      const expiry = localStorage.getItem('token_expiry');
-
-      if (accessToken && refreshToken && expiry) {
-        this.accessToken = accessToken;
-        this.refreshToken = refreshToken;
-        this.tokenExpiry = parseInt(expiry);
-      }
-    } catch (error) {
-      console.error('Failed to load tokens from storage:', error);
-      this.clearTokens();
-    }
-  }
-
-  clearFromStorage() {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('token_expiry');
-    localStorage.removeItem('user_id');
-    localStorage.removeItem('user_role');
-  }
-}
-
-// Глобальный экземпляр менеджера токенов
-const tokenManager = new SecureTokenManager();
-tokenManager.loadFromStorage();
-
-// Улучшенная функция для работы с API через Gateway
-async function apiRequest(endpoint, options = {}, timeoutKey = 'default') {
-  const timeout = TIMEOUTS[timeoutKey] || TIMEOUTS.default;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-  const accessToken = tokenManager.getAccessToken();
-  const headers = {
-    'Content-Type': 'application/json',
-    ...options.headers,
+  const defaultOptions = {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+    },
+    ...options,
   };
 
-  if (accessToken) {
-    headers['Authorization'] = `Bearer ${accessToken}`;
-  }
-
   try {
-    const response = await fetch(`${BASE_URLS.api}${endpoint}`, {
-      ...options,
-      headers,
-      signal: controller.signal,
-    });
-    
-    clearTimeout(timeoutId);
+    const response = await fetch(url, defaultOptions);
     
     if (!response.ok) {
-      if (response.status === 401) {
-        // Попытка обновить токен
-        const newToken = await tokenManager.refreshAccessToken();
-        if (newToken) {
-          // Повторяем запрос с новым токеном
-          return apiRequest(endpoint, options, timeoutKey);
-        }
-      }
-      
-      // Обработка специфичных ошибок API Gateway
-      if (response.status === 429) {
-        throw new Error('Превышен лимит запросов. Попробуйте позже.');
-      } else if (response.status === 503) {
-        throw new Error('Сервис временно недоступен. Попробуйте позже.');
-      } else if (response.status === 502) {
-        throw new Error('Ошибка шлюза. Попробуйте позже.');
-      }
-      
-      const errorText = await response.text();
-      const error = new Error(`Ошибка ${response.status}: ${errorText || response.statusText}`);
-      error.response = { status: response.status, data: { detail: errorText } };
-      throw error;
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
     
-    return response.json();
+    return await response.json();
   } catch (error) {
-    clearTimeout(timeoutId);
-    console.error(`API request error (timeout: ${timeout}ms):`, error);
-    
-    if (error.name === 'AbortError') {
-      throw new Error('Превышено время ожидания запроса');
-    } else if (error.message.includes('Failed to fetch')) {
-      throw new Error('Ошибка сети. Проверьте подключение к интернету.');
-    }
-    
+    console.error('API request failed:', error);
     throw error;
   }
 }
 
-// Новые функции для интеграции с улучшенными сервисами через Gateway
-
-// Enhanced Cache Service через Gateway
-export async function getCachedData(key, service = 'default') {
-  return apiRequest(`/cache/${key}?service=${service}`);
-}
-
-export async function setCachedData(key, data, ttl = 300, service = 'default') {
-  return apiRequest('/cache', {
+// Функции для работы с аутентификацией через Gateway
+export async function login(credentials) {
+  return apiRequest('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({
-      key,
-      data,
-      ttl,
-      service
-    })
-  }, 'data');
-}
-
-// Security Service через Gateway
-export async function getSecurityProfile() {
-  return apiRequest('/security/profile');
-}
-
-export async function updateSecuritySettings(settings) {
-  return apiRequest('/security/profile', {
-    method: 'PUT',
-    body: JSON.stringify(settings)
-  }, 'data');
-}
-
-export async function validateToken(token) {
-  return apiRequest(`/security/validate/${token}`);
-}
-
-// AI Analytics Service через Gateway
-export async function getAIAnalytics(metricNames = null) {
-  const query = metricNames ? `?metric_names=${metricNames.join(',')}` : '';
-  return apiRequest(`/ai/analytics/metrics/realtime${query}`, {}, 'ai');
-}
-
-export async function analyzeBusinessData(data, analysisType = 'trends') {
-  return apiRequest(`/ai/analytics/${analysisType}`, {
-    method: 'POST',
-    body: JSON.stringify(data)
-  }, 'ai');
-}
-
-export async function generateMLForecast(data, horizon = 30) {
-  return apiRequest(`/ai/analytics/forecast`, {
-    method: 'POST',
-    body: JSON.stringify(data)
-  }, 'ai');
-}
-
-// Voice Assistant Service через Gateway
-export async function processVoiceCommand(audioFile, language = 'ru') {
-  const formData = new FormData();
-  formData.append('audio_file', audioFile);
-  formData.append('language', language);
-  
-  return apiRequest('/voice/command', {
-    method: 'POST',
-    body: formData,
-    headers: { 'Content-Type': undefined }
-  }, 'voice');
-}
-
-export async function synthesizeSpeech(text, voiceType = 'female', language = 'ru') {
-  return apiRequest('/voice/synthesize', {
-    method: 'POST',
-    body: JSON.stringify({
-      text,
-      voice_type: voiceType,
-      language
-    })
-  }, 'voice');
-}
-
-// Real-time Analytics Service через Gateway
-export async function getRealTimeMetrics() {
-  return apiRequest('/analytics/metrics/realtime', {}, 'realtime');
-}
-
-export async function subscribeToRealTimeUpdates(subscription) {
-  return apiRequest('/analytics/subscribe', {
-    method: 'POST',
-    body: JSON.stringify(subscription)
-  }, 'realtime');
-}
-
-// WebSocket для real-time обновлений через Gateway
-export function connectRealTimeWebSocket(userId, subscriptions = []) {
-  const accessToken = tokenManager.getAccessToken();
-  if (!accessToken) {
-    throw new Error('No access token available');
-  }
-
-  const ws = new WebSocket(
-    `${BASE_URLS.ws.realtime}/${userId}?subscriptions=${subscriptions.join(',')}&token=${accessToken}`
-  );
-
-  let reconnectAttempts = 0;
-  const maxReconnectAttempts = 5;
-  const reconnectDelay = 1000;
-
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    // Обработка real-time данных
-    console.log('Real-time update:', data);
-  };
-
-  ws.onerror = (error) => {
-    console.error('Real-time WebSocket error:', error);
-  };
-
-  ws.onclose = (event) => {
-    console.log('Real-time WebSocket closed:', event.code, event.reason);
-    
-    if (reconnectAttempts < maxReconnectAttempts) {
-      reconnectAttempts++;
-      const delay = reconnectDelay * Math.pow(2, reconnectAttempts - 1);
-      
-      console.log(`Attempting to reconnect in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
-      
-      setTimeout(() => {
-        connectRealTimeWebSocket(userId, subscriptions);
-      }, delay);
-    } else {
-      console.error('Max reconnection attempts reached');
-    }
-  };
-
-  return ws;
-}
-
-// Обновленные функции аутентификации через Gateway
-export async function login(email, password) {
-  const response = await apiRequest('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(credentials),
   }, 'auth');
-  
-  tokenManager.setTokens(response.access_token, response.refresh_token, response.expires_in);
-  
-  // Сохраняем дополнительную информацию
-  localStorage.setItem('user_id', response.user_id);
-  localStorage.setItem('user_role', response.role || 'user');
-  
-  return response;
 }
 
-export async function register(payload) {
-  const response = await apiRequest('/auth/register', {
+export async function register(userData) {
+  return apiRequest('/auth/register', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify(userData),
   }, 'auth');
-  
-  tokenManager.setTokens(response.access_token, response.refresh_token, response.expires_in);
-  localStorage.setItem('user_id', response.user_id);
-  localStorage.setItem('user_role', response.role || 'user');
-  
-  return response;
 }
 
-export async function googleLogin(code, state) {
-  const response = await apiRequest(
-    `/auth/google/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
-    { method: 'GET' },
-    'auth'
-  );
-  
-  tokenManager.setTokens(response.access_token, response.refresh_token, response.expires_in);
-  localStorage.setItem('user_id', response.user_id);
-  localStorage.setItem('user_role', response.role || 'user');
-  
-  return response;
+export async function refreshToken(refreshToken) {
+  return apiRequest('/auth/refresh', {
+    method: 'POST',
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  }, 'auth');
 }
 
 export async function logout() {
-  try {
-    await apiRequest('/auth/logout', { method: 'POST' }, 'auth');
-  } catch (error) {
-    console.error('Logout error:', error);
-  } finally {
-    tokenManager.clearTokens();
-  }
+  return apiRequest('/auth/logout', {
+    method: 'POST',
+  }, 'auth');
 }
 
 export async function getProfile() {
   return apiRequest('/auth/profile');
 }
 
-export async function updateProfile(profile) {
-  if (profile.inn && !/^\d{10}$|^\d{12}$/.test(profile.inn)) {
-    throw new Error("ИНН должен содержать 10 или 12 цифр");
-  }
+export async function updateProfile(profileData) {
   return apiRequest('/auth/profile', {
     method: 'PUT',
-    body: JSON.stringify(profile),
-  }, 'data');
+    body: JSON.stringify(profileData),
+  }, 'auth');
+}
+
+// Функции для работы с пользователями через Gateway
+export async function getUsers(page = 1, limit = 50, role = null, companyId = null) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  if (role) params.append('role', role);
+  if (companyId) params.append('company_id', companyId);
+  
+  return apiRequest(`/users?${params}`);
+}
+
+export async function createUser(userData) {
+  return apiRequest('/users', {
+    method: 'POST',
+    body: JSON.stringify(userData),
+  }, 'auth');
+}
+
+export async function updateUser(userId, userData) {
+  return apiRequest(`/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(userData),
+  }, 'auth');
+}
+
+export async function deleteUser(userId) {
+  return apiRequest(`/users/${userId}`, {
+    method: 'DELETE',
+  }, 'auth');
+}
+
+export async function createUserInCompany(companyId, userData) {
+  return apiRequest(`/companies/${companyId}/users`, {
+    method: 'POST',
+    body: JSON.stringify(userData),
+  }, 'auth');
 }
 
 // Функции для работы с задачами через Gateway
+export async function getTasks(page = 1, limit = 50, status = null, priority = null) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  if (status) params.append('status', status);
+  if (priority) params.append('priority', priority);
+  
+  return apiRequest(`/tasks?${params}`);
+}
+
+// Алиас для совместимости с существующими компонентами
 export async function getMyTasks(params = {}) {
   const query = new URLSearchParams(params).toString();
   return apiRequest(`/tasks/my?${query}`);
-}
-
-export async function createTask(task) {
-  const priorityMap = { 'Низкий': 1, 'Средний': 2, 'Высокий': 3 };
-  return apiRequest('/tasks', {
-    method: 'POST',
-    body: JSON.stringify({
-      ...task,
-      priority: priorityMap[task.priority] || task.priority,
-      assignees: task.assignee ? [{ user_id: task.assignee }] : [],
-    }),
-  }, 'data');
-}
-
-export async function updateTask(taskId, updates) {
-  const priorityMap = { 'Низкий': 1, 'Средний': 2, 'Высокий': 3 };
-  return apiRequest(`/tasks/${taskId}`, {
-    method: 'PUT',
-    body: JSON.stringify({
-      ...updates,
-      priority: priorityMap[updates.priority] || updates.priority,
-      assignees: updates.assignee ? [{ user_id: updates.assignee }] : [],
-    }),
-  }, 'data');
-}
-
-export async function deleteTask(taskId) {
-  return apiRequest(`/tasks/${taskId}`, { method: 'DELETE' });
 }
 
 export async function getTask(taskId) {
   return apiRequest(`/tasks/${taskId}`);
 }
 
+export async function createTask(taskData) {
+  return apiRequest('/tasks', {
+    method: 'POST',
+    body: JSON.stringify(taskData),
+  }, 'tasks');
+}
+
+export async function updateTask(taskId, taskData) {
+  return apiRequest(`/tasks/${taskId}`, {
+    method: 'PUT',
+    body: JSON.stringify(taskData),
+  }, 'tasks');
+}
+
+export async function deleteTask(taskId) {
+  return apiRequest(`/tasks/${taskId}`, {
+    method: 'DELETE',
+  }, 'tasks');
+}
+
+export async function getTaskComments(taskId) {
+  return apiRequest(`/tasks/${taskId}/comments`);
+}
+
+export async function addTaskComment(taskId, commentData) {
+  return apiRequest(`/tasks/${taskId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify(commentData),
+  }, 'tasks');
+}
+
 // Функции для работы с клиентами через Gateway
+export async function getClients(filters = {}) {
+  const params = new URLSearchParams();
+  
+  if (filters.page) params.append('page', filters.page.toString());
+  if (filters.limit) params.append('limit', filters.limit.toString());
+  if (filters.status) params.append('status', filters.status);
+  if (filters.search) params.append('search', filters.search);
+  
+  const query = params.toString() ? `?${params}` : '';
+  return apiRequest(`/clients${query}`);
+}
+
 export async function addClient(clientData) {
   return apiRequest('/clients', {
     method: 'POST',
     body: JSON.stringify(clientData),
-  }, 'data');
-}
-
-export async function getClients(filters = {}) {
-  const query = new URLSearchParams(filters).toString();
-  return apiRequest(`/clients${query ? `?${query}` : ''}`);
+  }, 'clients');
 }
 
 export async function updateClient(clientId, clientData) {
   return apiRequest(`/clients/${clientId}`, {
     method: 'PUT',
     body: JSON.stringify(clientData),
-  }, 'data');
+  }, 'clients');
 }
 
 export async function deleteClient(clientId) {
-  return apiRequest(`/clients/${clientId}`, { method: 'DELETE' });
-}
-
-// Функции для работы с комментариями через Gateway
-export async function createComment(taskId, comment) {
-  return apiRequest(`/tasks/${taskId}/comments`, {
-    method: 'POST',
-    body: JSON.stringify({ text: comment }),
-  }, 'data');
-}
-
-export async function updateComment(taskId, commentId, comment) {
-  return apiRequest(`/tasks/${taskId}/comments/${commentId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ text: comment }),
-  }, 'data');
-}
-
-export async function deleteComment(taskId, commentId) {
-  return apiRequest(`/tasks/${taskId}/comments/${commentId}`, { method: 'DELETE' });
-}
-
-// Функции для работы с документами через Gateway
-export async function getDocuments() {
-  return apiRequest('/documents');
-}
-
-export async function uploadDocument(file) {
-  const formData = new FormData();
-  formData.append('file', file);
-  return apiRequest('/documents', {
-    method: 'POST',
-    body: formData,
-    headers: { 'Content-Type': undefined },
-  }, 'upload');
+  return apiRequest(`/clients/${clientId}`, {
+    method: 'DELETE',
+  }, 'clients');
 }
 
 // Функции для работы с отчетами через Gateway
 export async function getReports(page = 1, limit = 10, filters = {}) {
-  const queryParams = new URLSearchParams({
+  const params = new URLSearchParams({
     page: page.toString(),
-    limit: limit.toString(),
-    ...filters
-  });
-  return apiRequest(`/reports?${queryParams}`);
-}
-
-export async function getReportsWithPagination(page = 1, limit = 10, filters = {}) {
-  const queryParams = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-    ...filters
+    limit: limit.toString()
   });
   
-  const response = await apiRequest(`/reports?${queryParams}`);
+  if (filters.type) params.append('type', filters.type);
+  if (filters.status) params.append('status', filters.status);
+  if (filters.date_from) params.append('date_from', filters.date_from);
+  if (filters.date_to) params.append('date_to', filters.date_to);
   
-  // Возвращаем структурированный ответ с метаданными пагинации
-  return {
-    data: response.reports || response.data || [],
-    pagination: {
-      currentPage: page,
-      totalPages: Math.ceil((response.total || 0) / limit),
-      totalItems: response.total || 0,
-      itemsPerPage: limit,
-      hasNextPage: page < Math.ceil((response.total || 0) / limit),
-      hasPrevPage: page > 1
-    }
-  };
-}
-
-export async function generateReport(filters) {
-  return apiRequest('/reports', {
-    method: 'POST',
-    body: JSON.stringify(filters),
-  }, 'data');
-}
-
-export async function createReport(reportData) {
-  return apiRequest('/reports', {
-    method: 'POST',
-    body: JSON.stringify(reportData),
-  }, 'data');
-}
-
-export async function updateReport(reportId, updates) {
-  const payload = {
-    title: updates.title,
-    status: updates.status,
-    responsible: updates.author,
-    description: updates.content
-  };
-  return apiRequest(`/reports/${reportId}`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  }, 'data');
+  return apiRequest(`/reports?${params}`);
 }
 
 export async function getReport(reportId) {
   return apiRequest(`/reports/${reportId}`);
 }
 
+export async function createReport(reportData) {
+  return apiRequest('/reports', {
+    method: 'POST',
+    body: JSON.stringify(reportData),
+  }, 'reports');
+}
+
+export async function updateReport(reportId, reportData) {
+  return apiRequest(`/reports/${reportId}`, {
+    method: 'PUT',
+    body: JSON.stringify(reportData),
+  }, 'reports');
+}
+
 export async function deleteReport(reportId) {
-  return apiRequest(`/reports/${reportId}`, { method: 'DELETE' });
+  return apiRequest(`/reports/${reportId}`, {
+    method: 'DELETE',
+  }, 'reports');
+}
+
+export async function generateReport(filters) {
+  return apiRequest('/reports/generate', {
+    method: 'POST',
+    body: JSON.stringify(filters),
+  }, 'reports');
 }
 
 export async function exportReport(reportId, format = 'pdf') {
@@ -589,63 +245,40 @@ export async function exportReport(reportId, format = 'pdf') {
 
 // Функции для работы с актами через Gateway
 export async function getActs(page = 1, limit = 10, filters = {}) {
-  const queryParams = new URLSearchParams({
+  const params = new URLSearchParams({
     page: page.toString(),
-    limit: limit.toString(),
-    ...filters
-  });
-  return apiRequest(`/acts?${queryParams}`);
-}
-
-export async function getActsWithPagination(page = 1, limit = 10, filters = {}) {
-  const queryParams = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-    ...filters
+    limit: limit.toString()
   });
   
-  const response = await apiRequest(`/acts?${queryParams}`);
+  if (filters.status) params.append('status', filters.status);
+  if (filters.date_from) params.append('date_from', filters.date_from);
+  if (filters.date_to) params.append('date_to', filters.date_to);
   
-  // Возвращаем структурированный ответ с метаданными пагинации
-  return {
-    data: response.acts || response.data || [],
-    pagination: {
-      currentPage: page,
-      totalPages: Math.ceil((response.total || 0) / limit),
-      totalItems: response.total || 0,
-      itemsPerPage: limit,
-      hasNextPage: page < Math.ceil((response.total || 0) / limit),
-      hasPrevPage: page > 1
-    }
-  };
-}
-
-export async function createAct(actData) {
-  return apiRequest('/acts', {
-    method: 'POST',
-    body: JSON.stringify(actData),
-  }, 'data');
-}
-
-export async function updateAct(actId, updates) {
-  const payload = {
-    title: updates.title,
-    status: updates.status,
-    responsible: updates.responsible,
-    description: updates.description
-  };
-  return apiRequest(`/acts/${actId}`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  }, 'data');
+  return apiRequest(`/acts?${params}`);
 }
 
 export async function getAct(actId) {
   return apiRequest(`/acts/${actId}`);
 }
 
+export async function createAct(actData) {
+  return apiRequest('/acts', {
+    method: 'POST',
+    body: JSON.stringify(actData),
+  }, 'acts');
+}
+
+export async function updateAct(actId, actData) {
+  return apiRequest(`/acts/${actId}`, {
+    method: 'PUT',
+    body: JSON.stringify(actData),
+  }, 'acts');
+}
+
 export async function deleteAct(actId) {
-  return apiRequest(`/acts/${actId}`, { method: 'DELETE' });
+  return apiRequest(`/acts/${actId}`, {
+    method: 'DELETE',
+  }, 'acts');
 }
 
 export async function signAct(actId) {
@@ -658,277 +291,40 @@ export async function exportAct(actId, format = 'pdf') {
   return apiRequest(`/acts/${actId}/export?format=${format}`);
 }
 
-// Функции для работы с документами через Gateway
-export async function getDocuments(page = 1, limit = 10, filters = {}) {
-  const queryParams = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-    ...filters
-  });
-  return apiRequest(`/documents?${queryParams}`);
-}
-
-export async function getDocumentsWithPagination(page = 1, limit = 10, filters = {}) {
-  const queryParams = new URLSearchParams({
-    page: page.toString(),
-    limit: limit.toString(),
-    ...filters
-  });
-  
-  const response = await apiRequest(`/documents?${queryParams}`);
-  
-  // Возвращаем структурированный ответ с метаданными пагинации
-  return {
-    data: response.documents || response.data || [],
-    pagination: {
-      currentPage: page,
-      totalPages: Math.ceil((response.total || 0) / limit),
-      totalItems: response.total || 0,
-      itemsPerPage: limit,
-      hasNextPage: page < Math.ceil((response.total || 0) / limit),
-      hasPrevPage: page > 1
-    }
-  };
-}
-
-export async function createDocument(documentData) {
-  return apiRequest('/documents/create', {
-    method: 'POST',
-    body: JSON.stringify(documentData),
-  }, 'data');
-}
-
-export async function getDocument(documentId) {
-  return apiRequest(`/documents/${documentId}`);
-}
-
-export async function updateDocument(documentId, updates) {
-  return apiRequest(`/documents/${documentId}`, {
-    method: 'PUT',
-    body: JSON.stringify(updates),
-  }, 'data');
-}
-
-export async function deleteDocument(documentId) {
-  return apiRequest(`/documents/${documentId}`, { method: 'DELETE' });
-}
-
-export async function signDocument(documentId) {
-  return apiRequest(`/documents/${documentId}/sign`, {
-    method: 'POST'
-  });
-}
-
-export async function exportDocument(documentId, format = 'pdf') {
-  return apiRequest(`/documents/${documentId}/export?format=${format}`);
-}
-
-export async function exportTo1C(documentId) {
-  return apiRequest(`/documents/${documentId}/export/1c`);
-}
-
-// Функции для работы с пользователями через Gateway
-export async function getUsers() {
-  return apiRequest('/users');
-}
-
-export async function createUser(email, password, role) {
-  return apiRequest('/users', {
-    method: 'POST',
-    body: JSON.stringify({ email, password, role, company_name: "Default Company" }),
-  }, 'data');
-}
-
-export async function updateUser(userId, updates) {
-  return apiRequest(`/users/${userId}`, {
-    method: 'PUT',
-    body: JSON.stringify(updates),
-  }, 'data');
-}
-
-export async function deleteUser(userId) {
-  return apiRequest(`/users/${userId}`, { method: 'DELETE' });
-}
-
-// Функции для работы с подпиской через Gateway
-export async function getCompanyCards() {
-  return apiRequest('/subscription/cards', {}, 'data');
-}
-
-export async function getPaymentHistory() {
-  return apiRequest('/subscription/payments', {}, 'data');
-}
-
-export async function attachCard(cardData) {
-  return apiRequest('/subscription/cards/attach', {
-    method: 'POST',
-    body: JSON.stringify(cardData),
-  }, 'data');
-}
-
-export async function detachCard(cardData) {
-  return apiRequest('/subscription/cards/detach', {
-    method: 'POST',
-    body: JSON.stringify(cardData),
-  }, 'data');
-}
-
-export async function initiateSubscriptionPayment(companyId, cardId = null) {
-  return apiRequest('/subscription/initiate', {
-    method: 'POST',
-    body: JSON.stringify({ company_id: companyId, card_id: cardId }),
-  }, 'data');
-}
-
-export async function confirmSubscriptionPayment(paymentId) {
-  return apiRequest('/subscription/confirm', {
-    method: 'POST',
-    body: JSON.stringify({ payment_id: paymentId }),
-  }, 'data');
-}
-
-export async function activateTrial(companyId) {
-  return apiRequest('/subscription/activate-trial', {
-    method: 'POST',
-    body: JSON.stringify({ company_id: companyId }),
-  }, 'data');
-}
-
-// Функции для работы с AI через Gateway
-export async function analyzeText(text) {
-  return apiRequest('/ai/business/text', {
-    method: 'POST',
-    body: JSON.stringify({ text }),
-  }, 'ai');
-}
-
-export async function analyzeVoice(audioBase64, format, suggestion = null) {
-  const body = suggestion ? { ...suggestion } : { audio_file: audioBase64, format };
-  return apiRequest('/ai/voice/predictive', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  }, 'ai');
-}
-
-export async function processText(text) {
-  return apiRequest('/ai/business/text', {
-    method: 'POST',
-    body: JSON.stringify({ text }),
-  }, 'ai');
-}
-
-// Функции для работы с конкурентами через Gateway
-export async function monitorCompetitors(urls) {
-  return apiRequest('/ai/business/competitors/analyze', {
-    method: 'POST',
-    body: JSON.stringify(urls),
-  }, 'ai');
-}
-
-export async function getPromotionRecommendations(salesData, competitorData) {
-  return apiRequest('/ai/business/insights/generate', {
-    method: 'POST',
-    body: JSON.stringify({ 
-      insight_type: 'promotion',
-      sales_data: salesData, 
-      competitor_data: competitorData 
-    }),
-  }, 'ai');
-}
-
 // Функции для работы с временем через Gateway
 export async function startTimeTracking(taskId) {
   return apiRequest('/time/start', {
     method: 'POST',
     body: JSON.stringify({ task_id: taskId }),
-  }, 'data');
+  }, 'time');
 }
 
 export async function stopTimeTracking(taskId) {
   return apiRequest('/time/stop', {
     method: 'POST',
     body: JSON.stringify({ task_id: taskId }),
-  }, 'data');
+  }, 'time');
 }
 
 export async function getTimeReport(period = 'week') {
   return apiRequest(`/time/report?period=${period}`);
 }
 
-// Функции для работы с производительностью через Gateway
-export async function getProductivityData() {
-  return apiRequest('/productivity?period=week');
-}
-
-export async function getProductivityReport(userId, period) {
-  return apiRequest(`/productivity/${userId}?period=${period}`);
-}
-
-// Функции для работы с зарплатой через Gateway
-export async function calculatePayroll(period) {
-  return apiRequest('/payroll/calculate', {
-    method: 'POST',
-    body: JSON.stringify({ period }),
-  }, 'data');
-}
-
-export async function getPayroll(userId) {
-  return apiRequest(`/payroll/${userId}`);
-}
-
-export async function getAggregatePayroll(period) {
-  return apiRequest(`/payroll/aggregate?period=${period}`);
-}
-
-// Функции для работы с задачами через Gateway
-export async function createRecurringTask(taskData) {
-  return apiRequest('/tasks/recurring', {
-    method: 'POST',
-    body: JSON.stringify(taskData),
-  }, 'data');
-}
-
-export async function createTaxReminders(data) {
-  return apiRequest('/tasks/tax-reminders', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  }, 'data');
-}
-
 // Функции для работы с дашбордом через Gateway
 export async function getDashboardMetrics() {
-  const data = await apiRequest('/dashboard/metrics');
-  return {
-    completed_tasks: data.task_count || 0,
-    new_clients: data.new_clients || 0,
-    total_amount: data.total_amount || 0,
-    productivity: data.productivity || 0,
-    tasks_change: data.tasks_change || 0,
-    clients_change: data.clients_change || 0,
-    amount_change: data.amount_change || 0,
-    productivity_change: data.productivity_change || 0
-  };
+  return apiRequest('/dashboard/metrics');
 }
 
 export async function getActivityData(period) {
-  const data = await apiRequest(`/dashboard/activity?period=${period}`);
-  return {
-    labels: data.weeklyTrends?.map(trend => trend.date) || [],
-    completed: data.weeklyTrends?.map(trend => trend.completed) || [],
-    created: data.weeklyTrends?.map(trend => trend.created) || []
-  };
-}
-
-export async function getTaskDistribution() {
-  const data = await apiRequest('/dashboard/task-distribution');
-  return {
-    labels: data.employee_load.map(emp => emp.user_id),
-    values: data.employee_load.map(emp => emp.task_count)
-  };
+  return apiRequest(`/dashboard/activity?period=${period}`);
 }
 
 export async function getRecentTasks() {
   return apiRequest('/tasks/recent?limit=5');
+}
+
+export async function getTaskDistribution() {
+  return apiRequest('/dashboard/task-distribution');
 }
 
 export async function getAdminDashboardData() {
@@ -945,9 +341,61 @@ export async function getAdminDashboardData() {
   };
 }
 
+// Функции для работы с подпиской через Gateway
+export async function getCompanyCards() {
+  return apiRequest('/subscription/cards');
+}
+
+export async function getPaymentHistory() {
+  return apiRequest('/subscription/payments');
+}
+
+export async function attachCard(cardData) {
+  return apiRequest('/subscription/cards/attach', {
+    method: 'POST',
+    body: JSON.stringify(cardData),
+  }, 'subscription');
+}
+
+export async function detachCard(cardData) {
+  return apiRequest('/subscription/cards/detach', {
+    method: 'POST',
+    body: JSON.stringify(cardData),
+  }, 'subscription');
+}
+
+export async function initiateSubscriptionPayment(companyId, cardId = null) {
+  return apiRequest('/subscription/initiate', {
+    method: 'POST',
+    body: JSON.stringify({ company_id: companyId, card_id: cardId }),
+  }, 'subscription');
+}
+
+export async function confirmSubscriptionPayment(paymentId) {
+  return apiRequest('/subscription/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ payment_id: paymentId }),
+  }, 'subscription');
+}
+
+export async function activateTrial(companyId) {
+  return apiRequest('/subscription/activate-trial', {
+    method: 'POST',
+    body: JSON.stringify({ company_id: companyId }),
+  }, 'subscription');
+}
+
 // Функции для работы с Google Auth через Gateway
 export async function getGoogleLoginUrl() {
   return apiRequest('/auth/google');
+}
+
+export async function googleLogin(code, state) {
+  return apiRequest(
+    `/auth/google/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
+    { method: 'GET' },
+    'auth'
+  );
 }
 
 // Функции для работы с паролями через Gateway
@@ -966,13 +414,6 @@ export async function confirmPasswordReset(token, new_password) {
 }
 
 // Функции для работы с компаниями через Gateway
-export async function createUserInCompany(companyId, email, password, role) {
-  return apiRequest(`/companies/${companyId}/users`, {
-    method: 'POST',
-    body: JSON.stringify({ email, password, role }),
-  }, 'data');
-}
-
 export async function deleteCompany(companyId) {
   return apiRequest(`/companies/${companyId}`, { method: 'DELETE' });
 }
@@ -981,7 +422,7 @@ export async function updateEmployeeOrder(orderData) {
   return apiRequest('/employees/order', {
     method: 'POST',
     body: JSON.stringify(orderData),
-  }, 'data');
+  }, 'employees');
 }
 
 // Функции для работы с финансовыми событиями через Gateway
@@ -997,36 +438,736 @@ export async function exportData(format, filters) {
   }, 'export');
 }
 
-// WebSocket для уведомлений через Gateway
-export function connectWebSocket(service, endpoint, userId, onMessage) {
-  const accessToken = tokenManager.getAccessToken();
-  if (!accessToken) {
-    throw new Error('No access token available');
-  }
+// Функции для работы с объединенным финансовым сервисом через Gateway
+export async function getTransactions(page = 1, limit = 50, category = null, dateFrom = null, dateTo = null) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString()
+  });
   
-  const ws = new WebSocket(`${BASE_URLS.ws.gateway}/${service}/${endpoint}/${userId}?token=${accessToken}`);
+  if (category) params.append('category', category);
+  if (dateFrom) params.append('date_from', dateFrom);
+  if (dateTo) params.append('date_to', dateTo);
   
-  let reconnectAttempts = 0;
-  const maxReconnectAttempts = 3;
+  return apiRequest(`/financial/transactions?${params}`);
+}
+
+export async function createTransaction(transactionData) {
+  return apiRequest('/financial/transactions', {
+    method: 'POST',
+    body: JSON.stringify(transactionData),
+  }, 'financial');
+}
+
+export async function updateTransaction(transactionId, transactionData) {
+  return apiRequest(`/financial/transactions/${transactionId}`, {
+    method: 'PUT',
+    body: JSON.stringify(transactionData),
+  }, 'financial');
+}
+
+export async function deleteTransaction(transactionId) {
+  return apiRequest(`/financial/transactions/${transactionId}`, {
+    method: 'DELETE',
+  }, 'financial');
+}
+
+export async function getCategories() {
+  return apiRequest('/financial/categories');
+}
+
+export async function createCategory(categoryData) {
+  return apiRequest('/financial/categories', {
+    method: 'POST',
+    body: JSON.stringify(categoryData),
+  }, 'financial');
+}
+
+export async function getBudgets() {
+  return apiRequest('/financial/budgets');
+}
+
+export async function createBudget(budgetData) {
+  return apiRequest('/financial/budgets', {
+    method: 'POST',
+    body: JSON.stringify(budgetData),
+  }, 'financial');
+}
+
+export async function getFinancialAnalytics(period = 'month') {
+  return apiRequest(`/financial/analytics/summary?period=${period}`);
+}
+
+export async function getCashflowAnalysis(period = 'month') {
+  return apiRequest(`/financial/analytics/cashflow?period=${period}`);
+}
+
+// Функции для работы с налоговой интеграцией (теперь часть финансового сервиса)
+export async function createTaxReport(taxReportData) {
+  return apiRequest('/financial/tax/reports', {
+    method: 'POST',
+    body: JSON.stringify(taxReportData),
+  }, 'financial');
+}
+
+export async function submitTaxReport(reportId) {
+  return apiRequest(`/financial/tax/reports/${reportId}/submit`, {
+    method: 'POST',
+  }, 'financial');
+}
+
+export async function getTaxCalendar(year = new Date().getFullYear()) {
+  return apiRequest(`/financial/tax/calendar/${year}`);
+}
+
+export async function getTaxOptimizationSuggestions() {
+  return apiRequest('/financial/tax/optimization/suggestions');
+}
+
+export async function getTaxReminders() {
+  return apiRequest('/financial/tax/reminders');
+}
+
+export async function getTaxCalculations() {
+  return apiRequest('/financial/tax/calculations');
+}
+
+export async function createTaxPayment(taxPaymentData) {
+  return apiRequest('/financial/tax/payments', {
+    method: 'POST',
+    body: JSON.stringify(taxPaymentData),
+  }, 'financial');
+}
+
+export async function getTaxHistory() {
+  return apiRequest('/financial/tax/history');
+}
+
+// Функции для работы с объединенным банковским сервисом через Gateway
+export async function getBankAccounts() {
+  return apiRequest('/bank/accounts');
+}
+
+export async function createBankAccount(accountData) {
+  return apiRequest('/bank/accounts', {
+    method: 'POST',
+    body: JSON.stringify(accountData),
+  }, 'bank');
+}
+
+export async function getAccountBalance(accountId) {
+  return apiRequest(`/bank/accounts/${accountId}/balance`);
+}
+
+export async function createPayment(paymentData) {
+  return apiRequest('/bank/payments', {
+    method: 'POST',
+    body: JSON.stringify(paymentData),
+  }, 'bank');
+}
+
+export async function getPayments(page = 1, limit = 50, status = null) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString()
+  });
   
-  ws.onmessage = (event) => onMessage(JSON.parse(event.data));
-  ws.onerror = (error) => console.error(`WebSocket error (${service}):`, error);
-  ws.onclose = () => {
-    if (reconnectAttempts < maxReconnectAttempts) {
-      reconnectAttempts++;
-      setTimeout(() => {
-        connectWebSocket(service, endpoint, userId, onMessage);
-      }, 1000 * reconnectAttempts);
-    }
+  if (status) params.append('status', status);
+  
+  return apiRequest(`/bank/payments?${params}`);
+}
+
+export async function createRecurringPayment(paymentData) {
+  return apiRequest('/bank/recurring-payments', {
+    method: 'POST',
+    body: JSON.stringify(paymentData),
+  }, 'bank');
+}
+
+export async function getRecurringPayments() {
+  return apiRequest('/bank/recurring-payments');
+}
+
+export async function generateSBPQR(paymentData) {
+  return apiRequest('/bank/qr/sbp', {
+    method: 'POST',
+    body: JSON.stringify(paymentData),
+  }, 'bank');
+}
+
+export async function generatePaymentQR(paymentData) {
+  return apiRequest('/bank/qr/payment', {
+    method: 'POST',
+    body: JSON.stringify(paymentData),
+  }, 'bank');
+}
+
+export async function getQRCodes() {
+  return apiRequest('/bank/qr');
+}
+
+export async function getBankConnections() {
+  return apiRequest('/bank/connections');
+}
+
+export async function createBankConnection(connectionData) {
+  return apiRequest('/bank/connections', {
+    method: 'POST',
+    body: JSON.stringify(connectionData),
+  }, 'bank');
+}
+
+export async function syncBankConnection(connectionId) {
+  return apiRequest(`/bank/connections/${connectionId}/sync`, {
+    method: 'POST',
+  }, 'bank');
+}
+
+export async function getBankTransactions(connectionId, page = 1, limit = 50) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  return apiRequest(`/bank/connections/${connectionId}/transactions?${params}`);
+}
+
+export async function getBankAnalyticsSummary(connectionId, period = 'month') {
+  return apiRequest(`/bank/connections/${connectionId}/analytics/summary?period=${period}`);
+}
+
+export async function getBankCashflowAnalysis(connectionId, period = 'month') {
+  return apiRequest(`/bank/connections/${connectionId}/analytics/cashflow?period=${period}`);
+}
+
+// Функции для работы с объединенным сервисом документов через Gateway
+export async function getDocuments(page = 1, limit = 50, type = null, status = null) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  if (type) params.append('type', type);
+  if (status) params.append('status', status);
+  
+  return apiRequest(`/documents?${params}`);
+}
+
+export async function getDocument(documentId) {
+  return apiRequest(`/documents/${documentId}`);
+}
+
+export async function createDocument(documentData) {
+  return apiRequest('/documents', {
+    method: 'POST',
+    body: JSON.stringify(documentData),
+  }, 'documents');
+}
+
+export async function updateDocument(documentId, documentData) {
+  return apiRequest(`/documents/${documentId}`, {
+    method: 'PUT',
+    body: JSON.stringify(documentData),
+  }, 'documents');
+}
+
+export async function deleteDocument(documentId) {
+  return apiRequest(`/documents/${documentId}`, {
+    method: 'DELETE',
+  }, 'documents');
+}
+
+export async function signDocument(documentId, signatureData) {
+  return apiRequest(`/documents/${documentId}/sign`, {
+    method: 'POST',
+    body: JSON.stringify(signatureData),
+  }, 'documents');
+}
+
+export async function exportDocument(documentId, format = 'pdf') {
+  return apiRequest(`/documents/${documentId}/export?format=${format}`);
+}
+
+export async function exportTo1C(documentId) {
+  return apiRequest(`/documents/${documentId}/export/1c`);
+}
+
+export async function getReports(page = 1, limit = 50, type = null) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  if (type) params.append('type', type);
+  
+  return apiRequest(`/documents/reports?${params}`);
+}
+
+export async function createReport(reportData) {
+  return apiRequest('/documents/reports', {
+    method: 'POST',
+    body: JSON.stringify(reportData),
+  }, 'documents');
+}
+
+export async function getActs(page = 1, limit = 50, status = null) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  if (status) params.append('status', status);
+  
+  return apiRequest(`/documents/acts?${params}`);
+}
+
+export async function createAct(actData) {
+  return apiRequest('/documents/acts', {
+    method: 'POST',
+    body: JSON.stringify(actData),
+  }, 'documents');
+}
+
+export async function createTimeReport(timeReportData) {
+  return apiRequest('/documents/time-reports', {
+    method: 'POST',
+    body: JSON.stringify(timeReportData),
+  }, 'documents');
+}
+
+export async function activateTrial() {
+  return apiRequest('/documents/trial/activate', {
+    method: 'POST',
+  }, 'documents');
+}
+
+// Функции для работы с шаблонами документов (теперь часть сервиса документов)
+export async function getDocumentTemplates(type = null) {
+  const query = type ? `?type=${type}` : '';
+  return apiRequest(`/documents/templates${query}`);
+}
+
+export async function getDocumentTemplate(templateType) {
+  return apiRequest(`/documents/templates/${templateType}`);
+}
+
+export async function generateDocument(templateType, variables) {
+  return apiRequest('/documents/generate', {
+    method: 'POST',
+    body: JSON.stringify({
+      template_type: templateType,
+      variables: variables
+    }),
+  }, 'documents');
+}
+
+export async function generateWordDocument(templateType, variables) {
+  return apiRequest('/documents/generate/word', {
+    method: 'POST',
+    body: JSON.stringify({
+      template_type: templateType,
+      variables: variables
+    }),
+  }, 'documents');
+}
+
+export async function generatePDFDocument(templateType, variables) {
+  return apiRequest('/documents/generate/pdf', {
+    method: 'POST',
+    body: JSON.stringify({
+      template_type: templateType,
+      variables: variables
+    }),
+  }, 'documents');
+}
+
+export async function getTemplateCategories() {
+  return apiRequest('/documents/templates/categories');
+}
+
+export async function getTemplateTypes() {
+  return apiRequest('/documents/templates/types');
+}
+
+// Функции для работы с объединенным сервисом уведомлений через Gateway
+export async function createSmartNotification(notificationData) {
+  return apiRequest('/notifications/smart/notifications', {
+    method: 'POST',
+    body: JSON.stringify(notificationData),
+  }, 'notifications');
+}
+
+export async function getSmartNotifications(userId, status = null, type = null, page = 1, limit = 50) {
+  const params = new URLSearchParams({
+    user_id: userId,
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  if (status) params.append('status', status);
+  if (type) params.append('type', type);
+  
+  return apiRequest(`/notifications/smart/notifications?${params}`);
+}
+
+export async function createNotificationTemplate(templateData) {
+  return apiRequest('/notifications/smart/templates', {
+    method: 'POST',
+    body: JSON.stringify(templateData),
+  }, 'notifications');
+}
+
+export async function getNotificationTemplates(type = null) {
+  const query = type ? `?type=${type}` : '';
+  return apiRequest(`/notifications/smart/templates${query}`);
+}
+
+export async function updateUserNotificationSettings(userId, settingsData) {
+  return apiRequest(`/notifications/smart/settings/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(settingsData),
+  }, 'notifications');
+}
+
+export async function getUserNotificationSettings(userId) {
+  return apiRequest(`/notifications/smart/settings/${userId}`);
+}
+
+export async function createNotificationRule(ruleData) {
+  return apiRequest('/notifications/smart/rules', {
+    method: 'POST',
+    body: JSON.stringify(ruleData),
+  }, 'notifications');
+}
+
+export async function getNotificationRules(userId) {
+  return apiRequest(`/notifications/smart/rules?user_id=${userId}`);
+}
+
+export async function getNotificationAnalytics(userId, period = 'week') {
+  return apiRequest(`/notifications/smart/analytics/${userId}?period=${period}`);
+}
+
+// Функции для работы с объединенным AI сервисом через Gateway
+export async function analyzeCompetitors(competitorUrls, industry = null, focusAreas = []) {
+  return apiRequest('/ai/business/competitors/analyze', {
+    method: 'POST',
+    body: JSON.stringify({
+      competitor_urls: competitorUrls,
+      industry,
+      focus_areas: focusAreas
+    }),
+  }, 'ai');
+}
+
+export async function analyzePricing(serviceName, currentPrice, serviceDescription, targetMarket = null, competitors = null) {
+  return apiRequest('/ai/business/pricing/analyze', {
+    method: 'POST',
+    body: JSON.stringify({
+      service_name: serviceName,
+      current_price: currentPrice,
+      service_description: serviceDescription,
+      target_market: targetMarket,
+      competitors
+    }),
+  }, 'ai');
+}
+
+export async function generateBusinessInsights(insightType, data, priority = 'medium') {
+  return apiRequest('/ai/business/insights/generate', {
+    method: 'POST',
+    body: JSON.stringify({
+      insight_type: insightType,
+      data,
+      priority
+    }),
+  }, 'ai');
+}
+
+export async function trainAIModel(modelName, modelType, trainingData, parameters = null) {
+  return apiRequest('/ai/analytics/models/train', {
+    method: 'POST',
+    body: JSON.stringify({
+      model_name: modelName,
+      model_type: modelType,
+      training_data: trainingData,
+      parameters
+    }),
+  }, 'ai');
+}
+
+export async function makePrediction(modelName, inputData) {
+  return apiRequest('/ai/analytics/predict', {
+    method: 'POST',
+    body: JSON.stringify({
+      model_name: modelName,
+      input_data: inputData
+    }),
+  }, 'ai');
+}
+
+export async function getAIModels(modelType = null) {
+  const query = modelType ? `?model_type=${modelType}` : '';
+  return apiRequest(`/ai/analytics/models${query}`);
+}
+
+export async function getPredictions(userId, modelName = null, page = 1, limit = 50) {
+  const params = new URLSearchParams({
+    user_id: userId,
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  if (modelName) params.append('model_name', modelName);
+  
+  return apiRequest(`/ai/analytics/predictions?${params}`);
+}
+
+// Функции для работы с объединенным сервисом безопасности и кэширования через Gateway
+export async function setCacheValue(key, value, service = 'default', ttl = null) {
+  return apiRequest('/security/cache/set', {
+    method: 'POST',
+    body: JSON.stringify({
+      key,
+      service,
+      ttl,
+      data: value
+    }),
+  }, 'security');
+}
+
+export async function getCacheValue(key, service = 'default') {
+  return apiRequest(`/security/cache/get/${key}?service=${service}`);
+}
+
+export async function deleteCacheValue(key, service = 'default') {
+  return apiRequest(`/security/cache/delete/${key}?service=${service}`, {
+    method: 'DELETE',
+  }, 'security');
+}
+
+export async function invalidateCache(pattern, service = 'default', level = 'all') {
+  return apiRequest('/security/cache/invalidate', {
+    method: 'POST',
+    body: JSON.stringify({
+      pattern,
+      service,
+      level
+    }),
+  }, 'security');
+}
+
+export async function getCacheStats() {
+  return apiRequest('/security/cache/stats');
+}
+
+export async function createSecurityEvent(eventData) {
+  return apiRequest('/security/events', {
+    method: 'POST',
+    body: JSON.stringify(eventData),
+  }, 'security');
+}
+
+export async function checkIPSecurity(ipAddress) {
+  return apiRequest(`/security/ip/${ipAddress}`);
+}
+
+export async function blockIPAddress(ipAddress, reason, duration = 3600) {
+  const params = new URLSearchParams({
+    ip_address: ipAddress,
+    reason,
+    duration: duration.toString()
+  });
+  
+  return apiRequest(`/security/block-ip?${params}`, {
+    method: 'POST',
+  }, 'security');
+}
+
+export async function getSecurityEvents(eventType = null, severity = null, page = 1, limit = 50) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  if (eventType) params.append('event_type', eventType);
+  if (severity) params.append('severity', severity);
+  
+  return apiRequest(`/security/events?${params}`);
+}
+
+export async function getSecurityPolicies() {
+  return apiRequest('/security/policies');
+}
+
+export async function createSecurityPolicy(policyData) {
+  return apiRequest('/security/policies', {
+    method: 'POST',
+    body: JSON.stringify(policyData),
+  }, 'security');
+}
+
+// Функции для работы с объединенным голосовым помощником и аналитикой через Gateway
+export async function processVoiceCommand(audioFile, language = 'ru', commandType = null) {
+  const formData = new FormData();
+  formData.append('audio_file', audioFile);
+  formData.append('language', language);
+  if (commandType) formData.append('command_type', commandType);
+  
+  return apiRequest('/voice/command', {
+    method: 'POST',
+    body: formData,
+    headers: {
+      'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+    },
+  }, 'voice');
+}
+
+export async function getVoiceAnalytics(userId, period = 'week') {
+  return apiRequest(`/voice/analytics/${userId}?period=${period}`);
+}
+
+export async function updateVoiceSettings(userId, settingsData) {
+  return apiRequest(`/voice/settings/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(settingsData),
+  }, 'voice');
+}
+
+export async function getVoiceSettings(userId) {
+  return apiRequest(`/voice/settings/${userId}`);
+}
+
+export async function createAnalyticsEvent(eventData) {
+  return apiRequest('/voice/analytics/events', {
+    method: 'POST',
+    body: JSON.stringify(eventData),
+  }, 'voice');
+}
+
+export async function createRealTimeMetric(metricData) {
+  return apiRequest('/voice/analytics/metrics', {
+    method: 'POST',
+    body: JSON.stringify(metricData),
+  }, 'voice');
+}
+
+export async function getAnalyticsEvents(eventType = null, source = null, page = 1, limit = 50) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  if (eventType) params.append('event_type', eventType);
+  if (source) params.append('source', source);
+  
+  return apiRequest(`/voice/analytics/events?${params}`);
+}
+
+export async function getRealTimeMetrics(metricName = null, source = null, page = 1, limit = 50) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  if (metricName) params.append('metric_name', metricName);
+  if (source) params.append('source', source);
+  
+  return apiRequest(`/voice/analytics/metrics?${params}`);
+}
+
+// Функции для работы с ботами через Gateway
+export async function getBotStatus(botType) {
+  return apiRequest(`/bots/${botType}/status`);
+}
+
+export async function sendBotMessage(botType, messageData) {
+  return apiRequest(`/bots/${botType}/send`, {
+    method: 'POST',
+    body: JSON.stringify(messageData),
+  }, 'bots');
+}
+
+export async function getBotHistory(botType, page = 1, limit = 50) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString()
+  });
+  
+  return apiRequest(`/bots/${botType}/history?${params}`);
+}
+
+// Устаревшие функции для совместимости (deprecated)
+export async function getCachedData(key, service = 'default') {
+  console.warn('getCachedData is deprecated, use getCacheValue instead');
+  return getCacheValue(key, service);
+}
+
+export async function getSecurityProfile() {
+  console.warn('getSecurityProfile is deprecated, use getSecurityPolicies instead');
+  return getSecurityPolicies();
+}
+
+export async function getAIAnalytics(metricNames = null) {
+  console.warn('getAIAnalytics is deprecated, use getRealTimeMetrics instead');
+  return getRealTimeMetrics('ai_analytics', 'ai_service');
+}
+
+export async function connectRealTimeWebSocket(userId, subscriptions = []) {
+  console.warn('connectRealTimeWebSocket is deprecated, use WebSocket directly');
+  // Возвращаем заглушку для совместимости
+  return { status: 'deprecated' };
+}
+
+// Функции для совместимости с существующими компонентами
+export async function monitorCompetitors(urls, options = {}) {
+  return analyzeCompetitors(urls);
+}
+
+export async function getPromotionRecommendations(salesData, competitorData) {
+  return generateBusinessInsights('promotion', { sales_data: salesData, competitor_data: competitorData });
+}
+
+export async function analyzeVoice(audioData, format = 'webm') {
+  return processVoiceCommand(audioData, 'ru', 'voice_analysis');
+}
+
+export async function processText(text) {
+  return generateBusinessInsights('text_analysis', { text });
+}
+
+// Функции для работы с CSRF (если необходимо)
+export async function fetchWithCsrf(url, options = {}) {
+  // Получаем CSRF токен из meta тега или cookie
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || 
+                   document.cookie.split('; ').find(row => row.startsWith('csrf_token='))?.split('=')[1];
+  
+  const headers = {
+    'X-CSRF-Token': csrfToken,
+    ...options.headers
   };
   
-  return ws;
+  return fetch(url, { ...options, headers });
 }
+
+// Константы для совместимости (deprecated)
+export const BASE_URLS = {
+  gateway: API_BASE_URL,
+  api: `${API_BASE_URL}/api`,
+  auth: `${API_BASE_URL}/auth`,
+  tasks: `${API_BASE_URL}/tasks`,
+  documents: `${API_BASE_URL}/documents`,
+  financial: `${API_BASE_URL}/financial`,
+  bank: `${API_BASE_URL}/bank`,
+  notifications: `${API_BASE_URL}/notifications`,
+  ai: `${API_BASE_URL}/ai`,
+  security: `${API_BASE_URL}/security`,
+  voice: `${API_BASE_URL}/voice`,
+  bots: `${API_BASE_URL}/bots`
+};
 
 // Экспорт основных функций и констант
 export {
-  BASE_URLS,
-  TIMEOUTS,
-  tokenManager,
-  apiRequest
+  apiRequest,
+  API_BASE_URL
 };
