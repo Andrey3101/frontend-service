@@ -223,6 +223,18 @@ export default {
           ],
         },
         {
+          title: 'Инновации',
+          route: '/innovations',
+          icon: 'chat.svg',
+          submenu: [
+            { title: 'VR/AR доска', route: '/virtual-board' },
+            { title: 'Мобильное приложение', route: '/mobile-app' },
+            { title: 'Умный бот', route: '/smart-bot' },
+            { title: 'Персональные отчеты', route: '/personalized-reports' },
+            { title: 'Умные уведомления', route: '/smart-notifications' },
+          ],
+        },
+        {
           title: 'Профиль',
           route: '/profile',
           icon: 'profile.svg',

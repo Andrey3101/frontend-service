@@ -32,7 +32,11 @@
     "vuetify": "^3.7.19",
     "xlsx": "^0.18.5",
     "js-cookie": "^3.0.5",
-    "crypto-js": "^4.2.0"
+    "crypto-js": "^4.2.0",
+    "chartjs-adapter-dayjs": "^1.0.1",
+    "dayjs": "^1.11.13",
+    "vuetify-datetime-picker": "^2.0.0",
+    "webxr-polyfill": "^1.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.12.16",

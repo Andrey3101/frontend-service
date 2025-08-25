@@ -137,7 +137,7 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { getTask, updateTask, getUsers } from '../api';
+import { getTask, getUsers, updateTask, deleteTask, addTaskComment, getTaskComments, updateTaskComment, deleteTaskComment, startTimeTracking, stopTimeTracking, getTimeReport, getActiveTimeEntries, calculateTotalActiveTime } from '../api';
 import EditModal from './EditModal.vue';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';

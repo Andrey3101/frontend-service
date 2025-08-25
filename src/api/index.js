@@ -160,6 +160,285 @@ export async function addTaskComment(taskId, commentData) {
   }, 'tasks');
 }
 
+// НОВЫЕ ФУНКЦИИ ДЛЯ TASK-SERVICE
+export async function createTaskWithPrediction(text, confirmSuggestion = false, suggestionAction = {}) {
+  return apiRequest('/tasks/create/predictive', {
+    method: 'POST',
+    body: JSON.stringify({
+      text,
+      confirm_suggestion: confirmSuggestion,
+      suggestion_action: suggestionAction
+    }),
+  }, 'tasks');
+}
+
+export async function getTaskStats(status = null, period = null) {
+  const params = new URLSearchParams();
+  if (status) params.append('status', status);
+  if (period) params.append('period', period);
+  
+  return apiRequest(`/tasks/stats?${params}`);
+}
+
+export async function getTaskSuggestions(text) {
+  return apiRequest(`/tasks/suggestions?text=${encodeURIComponent(text)}`);
+}
+
+export async function updateTaskComment(taskId, commentId, commentData) {
+  return apiRequest(`/tasks/${taskId}/comments/${commentId}`, {
+    method: 'PUT',
+    body: JSON.stringify(commentData),
+  }, 'tasks');
+}
+
+export async function deleteTaskComment(taskId, commentId) {
+  return apiRequest(`/tasks/${taskId}/comments/${commentId}`, {
+    method: 'DELETE',
+  }, 'tasks');
+}
+
+export async function startTimeTracking(taskId) {
+  return apiRequest(`/tasks/${taskId}/time/start`, {
+    method: 'POST',
+  }, 'tasks');
+}
+
+export async function stopTimeTracking(entryId) {
+  return apiRequest(`/tasks/time/stop?entry_id=${entryId}`, {
+    method: 'POST',
+  }, 'tasks');
+}
+
+export async function getTimeReport(period = 'week') {
+  return apiRequest(`/tasks/time/report?period=${period}`);
+}
+
+export async function getActiveTimeEntries() {
+  return apiRequest('/tasks/time/active');
+}
+
+export async function calculateTotalActiveTime() {
+  return apiRequest('/tasks/time/total');
+}
+
+// Функции для встреч
+export async function createMeeting(meetingData) {
+  return apiRequest('/tasks/meetings', {
+    method: 'POST',
+    body: JSON.stringify(meetingData),
+  }, 'tasks');
+}
+
+export async function getMeetings(startDate = null, endDate = null, meetingType = null) {
+  const params = new URLSearchParams();
+  if (startDate) params.append('start_date', startDate);
+  if (endDate) params.append('end_date', endDate);
+  if (meetingType) params.append('meeting_type', meetingType);
+
+  return apiRequest(`/tasks/meetings?${params}`);
+}
+
+export async function getMeeting(meetingId) {
+  return apiRequest(`/tasks/meetings/${meetingId}`);
+}
+
+export async function updateMeeting(meetingId, meetingData) {
+  return apiRequest(`/tasks/meetings/${meetingId}`, {
+    method: 'PUT',
+    body: JSON.stringify(meetingData),
+  }, 'tasks');
+}
+
+export async function deleteMeeting(meetingId) {
+  return apiRequest(`/tasks/meetings/${meetingId}`, {
+    method: 'DELETE',
+  }, 'tasks');
+}
+
+// Функции для важных дат
+export async function createImportantDate(dateData) {
+  return apiRequest('/tasks/important-dates', {
+    method: 'POST',
+    body: JSON.stringify(dateData),
+  }, 'tasks');
+}
+
+export async function getImportantDates(dateType = null, priority = null) {
+  const params = new URLSearchParams();
+  if (dateType) params.append('type', dateType);
+  if (priority) params.append('priority', priority);
+
+  return apiRequest(`/tasks/important-dates?${params}`);
+}
+
+export async function getImportantDate(dateId) {
+  return apiRequest(`/tasks/important-dates/${dateId}`);
+}
+
+export async function updateImportantDate(dateId, dateData) {
+  return apiRequest(`/tasks/important-dates/${dateId}`, {
+    method: 'PUT',
+    body: JSON.stringify(dateData),
+  }, 'tasks');
+}
+
+export async function deleteImportantDate(dateId) {
+  return apiRequest(`/tasks/important-dates/${dateId}`, {
+    method: 'DELETE',
+  }, 'tasks');
+}
+
+// Функции для внешних интеграций
+export async function createExternalIntegration(integrationData) {
+  return apiRequest('/tasks/integrations', {
+    method: 'POST',
+    body: JSON.stringify(integrationData),
+  }, 'tasks');
+}
+
+export async function getExternalIntegrations() {
+  return apiRequest('/tasks/integrations');
+}
+
+export async function getExternalIntegration(integrationId) {
+  return apiRequest(`/tasks/integrations/${integrationId}`);
+}
+
+export async function updateExternalIntegration(integrationId, integrationData) {
+  return apiRequest(`/tasks/integrations/${integrationId}`, {
+    method: 'PUT',
+    body: JSON.stringify(integrationData),
+  }, 'tasks');
+}
+
+export async function deleteExternalIntegration(integrationId) {
+  return apiRequest(`/tasks/integrations/${integrationId}`, {
+    method: 'DELETE',
+  }, 'tasks');
+}
+
+export async function syncExternalData(integrationId) {
+  return apiRequest(`/tasks/integrations/${integrationId}/sync`, {
+    method: 'POST',
+  }, 'tasks');
+}
+
+// Функции для контактов
+export async function createContact(contactData) {
+  return apiRequest('/tasks/contacts', {
+    method: 'POST',
+    body: JSON.stringify(contactData),
+  }, 'tasks');
+}
+
+export async function getContacts(contactType = null, company = null) {
+  const params = new URLSearchParams();
+  if (contactType) params.append('type', contactType);
+  if (company) params.append('company', company);
+
+  return apiRequest(`/tasks/contacts?${params}`);
+}
+
+export async function getContact(contactId) {
+  return apiRequest(`/tasks/contacts/${contactId}`);
+}
+
+export async function updateContact(contactId, contactData) {
+  return apiRequest(`/tasks/contacts/${contactId}`, {
+    method: 'PUT',
+    body: JSON.stringify(contactData),
+  }, 'tasks');
+}
+
+export async function deleteContact(contactId) {
+  return apiRequest(`/tasks/contacts/${contactId}`, {
+    method: 'DELETE',
+  }, 'tasks');
+}
+
+// Функции для повторяющихся задач
+export async function createRecurringTask(taskData) {
+  return apiRequest('/tasks/recurring', {
+    method: 'POST',
+    body: JSON.stringify(taskData),
+  }, 'tasks');
+}
+
+// Функции для отчетов по продуктивности
+export async function getProductivityReport(period = 'week') {
+  return apiRequest(`/tasks/productivity?period=${period}`);
+}
+
+// Функции для напоминаний о налогах
+export async function createTaxReminders(companyType) {
+  return apiRequest('/tasks/tax-reminders', {
+    method: 'POST',
+    body: JSON.stringify({ company_type: companyType }),
+  }, 'tasks');
+}
+
+// Функции для запросов на отпуск
+export async function createLeaveRequest(leaveType, startDate, endDate) {
+  return apiRequest('/tasks/leave/request', {
+    method: 'POST',
+    body: JSON.stringify({
+      type: leaveType,
+      start_date: startDate,
+      end_date: endDate
+    }),
+  }, 'tasks');
+}
+
+// Функции для онбординга
+export async function createOnboardingChecklist() {
+  return apiRequest('/tasks/onboarding/checklist', {
+    method: 'POST',
+  }, 'tasks');
+}
+
+// Функции для массового назначения задач
+export async function bulkAssignTasks(taskIds, assigneeId) {
+  return apiRequest('/tasks/bulk_assign', {
+    method: 'POST',
+    body: JSON.stringify({
+      task_ids: taskIds,
+      assignee_id: assigneeId
+    }),
+  }, 'tasks');
+}
+
+// Функции для аналитики продаж
+export async function getSalesAnalytics(period = null) {
+  const params = new URLSearchParams();
+  if (period) params.append('period', period);
+  
+  return apiRequest(`/tasks/sales/analytics?${params}`);
+}
+
+// Функции для дашборда
+export async function getDashboard(filters = {}) {
+  const params = new URLSearchParams();
+  Object.keys(filters).forEach(key => {
+    if (filters[key] !== null && filters[key] !== undefined) {
+      params.append(key, filters[key]);
+    }
+  });
+  
+  return apiRequest(`/tasks/dashboard?${params}`);
+}
+
+// Функции для отчетов
+export async function generateReport(reportData) {
+  return apiRequest('/tasks/reports', {
+    method: 'POST',
+    body: JSON.stringify(reportData),
+  }, 'tasks');
+}
+
+export async function getReports() {
+  return apiRequest('/tasks/reports');
+}
+
 // Функции для работы с клиентами через Gateway
 export async function getClients(filters = {}) {
   const params = new URLSearchParams();
@@ -292,20 +571,6 @@ export async function exportAct(actId, format = 'pdf') {
 }
 
 // Функции для работы с временем через Gateway
-export async function startTimeTracking(taskId) {
-  return apiRequest('/time/start', {
-    method: 'POST',
-    body: JSON.stringify({ task_id: taskId }),
-  }, 'time');
-}
-
-export async function stopTimeTracking(taskId) {
-  return apiRequest('/time/stop', {
-    method: 'POST',
-    body: JSON.stringify({ task_id: taskId }),
-  }, 'time');
-}
-
 export async function getTimeReport(period = 'week') {
   return apiRequest(`/time/report?period=${period}`);
 }
@@ -383,19 +648,6 @@ export async function activateTrial(companyId) {
     method: 'POST',
     body: JSON.stringify({ company_id: companyId }),
   }, 'subscription');
-}
-
-// Функции для работы с Google Auth через Gateway
-export async function getGoogleLoginUrl() {
-  return apiRequest('/auth/google');
-}
-
-export async function googleLogin(code, state) {
-  return apiRequest(
-    `/auth/google/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
-    { method: 'GET' },
-    'auth'
-  );
 }
 
 // Функции для работы с паролями через Gateway

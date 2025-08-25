@@ -41,7 +41,7 @@
                 </div>
                 
                 <v-btn
-                  v-if="service === 'error'"
+                  v-if="service.status === 'error'"
                   icon
                   small
                   color="error"
@@ -101,336 +101,361 @@
           
           <v-btn
             color="info"
-            @click="exportServicesReport"
-            :disabled="!allServicesReady"
+            @click="exportServicesStatus"
+            :disabled="!hasServicesData"
           >
             <v-icon left>mdi-download</v-icon>
-            Экспорт отчета
+            Экспорт статуса
           </v-btn>
         </v-col>
       </v-row>
       
       <!-- Детальная информация -->
       <v-expand-transition>
-        <div v-if="showServicesDetails">
+        <div v-show="showServicesDetails">
           <v-divider class="my-4"></v-divider>
           
-          <v-expansion-panels>
-            <v-expansion-panel
-              v-for="(service, name) in servicesStatus"
-              :key="name"
-            >
-              <v-expansion-panel-title>
-                <v-icon
-                  :color="getServiceStatusColor(service)"
-                  class="mr-2"
-                >
-                  {{ getServiceStatusIcon(service) }}
-                </v-icon>
-                {{ getServiceDisplayName(name) }}
-                <v-chip
-                  :color="getServiceStatusColor(service)"
-                  size="small"
-                  class="ml-auto"
-                >
-                  {{ service }}
-                </v-chip>
-              </v-expansion-panel-title>
-              
-              <v-expansion-panel-text>
-                <div class="pa-3">
-                  <div class="text-body-2">
-                    <strong>Описание:</strong> {{ getServiceDescription(name) }}
+          <v-row>
+            <v-col cols="12" v-for="(service, name) in servicesStatus" :key="`details-${name}`">
+              <v-card variant="outlined">
+                <v-card-title class="text-subtitle-1">
+                  {{ getServiceDisplayName(name) }}
+                </v-card-title>
+                
+                <v-card-text>
+                  <div class="text-caption mb-2">
+                    {{ getServiceDescription(name) }}
                   </div>
                   
-                  <div class="text-body-2 mt-2">
-                    <strong>Возможности:</strong>
-                    <ul class="mt-1">
-                      <li v-for="capability in getServiceCapabilities(name)" :key="capability">
-                        {{ capability }}
-                      </li>
-                    </ul>
-                  </div>
+                  <v-chip-group>
+                    <v-chip
+                      v-for="capability in getServiceCapabilities(name)"
+                      :key="capability"
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                    >
+                      {{ capability }}
+                    </v-chip>
+                  </v-chip-group>
                   
-                  <div class="text-body-2 mt-2" v-if="getServiceMetrics(name)">
-                    <strong>Метрики:</strong>
-                    <pre class="mt-1 pa-2 bg-grey-lighten-4 rounded">{{ JSON.stringify(getServiceMetrics(name), null, 2) }}</pre>
+                  <v-divider class="my-3"></v-divider>
+                  
+                  <div v-if="getServiceMetrics(name)">
+                    <div class="text-subtitle-2 mb-2">Метрики:</div>
+                    <pre class="text-caption">{{ JSON.stringify(getServiceMetrics(name), null, 2) }}</pre>
                   </div>
-                </div>
-              </v-expansion-panel-text>
-            </v-expansion-panel>
-          </v-expansion-panels>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
         </div>
       </v-expand-transition>
     </v-card-text>
   </v-card>
 </template>
 
-<script>
-import { ref, computed, onMounted } from 'vue';
+<script setup>
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
+import { getServicesStatus, initializeServices } from '@/services';
 
-export default {
-  name: 'ServicesMonitor',
+// Состояние
+const refreshing = ref(false);
+const restartingServices = ref([]);
+const restartingAll = ref(false);
+const showServicesDetails = ref(false);
+const servicesStatus = ref({});
+
+// Store
+const authStore = useAuthStore();
+
+// Вычисляемые свойства
+const servicesSummary = computed(() => {
+  const total = Object.keys(servicesStatus.value).length;
+  const loaded = Object.values(servicesStatus.value).filter(s => s.loaded).length;
+  const errors = Object.values(servicesStatus.value).filter(s => s.status === 'error').length;
+  const ready = Object.values(servicesStatus.value).filter(s => s.status === 'ready').length;
   
-  setup() {
-    const authStore = useAuthStore();
-    const refreshing = ref(false);
-    const restartingServices = ref([]);
-    const restartingAll = ref(false);
-    const showServicesDetails = ref(false);
+  return { total, loaded, errors, ready };
+});
+
+const hasServicesWithErrors = computed(() => {
+  return servicesSummary.value.errors > 0;
+});
+
+const hasServicesData = computed(() => {
+  return Object.keys(servicesStatus.value).length > 0;
+});
+
+// Методы
+const refreshServices = async () => {
+  try {
+    refreshing.value = true;
     
-    // Вычисляемые свойства
-    const servicesStatus = computed(() => authStore.getServicesStatus());
-    const servicesSummary = computed(() => authStore.servicesStatusSummary);
-    const allServicesReady = computed(() => authStore.allServicesReady);
-    const hasServicesWithErrors = computed(() => 
-      Object.values(servicesStatus.value).some(status => status === 'error')
-    );
+    // Инициализируем сервисы если они еще не инициализированы
+    if (Object.keys(servicesStatus.value).length === 0) {
+      await initializeServices();
+    }
     
-    // Методы
-    const refreshServices = async () => {
-      refreshing.value = true;
-      try {
-        // Обновляем статус сервисов
-        await authStore.initializeServices();
-      } catch (error) {
-        console.error('Failed to refresh services:', error);
-      } finally {
-        refreshing.value = false;
-      }
-    };
+    // Получаем статус всех сервисов
+    servicesStatus.value = getServicesStatus();
     
-    const restartService = async (serviceName) => {
-      restartingServices.value.push(serviceName);
-      try {
-        await authStore.restartService(serviceName);
-      } catch (error) {
-        console.error(`Failed to restart service ${serviceName}:`, error);
-      } finally {
-        const index = restartingServices.value.indexOf(serviceName);
-        if (index > -1) {
-          restartingServices.value.splice(index, 1);
-        }
-      }
-    };
-    
-    const restartAllServices = async () => {
-      restartingAll.value = true;
-      try {
-        const servicesWithErrors = Object.entries(servicesStatus.value)
-          .filter(([_, status]) => status === 'error')
-          .map(([name, _]) => name);
-        
-        for (const serviceName of servicesWithErrors) {
-          await authStore.restartService(serviceName);
-        }
-      } catch (error) {
-        console.error('Failed to restart all services:', error);
-      } finally {
-        restartingAll.value = false;
-      }
-    };
-    
-    const exportServicesReport = () => {
-      const report = {
-        timestamp: new Date().toISOString(),
-        services: servicesStatus.value,
-        summary: servicesSummary.value,
-        user: authStore.user?.email || 'unknown'
-      };
-      
-      const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `services-report-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    };
-    
-    // Вспомогательные методы
-    const getServiceStatusClass = (status) => {
-      const classes = {
-        ready: 'service-ready',
-        pending: 'service-pending',
-        initializing: 'service-initializing',
-        error: 'service-error',
-        restarting: 'service-restarting'
-      };
-      return classes[status] || 'service-unknown';
-    };
-    
-    const getServiceStatusColor = (status) => {
-      const colors = {
-        ready: 'success',
-        pending: 'warning',
-        initializing: 'info',
-        error: 'error',
-        restarting: 'warning'
-      };
-      return colors[status] || 'grey';
-    };
-    
-    const getServiceStatusIcon = (status) => {
-      const icons = {
-        ready: 'mdi-check-circle',
-        pending: 'mdi-clock-outline',
-        initializing: 'mdi-loading',
-        error: 'mdi-alert-circle',
-        restarting: 'mdi-restart'
-      };
-      return icons[status] || 'mdi-help-circle';
-    };
-    
-    const getServiceStatusText = (status) => {
-      const texts = {
-        ready: 'Готов к работе',
-        pending: 'Ожидает инициализации',
-        initializing: 'Инициализация...',
-        error: 'Ошибка инициализации',
-        restarting: 'Перезапуск...'
-      };
-      return texts[status] || 'Неизвестный статус';
-    };
-    
-    const getServiceDisplayName = (name) => {
-      const names = {
-        adaptivePerformance: 'Адаптивная производительность',
-        predictivePreloader: 'Умная предзагрузка',
-        distributedProcessing: 'Распределенная обработка',
-        wasmCalculator: 'WASM калькулятор',
-        performanceMetrics: 'Метрики производительности',
-        cacheService: 'Кэш сервис',
-        redisCache: 'Redis кэш'
-      };
-      return names[name] || name;
-    };
-    
-    const getServiceDescription = (name) => {
-      const descriptions = {
-        adaptivePerformance: 'Автоматическая настройка производительности под устройство',
-        predictivePreloader: 'Предзагрузка контента на основе поведения пользователя',
-        distributedProcessing: 'Распределение вычислений между клиентом и сервером',
-        wasmCalculator: 'Высокопроизводительные вычисления в WebAssembly',
-        performanceMetrics: 'Мониторинг и анализ производительности приложения',
-        cacheService: 'Многоуровневое кэширование данных',
-        redisCache: 'Распределенное кэширование через Redis'
-      };
-      return descriptions[name] || 'Описание недоступно';
-    };
-    
-    const getServiceCapabilities = (name) => {
-      const capabilities = {
-        adaptivePerformance: [
-          'Автоматическое определение профиля устройства',
-          'Адаптивная настройка рендеринга',
-          'Мониторинг FPS и памяти',
-          'Оптимизация под батарею и сеть'
-        ],
-        predictivePreloader: [
-          'Анализ паттернов навигации',
-          'Предзагрузка на основе кликов',
-          'Машинное обучение поведения',
-          'Умная оптимизация загрузки'
-        ],
-        distributedProcessing: [
-          'Обнаружение доступных узлов',
-          'Балансировка нагрузки',
-          'Web Workers для параллельных вычислений',
-          'Мониторинг здоровья узлов'
-        ],
-        wasmCalculator: [
-          'Финансовые расчеты',
-          'Математические функции',
-          'Статистический анализ',
-          'Матричные операции'
-        ],
-        performanceMetrics: [
-          'Отслеживание API запросов',
-          'Мониторинг рендеринга',
-          'Анализ памяти',
-          'Экспорт метрик'
-        ],
-        cacheService: [
-          'Многоуровневое кэширование',
-          'Автоматическая очистка',
-          'Паттерн-инвалидация',
-          'Статистика использования'
-        ],
-        redisCache: [
-          'Распределенное кэширование',
-          'Поддержка браузера и Node.js',
-          'Метрики производительности',
-          'Автоматическое переподключение'
-        ]
-      };
-      return capabilities[name] || ['Возможности недоступны'];
-    };
-    
-    const getServiceMetrics = (name) => {
-      try {
-        switch (name) {
-          case 'adaptivePerformance':
-            return authStore.adaptivePerformance?.getMetrics();
-          case 'predictivePreloader':
-            return authStore.predictivePreloader?.getStats();
-          case 'distributedProcessing':
-            return authStore.distributedProcessing?.getStats();
-          case 'performanceMetrics':
-            return authStore.performanceMetrics?.getMetrics();
-          case 'cacheService':
-            return authStore.cacheService?.getStats();
-          case 'redisCache':
-            return authStore.redisCache?.getStats();
-          default:
-            return null;
-        }
-      } catch (error) {
-        console.error(`Failed to get metrics for ${name}:`, error);
-        return null;
-      }
-    };
-    
-    // Инициализация
-    onMounted(() => {
-      // Автоматическое обновление каждые 30 секунд
-      setInterval(() => {
-        if (authStore.isAuthenticated) {
-          refreshServices();
-        }
-      }, 30000);
-    });
-    
-    return {
-      refreshing,
-      restartingServices,
-      restartingAll,
-      showServicesDetails,
-      servicesStatus,
-      servicesSummary,
-      allServicesReady,
-      hasServicesWithErrors,
-      refreshServices,
-      restartService,
-      restartAllServices,
-      exportServicesReport,
-      getServiceStatusClass,
-      getServiceStatusColor,
-      getServiceStatusIcon,
-      getServiceStatusText,
-      getServiceDisplayName,
-      getServiceDescription,
-      getServiceCapabilities,
-      getServiceMetrics
-    };
+  } catch (error) {
+    console.error('Ошибка обновления статуса сервисов:', error);
+  } finally {
+    refreshing.value = false;
   }
 };
+
+const restartService = async (serviceName) => {
+  try {
+    restartingServices.value.push(serviceName);
+    
+    // Здесь можно добавить логику перезапуска конкретного сервиса
+    console.log(`Перезапуск сервиса: ${serviceName}`);
+    
+    // Обновляем статус
+    await refreshServices();
+    
+  } catch (error) {
+    console.error(`Ошибка перезапуска сервиса ${serviceName}:`, error);
+  } finally {
+    restartingServices.value = restartingServices.value.filter(s => s !== serviceName);
+  }
+};
+
+const restartAllServices = async () => {
+  try {
+    restartingAll.value = true;
+    
+    // Перезапускаем все сервисы с ошибками
+    const errorServices = Object.keys(servicesStatus.value).filter(
+      name => servicesStatus.value[name].status === 'error'
+    );
+    
+    for (const serviceName of errorServices) {
+      await restartService(serviceName);
+    }
+    
+  } catch (error) {
+    console.error('Ошибка перезапуска всех сервисов:', error);
+  } finally {
+    restartingAll.value = false;
+  }
+};
+
+const exportServicesStatus = () => {
+  try {
+    const data = {
+      timestamp: new Date().toISOString(),
+      services: servicesStatus.value,
+      summary: servicesSummary.value
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `services-status-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+  } catch (error) {
+    console.error('Ошибка экспорта статуса сервисов:', error);
+  }
+};
+
+// Вспомогательные методы
+const getServiceStatusClass = (service) => {
+  if (!service.loaded) return 'service-unloaded';
+  if (service.status === 'error') return 'service-error';
+  if (service.status === 'ready') return 'service-ready';
+  return 'service-loading';
+};
+
+const getServiceStatusColor = (service) => {
+  if (!service.loaded) return 'grey';
+  if (service.status === 'error') return 'error';
+  if (service.status === 'ready') return 'success';
+  return 'warning';
+};
+
+const getServiceStatusIcon = (service) => {
+  if (!service.loaded) return 'mdi-help-circle';
+  if (service.status === 'error') return 'mdi-alert-circle';
+  if (service.status === 'ready') return 'mdi-check-circle';
+  return 'mdi-loading';
+};
+
+const getServiceStatusText = (service) => {
+  if (!service.loaded) return 'Не загружен';
+  if (service.status === 'error') return 'Ошибка';
+  if (service.status === 'ready') return 'Готов';
+  return 'Загрузка...';
+};
+
+const getServiceDisplayName = (name) => {
+  const names = {
+    cache: 'Кэш сервис',
+    notifications: 'Уведомления',
+    sync: 'Синхронизация',
+    websocket: 'WebSocket',
+    taskIntegration: 'Интеграция с backend',
+    activity: 'Активность пользователей',
+    audit: 'Аудит',
+    metrics: 'Метрики',
+    error: 'Обработка ошибок',
+    validation: 'Валидация',
+    settings: 'Настройки'
+  };
+  return names[name] || name;
+};
+
+const getServiceDescription = (name) => {
+  const descriptions = {
+    cache: 'Многоуровневое кэширование данных',
+    notifications: 'Управление уведомлениями и push-уведомлениями',
+    sync: 'Синхронизация данных между frontend и backend',
+    websocket: 'Real-time коммуникация',
+    taskIntegration: 'Интеграция с backend API',
+    activity: 'Отслеживание пользовательской активности',
+    audit: 'Аудит действий пользователей',
+    metrics: 'Сбор метрик производительности',
+    error: 'Централизованная обработка ошибок',
+    validation: 'Валидация данных',
+    settings: 'Управление настройками приложения'
+  };
+  return descriptions[name] || 'Описание недоступно';
+};
+
+const getServiceCapabilities = (name) => {
+  const capabilities = {
+    cache: [
+      'Многоуровневое кэширование',
+      'Автоматическая очистка',
+      'TTL управление',
+      'Статистика использования'
+    ],
+    notifications: [
+      'Push-уведомления',
+      'Шаблоны уведомлений',
+      'Умные уведомления',
+      'Управление разрешениями'
+    ],
+    sync: [
+      'Автоматическая синхронизация',
+      'Очереди изменений',
+      'Retry логика',
+      'Мониторинг статуса'
+    ],
+    websocket: [
+      'Real-time обновления',
+      'Автоматическое переподключение',
+      'Heartbeat мониторинг',
+      'Обработка ошибок'
+    ],
+    taskIntegration: [
+      'HTTP клиент с interceptors',
+      'Обработка ошибок',
+      'Аутентификация',
+      'Мониторинг состояния'
+    ],
+    activity: [
+      'Отслеживание сессий',
+      'Аналитика поведения',
+      'Метрики взаимодействия',
+      'Экспорт данных'
+    ],
+    audit: [
+      'Логирование действий',
+      'Отслеживание изменений',
+      'Экспорт логов',
+      'Фильтрация и поиск'
+    ],
+    metrics: [
+      'Сбор метрик производительности',
+      'Аналитика использования',
+      'Экспорт данных',
+      'Мониторинг в реальном времени'
+    ],
+    error: [
+      'Централизованная обработка',
+      'Логирование ошибок',
+      'Уведомления об ошибках',
+      'Анализ паттернов'
+    ],
+    validation: [
+      'Валидация форм',
+      'Проверка данных',
+      'Кастомные правила',
+      'Интеграция с UI'
+    ],
+    settings: [
+      'Управление темами',
+      'Локализация',
+      'Настройки UI',
+      'Персонализация'
+    ]
+  };
+  return capabilities[name] || ['Возможности недоступны'];
+};
+
+const getServiceMetrics = (name) => {
+  try {
+    const service = servicesStatus.value[name];
+    if (service && service.status && typeof service.status === 'object') {
+      return service.status;
+    }
+    return null;
+  } catch (error) {
+    console.error(`Failed to get metrics for ${name}:`, error);
+    return null;
+  }
+};
+
+const getStatColor = (key) => {
+  const colors = {
+    total: 'text-primary',
+    loaded: 'text-success',
+    errors: 'text-error',
+    ready: 'text-info'
+  };
+  return colors[key] || 'text-default';
+};
+
+const getStatLabel = (key) => {
+  const labels = {
+    total: 'Всего сервисов',
+    loaded: 'Загружено',
+    errors: 'Ошибки',
+    ready: 'Готово'
+  };
+  return labels[key] || key;
+};
+
+// Инициализация
+onMounted(() => {
+  // Загружаем статус сервисов при монтировании
+  refreshServices();
+  
+  // Автоматическое обновление каждые 30 секунд
+  const interval = setInterval(() => {
+    if (authStore.isAuthenticated) {
+      refreshServices();
+    }
+  }, 30000);
+  
+  // Очистка интервала при размонтировании
+  onUnmounted(() => {
+    clearInterval(interval);
+  });
+});
 </script>
 
 <style scoped>
 .services-monitor {
-  margin: 20px 0;
+  margin: 16px;
 }
 
 .service-card {
@@ -439,42 +464,30 @@ export default {
 
 .service-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.service-unloaded {
+  border-left: 4px solid #9e9e9e;
 }
 
 .service-ready {
-  border-color: #4CAF50 !important;
-  background-color: #f1f8e9;
-}
-
-.service-pending {
-  border-color: #FF9800 !important;
-  background-color: #fff3e0;
-}
-
-.service-initializing {
-  border-color: #2196F3 !important;
-  background-color: #e3f2fd;
+  border-left: 4px solid #4caf50;
 }
 
 .service-error {
-  border-color: #F44336 !important;
-  background-color: #ffebee;
+  border-left: 4px solid #f44336;
 }
 
-.service-restarting {
-  border-color: #FF9800 !important;
-  background-color: #fff3e0;
-}
-
-.service-unknown {
-  border-color: #9E9E9E !important;
-  background-color: #fafafa;
+.service-loading {
+  border-left: 4px solid #ff9800;
 }
 
 pre {
-  font-size: 0.8em;
-  max-height: 200px;
-  overflow-y: auto;
+  background-color: #f5f5f5;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  overflow-x: auto;
 }
 </style> 

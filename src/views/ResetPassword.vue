@@ -214,22 +214,6 @@
                 <v-progress-circular v-if="loading" indeterminate size="24" color="white" />
               </v-btn>
 
-              <!-- Google Login Button -->
-              <v-btn
-                color="white"
-                block
-                class="google-btn"
-                :loading="googleLoading"
-                :disabled="googleLoading"
-                @click="googleLogin"
-                elevation="2"
-                :aria-label="$t('register.googleBtn')"
-              >
-                <v-icon left color="grey darken-2">mdi-google</v-icon>
-                <span v-if="!googleLoading">{{ $t('register.googleBtn') }}</span>
-                <v-progress-circular v-if="googleLoading" indeterminate size="24" color="grey darken-2" />
-              </v-btn>
-
               <!-- Additional Actions -->
               <v-btn
                 text

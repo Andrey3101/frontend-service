@@ -214,22 +214,6 @@
                 <v-progress-circular v-if="loading" indeterminate size="24" color="white" />
               </v-btn>
 
-              <!-- Google Login Button -->
-              <v-btn
-                color="white"
-                block
-                class="google-btn"
-                :loading="googleLoading"
-                :disabled="googleLoading"
-                @click="googleLogin"
-                elevation="2"
-                :aria-label="$t('register.googleBtn')"
-              >
-                <v-icon left color="grey darken-2">mdi-google</v-icon>
-                <span v-if="!googleLoading">{{ $t('register.googleBtn') }}</span>
-                <v-progress-circular v-if="googleLoading" indeterminate size="24" color="grey darken-2" />
-              </v-btn>
-
               <!-- Additional Actions -->
               <v-btn
                 text
@@ -259,7 +243,6 @@
 
 <script>
 import { useAuthStore } from '@/stores/auth';
-import { getGoogleLoginUrl } from '@/api';
 
 export default {
   name: 'RegisterForm',
@@ -272,7 +255,6 @@ export default {
       showPassword: false,
       phoneMask: '+7(###) ###-##-##',
       loading: false,
-      googleLoading: false,
       showError: false,
       showSuccess: false,
       errorMessage: '',
@@ -331,33 +313,6 @@ export default {
         this.handleError(error, 'register');
       } finally {
         this.loading = false;
-      }
-    },
-
-    async googleLogin() {
-      this.googleLoading = true;
-      try {
-        const { url } = await getGoogleLoginUrl();
-        window.location.href = url;
-      } catch (error) {
-        this.handleError(error, 'google');
-      } finally {
-        this.googleLoading = false;
-      }
-    },
-
-    async handleGoogleCallback() {
-      const { code, state } = this.$route.query;
-      if (code && state) {
-        const authStore = useAuthStore();
-        try {
-          const response = await authStore.googleLogin(code, state);
-          localStorage.setItem('csrf_token', response.csrf_token);
-          this.showSuccess = true;
-          setTimeout(() => this.$router.push('/dashboard'), 1500);
-        } catch (error) {
-          this.handleError(error, 'googleCallback');
-        }
       }
     },
 
@@ -430,7 +385,6 @@ export default {
     },
   },
   mounted() {
-    this.handleGoogleCallback();
   },
 };
 </script>
@@ -501,26 +455,6 @@ export default {
 
 .register-btn:hover {
   background: linear-gradient(90deg, #1565c0 0%, #1976d2 100%);
-  transform: scale(1.02);
-}
-
-.google-btn {
-  padding: 12px 24px;
-  font-size: 16px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  border-radius: 8px;
-  border: 2px solid #e0e0e0;
-  background: #ffffff;
-  color: #424242;
-  transition: background 0.3s ease, transform 0.2s ease, border-color 0.3s ease;
-  margin-bottom: 16px;
-}
-
-.google-btn:hover {
-  background: #f5f5f5;
-  border-color: #bdbdbd;
   transform: scale(1.02);
 }
 

@@ -1,17 +1,19 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
-import App from './App.vue';
-import router from './router';
-import { createVuetify } from 'vuetify';
-import 'vuetify/styles';
-import * as components from 'vuetify/components';
-import * as directives from 'vuetify/directives';
 import { VueQueryPlugin } from '@tanstack/vue-query';
 import VueAnimateOnScroll from 'vue3-animate-onscroll';
 import VueTheMask from 'vue-the-mask';
-import Toast from 'vue-toastification';
+import { Toast } from 'vue-toastification';
 import 'vue-toastification/dist/index.css';
-import './assets/styles.css';
+
+import App from './App.vue';
+import router from './router';
+
+// Импорт Vuetify
+import 'vuetify/styles';
+import { createVuetify } from 'vuetify';
+import * as components from 'vuetify/components';
+import * as directives from 'vuetify/directives';
 import './assets/styles/mdi.css';
 
 // Импорт новых сервисов
@@ -20,8 +22,11 @@ import predictivePreloader from './services/predictive-preloader.js';
 import distributedProcessing from './services/distributed-processing.js';
 import wasmCalculator from './wasm/wasm-calculator.js';
 import performanceMetrics from './services/performance-metrics.js';
-import cacheService from './services/cache.js';
+import cacheService from './services/cache-service.js';
 import redisCache from './services/redis-cache.js';
+
+// Импорт новой структуры сервисов
+import { initializeServices } from './services/index.js';
 
 // Создание экземпляра Vuetify с улучшенной конфигурацией
 const vuetify = createVuetify({
@@ -114,48 +119,23 @@ const initializeServices = async () => {
     performanceMetrics.init();
     console.log('Performance Metrics initialized');
     
-    // Инициализация кэш сервисов
-    cacheService.init();
-    redisCache.init();
-    console.log('Cache services initialized');
+    // Инициализация кэш сервиса
+    console.log('Cache Service initialized');
+    
+    // Инициализация Redis кэша
+    console.log('Redis Cache initialized');
+    
+    // Инициализация новой структуры сервисов
+    await initializeServices();
+    console.log('New Services Structure initialized');
     
   } catch (error) {
-    console.error('Failed to initialize services:', error);
+    console.error('Error initializing services:', error);
   }
 };
 
-// Глобальная обработка ошибок
-app.config.errorHandler = (err, vm, info) => {
-  console.error('Vue Error:', err);
-  console.error('Component:', vm);
-  console.error('Info:', info);
-  
-  // Отправка ошибки в метрики производительности
-  if (performanceMetrics) {
-    performanceMetrics.trackError(err, vm, info);
-  }
-};
-
-// Глобальная обработка предупреждений
-app.config.warnHandler = (msg, vm, trace) => {
-  console.warn('Vue Warning:', msg);
-  console.warn('Component:', vm);
-  console.warn('Trace:', trace);
-};
+// Запуск инициализации
+initializeServices();
 
 // Монтирование приложения
 app.mount('#app');
-
-// Инициализация сервисов после монтирования
-initializeServices();
-
-// Экспорт сервисов для глобального доступа
-window.selfEmployedServices = {
-  adaptivePerformance,
-  predictivePreloader,
-  distributedProcessing,
-  wasmCalculator,
-  performanceMetrics,
-  cacheService,
-  redisCache
-};

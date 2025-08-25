@@ -30,6 +30,15 @@ import MeetingsPage from '../views/MeetingsPage.vue';
 import InventoryPage from '../views/InventoryPage.vue';
 import BankAccountsPage from '../views/BankAccountsPage.vue';
 
+// ИННОВАЦИОННЫЕ КОМПОНЕНТЫ
+import VirtualBoard from '@/components/ar-vr/VirtualBoard.vue';
+import MobileApp from '@/components/mobile/MobileApp.vue';
+import SmartBot from '@/components/bots/SmartBot.vue';
+import PersonalizedReports from '@/components/reports/PersonalizedReports.vue';
+import SmartNotifications from '@/components/notifications/SmartNotifications.vue';
+import TaskDetail from '../components/TaskDetail.vue';
+import ServicesTest from '../views/ServicesTest.vue';
+
 const routes = [
   { path: '/', redirect: '/login' },
   { path: '/login', component: LoginForm },
@@ -69,6 +78,14 @@ const routes = [
     meta: { requiresAuth: true }
   },
   
+  // Тестирование сервисов
+  {
+    path: '/services-test',
+    name: 'ServicesTest',
+    component: ServicesTest,
+    meta: { requiresAuth: true }
+  },
+  
   // НОВЫЕ МАРШРУТЫ ДЛЯ НОВЫХ ФИЧ
   {
     path: '/contractors',
@@ -101,10 +118,48 @@ const routes = [
     meta: { requiresAuth: true }
   },
   
+  // ИННОВАЦИОННЫЕ КОМПОНЕНТЫ
+  {
+    path: '/virtual-board',
+    name: 'VirtualBoard',
+    component: VirtualBoard,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/mobile-app',
+    name: 'MobileApp',
+    component: MobileApp,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/smart-bot',
+    name: 'SmartBot',
+    component: SmartBot,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/personalized-reports',
+    name: 'PersonalizedReports',
+    component: PersonalizedReports,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/smart-notifications',
+    name: 'SmartNotifications',
+    component: SmartNotifications,
+    meta: { requiresAuth: true }
+  },
+  
   { 
     path: '/tasks', 
     component: Tasks, 
     meta: { requiresAuth: true } 
+  },
+  { 
+    path: '/tasks/:id', 
+    component: TaskDetail, 
+    meta: { requiresAuth: true },
+    props: true 
   },
   { 
     path: '/users', 

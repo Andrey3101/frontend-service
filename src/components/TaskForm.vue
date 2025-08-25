@@ -119,7 +119,7 @@
 </template>
 
 <script>
-import { createTask, updateTask, getTask, getUsers, createRecurringTask, createTaxReminders } from '../api';
+import { createTask, updateTask, getTask, getUsers, createRecurringTask, createTaxReminders, createTaskWithPrediction, getTaskStats, getTaskSuggestions } from '../api';
 
 export default {
   props: {

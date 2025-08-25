@@ -403,7 +403,7 @@
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useToast } from 'vue-toastification';
-import { getMyTasks, createTask, updateTask, deleteTask, getUsers, fetchWithCsrf, startTimeTracking, stopTimeTracking, BASE_URLS } from '@/api/index.js';
+import { getMyTasks, createTask, updateTask, deleteTask, getUsers, fetchWithCsrf, startTimeTracking, stopTimeTracking, getTaskStats, getTaskSuggestions, getTimeReport, getActiveTimeEntries, calculateTotalActiveTime, createMeeting, getMeetings, createImportantDate, getImportantDates, createExternalIntegration, getExternalIntegrations, createContact, getContacts, createRecurringTask, createTaxReminders, createLeaveRequest, createOnboardingChecklist, bulkAssignTasks, getSalesAnalytics, getDashboard, generateReport, getReports } from '@/api/index.js';
 
 export default {
   name: 'TasksList',
