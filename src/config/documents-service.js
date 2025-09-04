@@ -6,7 +6,7 @@
 // Базовые настройки для разных окружений
 const ENVIRONMENTS = {
   development: {
-    baseURL: 'http://localhost:8008',
+    baseURL: 'http://localhost:8003',
     timeout: 20000,
     retryAttempts: 3,
     retryDelay: 1000,
@@ -14,7 +14,7 @@ const ENVIRONMENTS = {
     enableMetrics: true
   },
   staging: {
-    baseURL: 'https://staging-documents-service.example.com',
+    baseURL: 'https://staging-api.msb-platform.ru/documents',
     timeout: 30000,
     retryAttempts: 5,
     retryDelay: 2000,
@@ -22,7 +22,7 @@ const ENVIRONMENTS = {
     enableMetrics: true
   },
   production: {
-    baseURL: 'https://documents-service.example.com',
+    baseURL: 'https://api.msb-platform.ru/documents', // Исправлен URL
     timeout: 40000,
     retryAttempts: 3,
     retryDelay: 3000,

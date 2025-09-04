@@ -6,7 +6,7 @@
 // Базовые настройки для разных окружений
 const ENVIRONMENTS = {
   development: {
-    baseURL: 'http://localhost:8080',
+    baseURL: 'http://localhost:8009', // Исправлен порт с 8080 на 8009
     timeout: 10000,
     retryAttempts: 3,
     retryDelay: 1000,
@@ -14,7 +14,7 @@ const ENVIRONMENTS = {
     enableMetrics: true
   },
   staging: {
-    baseURL: 'https://staging-task-service.example.com',
+    baseURL: 'https://staging-api.msb-platform.ru/tasks',
     timeout: 15000,
     retryAttempts: 5,
     retryDelay: 2000,
@@ -22,7 +22,7 @@ const ENVIRONMENTS = {
     enableMetrics: true
   },
   production: {
-    baseURL: 'https://task-service.example.com',
+    baseURL: 'https://api.msb-platform.ru/tasks', // Исправлен URL
     timeout: 20000,
     retryAttempts: 3,
     retryDelay: 3000,

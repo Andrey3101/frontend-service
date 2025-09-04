@@ -1,417 +1,351 @@
 /**
- * Сервис интеграции с task-service
- * Обеспечивает взаимодействие между frontend и backend
+ * Обновленный сервис интеграции с task-service
+ * Использует единый API клиент с версионированием v2
  */
 
-import axios from 'axios';
-import { getTaskServiceConfig } from '../config/task-service';
+import apiClient from './api-client.js';
+import websocketService from './websocket-service.js';
+import { getWebSocketConfig } from '../config/task-service';
 
 class TaskServiceIntegration {
   constructor() {
-    this.config = getTaskServiceConfig();
-    this.axiosInstance = this.createAxiosInstance();
-    this.setupInterceptors();
+    this.client = apiClient;
+    this.wsService = websocketService;
   }
 
   /**
-   * Создает экземпляр axios с базовой конфигурацией
+   * Получение списка задач
    */
-  createAxiosInstance() {
-    const instance = axios.create({
-      baseURL: this.config.baseURL,
-      timeout: this.config.timeout,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
-    });
-
-    return instance;
+  async getTasks(filters = {}) {
+    return this.client.get('/v2/tasks', filters, { cache: true });
   }
 
   /**
-   * Настраивает перехватчики для обработки ошибок и токенов
-   */
-  setupInterceptors() {
-    // Перехватчик запросов
-    this.axiosInstance.interceptors.request.use(
-      (config) => {
-        // Добавляем токен авторизации
-        const token = this.getAuthToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-
-        // Добавляем заголовки для CORS
-        config.headers['X-Requested-With'] = 'XMLHttpRequest';
-        
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
-
-    // Перехватчик ответов
-    this.axiosInstance.interceptors.response.use(
-      (response) => {
-        return response;
-      },
-      (error) => {
-        // Обрабатываем различные типы ошибок
-        if (error.response) {
-          // Сервер вернул ошибку
-          const { status, data } = error.response;
-          
-          switch (status) {
-            case 401:
-              this.handleUnauthorized();
-              break;
-            case 403:
-              this.handleForbidden();
-              break;
-            case 404:
-              this.handleNotFound();
-              break;
-            case 422:
-              this.handleValidationError(data);
-              break;
-            case 500:
-              this.handleServerError(data);
-              break;
-            default:
-              this.handleGenericError(status, data);
-          }
-        } else if (error.request) {
-          // Запрос был отправлен, но ответ не получен
-          this.handleNetworkError();
-        } else {
-          // Ошибка при настройке запроса
-          this.handleRequestError(error);
-        }
-
-        return Promise.reject(error);
-      }
-    );
-  }
-
-  /**
-   * Получает токен авторизации из localStorage
-   */
-  getAuthToken() {
-    return localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
-  }
-
-  /**
-   * Обработчики ошибок
-   */
-  handleUnauthorized() {
-    // Перенаправляем на страницу входа
-    if (window.location.pathname !== '/login') {
-      window.location.href = '/login';
-    }
-  }
-
-  handleForbidden() {
-    console.error('Доступ запрещен');
-  }
-
-  handleNotFound() {
-    console.error('Ресурс не найден');
-  }
-
-  handleValidationError(data) {
-    console.error('Ошибка валидации:', data);
-  }
-
-  handleServerError(data) {
-    console.error('Ошибка сервера:', data);
-  }
-
-  handleGenericError(status, data) {
-    console.error(`Ошибка ${status}:`, data);
-  }
-
-  handleNetworkError() {
-    console.error('Ошибка сети');
-  }
-
-  handleRequestError(error) {
-    console.error('Ошибка запроса:', error);
-  }
-
-  /**
-   * Методы для работы с задачами
-   */
-
-  /**
-   * Получает список задач с фильтрами
-   */
-  async getTasksWithFilters(filters = {}, pagination = {}) {
-    try {
-      const params = new URLSearchParams();
-      
-      // Добавляем фильтры
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== null && value !== undefined && value !== '') {
-          params.append(key, value);
-        }
-      });
-      
-      // Добавляем пагинацию
-      if (pagination.page) params.append('page', pagination.page);
-      if (pagination.limit) params.append('limit', pagination.limit);
-
-      const response = await this.axiosInstance.get(`/tasks?${params.toString()}`);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка получения задач: ${error.message}`);
-    }
-  }
-
-  /**
-   * Создает задачу с валидацией
-   */
-  async createTaskWithValidation(taskData) {
-    try {
-      // Валидация данных
-      this.validateTaskData(taskData);
-      
-      const response = await this.axiosInstance.post('/tasks', taskData);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка создания задачи: ${error.message}`);
-    }
-  }
-
-  /**
-   * Обновляет задачу с валидацией
-   */
-  async updateTaskWithValidation(taskId, taskData) {
-    try {
-      // Валидация данных
-      this.validateTaskData(taskData);
-      
-      const response = await this.axiosInstance.put(`/tasks/${taskId}`, taskData);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка обновления задачи: ${error.message}`);
-    }
-  }
-
-  /**
-   * Удаляет задачу с подтверждением
-   */
-  async deleteTaskWithConfirmation(taskId) {
-    try {
-      const response = await this.axiosInstance.delete(`/tasks/${taskId}`);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка удаления задачи: ${error.message}`);
-    }
-  }
-
-  /**
-   * Получает задачу по ID
+   * Получение задачи по ID
    */
   async getTask(taskId) {
+    return this.client.get(`/v2/tasks/${taskId}`, null, { cache: true });
+  }
+
+  /**
+   * Создание новой задачи
+   */
+  async createTask(taskData) {
+    return this.client.post('/v2/tasks', taskData);
+  }
+
+  /**
+   * Обновление задачи
+   */
+  async updateTask(taskId, taskData) {
+    return this.client.put(`/v2/tasks/${taskId}`, taskData);
+  }
+
+  /**
+   * Удаление задачи
+   */
+  async deleteTask(taskId) {
+    return this.client.delete(`/v2/tasks/${taskId}`);
+  }
+
+  /**
+   * Получение комментариев к задаче
+   */
+  async getComments(taskId) {
+    return this.client.get(`/v2/tasks/${taskId}/comments`, null, { cache: true });
+  }
+
+  /**
+   * Добавление комментария
+   */
+  async addComment(taskId, commentData) {
+    return this.client.post(`/v2/tasks/${taskId}/comments`, commentData);
+  }
+
+  /**
+   * Обновление комментария
+   */
+  async updateComment(taskId, commentId, commentData) {
+    return this.client.put(`/v2/tasks/${taskId}/comments/${commentId}`, commentData);
+  }
+
+  /**
+   * Удаление комментария
+   */
+  async deleteComment(taskId, commentId) {
+    return this.client.delete(`/v2/tasks/${taskId}/comments/${commentId}`);
+  }
+
+  /**
+   * Начало отслеживания времени
+   */
+  async startTimeTracking(taskId) {
+    return this.client.post(`/v2/tasks/${taskId}/time/start`);
+  }
+
+  /**
+   * Остановка отслеживания времени
+   */
+  async stopTimeTracking(entryId) {
+    return this.client.post(`/v2/tasks/time/stop?entry_id=${entryId}`);
+  }
+
+  /**
+   * Получение отчета по времени
+   */
+  async getTimeReport(period = 'week') {
+    return this.client.get(`/v2/tasks/time/report?period=${period}`, null, { cache: true });
+  }
+
+  /**
+   * Получение активных записей времени
+   */
+  async getActiveTimeEntries() {
+    return this.client.get('/v2/tasks/time/active', null, { cache: true });
+  }
+
+  /**
+   * Получение встреч
+   */
+  async getMeetings(filters = {}) {
+    return this.client.get('/v2/tasks/meetings', filters, { cache: true });
+  }
+
+  /**
+   * Получение встречи по ID
+   */
+  async getMeeting(meetingId) {
+    return this.client.get(`/v2/tasks/meetings/${meetingId}`, null, { cache: true });
+  }
+
+  /**
+   * Создание встречи
+   */
+  async createMeeting(meetingData) {
+    return this.client.post('/v2/tasks/meetings', meetingData);
+  }
+
+  /**
+   * Обновление встречи
+   */
+  async updateMeeting(meetingId, meetingData) {
+    return this.client.put(`/v2/tasks/meetings/${meetingId}`, meetingData);
+  }
+
+  /**
+   * Удаление встречи
+   */
+  async deleteMeeting(meetingId) {
+    return this.client.delete(`/v2/tasks/meetings/${meetingId}`);
+  }
+
+  /**
+   * Получение важных дат
+   */
+  async getImportantDates(filters = {}) {
+    return this.client.get('/v2/tasks/important-dates', filters, { cache: true });
+  }
+
+  /**
+   * Получение важной даты по ID
+   */
+  async getImportantDate(dateId) {
+    return this.client.get(`/v2/tasks/important-dates/${dateId}`, null, { cache: true });
+  }
+
+  /**
+   * Создание важной даты
+   */
+  async createImportantDate(dateData) {
+    return this.client.post('/v2/tasks/important-dates', dateData);
+  }
+
+  /**
+   * Обновление важной даты
+   */
+  async updateImportantDate(dateId, dateData) {
+    return this.client.put(`/v2/tasks/important-dates/${dateId}`, dateData);
+  }
+
+  /**
+   * Удаление важной даты
+   */
+  async deleteImportantDate(dateId) {
+    return this.client.delete(`/v2/tasks/important-dates/${dateId}`);
+  }
+
+  /**
+   * Получение интеграций
+   */
+  async getIntegrations() {
+    return this.client.get('/v2/tasks/integrations', null, { cache: true });
+  }
+
+  /**
+   * Получение интеграции по ID
+   */
+  async getIntegration(integrationId) {
+    return this.client.get(`/v2/tasks/integrations/${integrationId}`, null, { cache: true });
+  }
+
+  /**
+   * Создание интеграции
+   */
+  async createIntegration(integrationData) {
+    return this.client.post('/v2/tasks/integrations', integrationData);
+  }
+
+  /**
+   * Обновление интеграции
+   */
+  async updateIntegration(integrationId, integrationData) {
+    return this.client.put(`/v2/tasks/integrations/${integrationId}`, integrationData);
+  }
+
+  /**
+   * Удаление интеграции
+   */
+  async deleteIntegration(integrationId) {
+    return this.client.delete(`/v2/tasks/integrations/${integrationId}`);
+  }
+
+  /**
+   * Синхронизация интеграции
+   */
+  async syncIntegration(integrationId) {
+    return this.client.post(`/v2/tasks/integrations/${integrationId}/sync`);
+  }
+
+  /**
+   * Получение контактов
+   */
+  async getContacts(filters = {}) {
+    return this.client.get('/v2/tasks/contacts', filters, { cache: true });
+  }
+
+  /**
+   * Получение контакта по ID
+   */
+  async getContact(contactId) {
+    return this.client.get(`/v2/tasks/contacts/${contactId}`, null, { cache: true });
+  }
+
+  /**
+   * Создание контакта
+   */
+  async createContact(contactData) {
+    return this.client.post('/v2/tasks/contacts', contactData);
+  }
+
+  /**
+   * Обновление контакта
+   */
+  async updateContact(contactId, contactData) {
+    return this.client.put(`/v2/tasks/contacts/${contactId}`, contactData);
+  }
+
+  /**
+   * Удаление контакта
+   */
+  async deleteContact(contactId) {
+    return this.client.delete(`/v2/tasks/contacts/${contactId}`);
+  }
+
+  /**
+   * Получение аналитики
+   */
+  async getAnalytics(period = 'week') {
+    return this.client.get(`/v2/tasks/analytics?period=${period}`, null, { cache: true });
+  }
+
+  /**
+   * Получение предложений
+   */
+  async getSuggestions(text) {
+    return this.client.get(`/v2/tasks/suggestions?text=${encodeURIComponent(text)}`, null, { cache: true });
+  }
+
+  /**
+   * Создание предиктивной задачи
+   */
+  async createPredictiveTask(text, confirmSuggestion = false, suggestionAction = {}) {
+    return this.client.post('/v2/tasks/predictive', {
+      text,
+      confirm_suggestion: confirmSuggestion,
+      suggestion_action: suggestionAction
+    });
+  }
+
+  /**
+   * Подключение к WebSocket
+   */
+  async connectWebSocket() {
+    const wsConfig = getWebSocketConfig();
+    return this.wsService.connect(wsConfig.url);
+  }
+
+  /**
+   * Отключение от WebSocket
+   */
+  async disconnectWebSocket() {
+    return this.wsService.disconnect();
+  }
+
+  /**
+   * Отправка сообщения через WebSocket
+   */
+  async sendWebSocketMessage(type, payload = {}) {
+    return this.wsService.send({
+      type,
+      payload,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  /**
+   * Подписка на WebSocket события
+   */
+  on(event, callback) {
+    return this.wsService.on(event, callback);
+  }
+
+  /**
+   * Отписка от WebSocket событий
+   */
+  off(event, callback) {
+    return this.wsService.off(event, callback);
+  }
+
+  /**
+   * Проверка здоровья сервиса
+   */
+  async checkHealth() {
     try {
-      const response = await this.axiosInstance.get(`/tasks/${taskId}`);
-      return response.data;
+      const response = await this.client.get('/v2/tasks/health');
+      return {
+        healthy: true,
+        status: response.data.status,
+        timestamp: response.data.timestamp,
+        version: response.data.version
+      };
     } catch (error) {
-      throw new Error(`Ошибка получения задачи: ${error.message}`);
+      return {
+        healthy: false,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
     }
   }
 
   /**
-   * Добавляет комментарий к задаче
+   * Получение статуса сервиса
    */
-  async addCommentToTask(taskId, commentData) {
-    try {
-      const response = await this.axiosInstance.post(`/tasks/${taskId}/comments`, commentData);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка добавления комментария: ${error.message}`);
-    }
-  }
-
-  /**
-   * Обновляет комментарий в задаче
-   */
-  async updateCommentInTask(taskId, commentId, commentData) {
-    try {
-      const response = await this.axiosInstance.put(`/tasks/${taskId}/comments/${commentId}`, commentData);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка обновления комментария: ${error.message}`);
-    }
-  }
-
-  /**
-   * Удаляет комментарий из задачи
-   */
-  async deleteCommentFromTask(taskId, commentId) {
-    try {
-      const response = await this.axiosInstance.delete(`/tasks/${taskId}/comments/${commentId}`);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка удаления комментария: ${error.message}`);
-    }
-  }
-
-  /**
-   * Запускает отслеживание времени для задачи
-   */
-  async startTimeTrackingForTask(taskId) {
-    try {
-      const response = await this.axiosInstance.post(`/tasks/${taskId}/time-tracking/start`);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка запуска отслеживания времени: ${error.message}`);
-    }
-  }
-
-  /**
-   * Останавливает отслеживание времени для записи
-   */
-  async stopTimeTrackingForEntry(entryId) {
-    try {
-      const response = await this.axiosInstance.post(`/time-tracking/${entryId}/stop`);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка остановки отслеживания времени: ${error.message}`);
-    }
-  }
-
-  /**
-   * Массово назначает задачи пользователю
-   */
-  async bulkAssignTasksToUser(taskIds, assigneeId) {
-    try {
-      const response = await this.axiosInstance.post('/tasks/bulk-assign', {
-        task_ids: taskIds,
-        assignee_id: assigneeId
-      });
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка массового назначения задач: ${error.message}`);
-    }
-  }
-
-  /**
-   * Синхронизирует все данные
-   */
-  async syncAllData() {
-    try {
-      const response = await this.axiosInstance.post('/sync/all');
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка синхронизации: ${error.message}`);
-    }
-  }
-
-  /**
-   * Получает статистику задач
-   */
-  async getTaskStatistics(status = null, period = null) {
-    try {
-      const params = new URLSearchParams();
-      if (status) params.append('status', status);
-      if (period) params.append('period', period);
-
-      const response = await this.axiosInstance.get(`/tasks/statistics?${params.toString()}`);
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка получения статистики: ${error.message}`);
-    }
-  }
-
-  /**
-   * Получает метрики производительности
-   */
-  async getPerformanceMetrics() {
-    try {
-      const response = await this.axiosInstance.get('/performance/metrics');
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка получения метрик производительности: ${error.message}`);
-    }
-  }
-
-  /**
-   * Валидация данных задачи
-   */
-  validateTaskData(taskData) {
-    const errors = [];
-
-    if (!taskData.title || taskData.title.trim().length === 0) {
-      errors.push('Название задачи обязательно');
-    }
-
-    if (taskData.title && taskData.title.length > 255) {
-      errors.push('Название задачи не может быть длиннее 255 символов');
-    }
-
-    if (taskData.description && taskData.description.length > 1000) {
-      errors.push('Описание задачи не может быть длиннее 1000 символов');
-    }
-
-    if (taskData.dueDate) {
-      const dueDate = new Date(taskData.dueDate);
-      if (isNaN(dueDate.getTime())) {
-        errors.push('Неверный формат даты выполнения');
-      }
-    }
-
-    if (taskData.priority && ![1, 2, 3, 4].includes(taskData.priority)) {
-      errors.push('Приоритет должен быть от 1 до 4');
-    }
-
-    if (errors.length > 0) {
-      throw new Error(errors.join('; '));
-    }
-  }
-
-  /**
-   * Проверяет подключение к сервису
-   */
-  async checkConnection() {
-    try {
-      const response = await this.axiosInstance.get('/health');
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка подключения: ${error.message}`);
-    }
-  }
-
-  /**
-   * Получает информацию о сервисе
-   */
-  async getServiceInfo() {
-    try {
-      const response = await this.axiosInstance.get('/info');
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка получения информации о сервисе: ${error.message}`);
-    }
-  }
-
-  /**
-   * Обновляет конфигурацию
-   */
-  updateConfig(newConfig) {
-    this.config = { ...this.config, ...newConfig };
-    this.axiosInstance.defaults.baseURL = this.config.baseURL;
-    this.axiosInstance.defaults.timeout = this.config.timeout;
-  }
-
-  /**
-   * Сбрасывает конфигурацию к значениям по умолчанию
-   */
-  resetConfig() {
-    this.config = getTaskServiceConfig();
-    this.axiosInstance.defaults.baseURL = this.config.baseURL;
-    this.axiosInstance.defaults.timeout = this.config.timeout;
+  getStatus() {
+    return {
+      wsConnected: this.wsService.isConnected,
+      wsStatus: this.wsService.getStatus(),
+      apiStatus: this.client.getStatus()
+    };
   }
 }
 

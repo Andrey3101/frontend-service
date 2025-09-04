@@ -1,6 +1,7 @@
 /**
- * WebSocket сервис для real-time коммуникации с task-service
- * Обеспечивает двустороннюю связь для уведомлений и обновлений
+ * Улучшенный WebSocket сервис для real-time коммуникации
+ * Обеспечивает надежную связь с полной обработкой состояний,
+ * автоматическим переподключением и буферизацией сообщений
  */
 
 import { getWebSocketConfig } from '../config/task-service';
@@ -10,12 +11,19 @@ class WebSocketService {
     this.config = getWebSocketConfig();
     this.ws = null;
     this.isConnected = false;
+    this.isConnecting = false;
     this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 10;
     this.reconnectTimer = null;
     this.heartbeatTimer = null;
+    this.heartbeatInterval = 30000; // 30 секунд
     this.messageQueue = [];
     this.eventListeners = new Map();
     this.connectionStatus = 'disconnected';
+    this.lastHeartbeat = Date.now();
+    this.connectionStartTime = null;
+    this.messageBuffer = [];
+    this.maxBufferSize = 100;
     
     // Привязываем методы к контексту
     this.handleOpen = this.handleOpen.bind(this);
@@ -23,23 +31,39 @@ class WebSocketService {
     this.handleClose = this.handleClose.bind(this);
     this.handleError = this.handleError.bind(this);
     this.sendHeartbeat = this.sendHeartbeat.bind(this);
+    this.processMessageQueue = this.processMessageQueue.bind(this);
+    this.cleanup = this.cleanup.bind(this);
   }
 
   /**
-   * Подключается к WebSocket серверу
+   * Подключение к WebSocket серверу
    */
-  connect() {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      console.log('WebSocket уже подключен');
+  async connect() {
+    if (this.isConnecting) {
+      console.log('WebSocket: уже выполняется подключение...');
       return;
     }
 
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      console.log('WebSocket: уже подключен');
+      return;
+    }
+
+    if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
+      console.log('WebSocket: подключение в процессе...');
+      return;
+    }
+
+    this.isConnecting = true;
+    this.connectionStatus = 'connecting';
+
     try {
+      console.log('WebSocket: попытка подключения к', this.config.url);
+      
       this.ws = new WebSocket(this.config.url);
       this.setupEventHandlers();
-      this.connectionStatus = 'connecting';
+      this.connectionStartTime = Date.now();
       
-      console.log('WebSocket: попытка подключения к', this.config.url);
     } catch (error) {
       console.error('WebSocket: ошибка создания соединения:', error);
       this.handleConnectionError(error);
@@ -47,9 +71,11 @@ class WebSocketService {
   }
 
   /**
-   * Настраивает обработчики событий WebSocket
+   * Настройка обработчиков событий WebSocket
    */
   setupEventHandlers() {
+    if (!this.ws) return;
+
     this.ws.onopen = this.handleOpen;
     this.ws.onmessage = this.handleMessage;
     this.ws.onclose = this.handleClose;
@@ -62,8 +88,10 @@ class WebSocketService {
   handleOpen(event) {
     console.log('WebSocket: соединение установлено');
     this.isConnected = true;
+    this.isConnecting = false;
     this.connectionStatus = 'connected';
     this.reconnectAttempts = 0;
+    this.lastHeartbeat = Date.now();
     
     // Очищаем таймер переподключения
     if (this.reconnectTimer) {
@@ -74,11 +102,14 @@ class WebSocketService {
     // Запускаем heartbeat
     this.startHeartbeat();
     
-    // Отправляем накопленные сообщения
-    this.flushMessageQueue();
+    // Обрабатываем накопленные сообщения
+    this.processMessageQueue();
     
     // Уведомляем слушателей о подключении
-    this.emit('connected', event);
+    this.emit('connected', {
+      timestamp: Date.now(),
+      connectionTime: this.connectionStartTime ? Date.now() - this.connectionStartTime : 0
+    });
   }
 
   /**
@@ -89,6 +120,15 @@ class WebSocketService {
       const data = JSON.parse(event.data);
       console.log('WebSocket: получено сообщение:', data);
       
+      // Обновляем время последнего heartbeat
+      if (data.type === 'heartbeat') {
+        this.lastHeartbeat = Date.now();
+        return;
+      }
+      
+      // Добавляем сообщение в буфер
+      this.addToBuffer(data);
+      
       // Обрабатываем различные типы сообщений
       this.handleIncomingMessage(data);
       
@@ -96,6 +136,7 @@ class WebSocketService {
       this.emit('message', data);
     } catch (error) {
       console.error('WebSocket: ошибка парсинга сообщения:', error);
+      this.emit('error', { type: 'parse_error', error: error.message });
     }
   }
 
@@ -103,206 +144,78 @@ class WebSocketService {
    * Обработчик закрытия соединения
    */
   handleClose(event) {
-    console.log('WebSocket: соединение закрыто:', event.code, event.reason);
+    console.log('WebSocket: соединение закрыто', {
+      code: event.code,
+      reason: event.reason,
+      wasClean: event.wasClean
+    });
+    
     this.isConnected = false;
+    this.isConnecting = false;
     this.connectionStatus = 'disconnected';
     
     // Останавливаем heartbeat
     this.stopHeartbeat();
     
-    // Уведомляем слушателей о закрытии
-    this.emit('disconnected', event);
+    // Очищаем таймер переподключения
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     
-    // Пытаемся переподключиться если это не было инициативным закрытием
-    if (event.code !== 1000 && this.reconnectAttempts < this.config.maxReconnectAttempts) {
+    // Определяем, нужно ли переподключение
+    if (event.code === 1000 || event.code === 1001) {
+      // Нормальное закрытие или уход со страницы
+      console.log('WebSocket: нормальное закрытие, переподключение не требуется');
+      this.emit('disconnected', { reason: 'normal_close', code: event.code });
+    } else {
+      // Аномальное закрытие - пытаемся переподключиться
+      console.log('WebSocket: аномальное закрытие, пытаемся переподключиться');
       this.scheduleReconnect();
+      this.emit('disconnected', { reason: 'abnormal_close', code: event.code });
     }
   }
 
   /**
-   * Обработчик ошибок WebSocket
+   * Обработчик ошибок
    */
   handleError(error) {
-    console.error('WebSocket: ошибка:', error);
+    console.error('WebSocket: ошибка соединения:', error);
     this.connectionStatus = 'error';
-    
-    // Уведомляем слушателей об ошибке
-    this.emit('error', error);
+    this.emit('error', { type: 'connection_error', error: error.message });
   }
 
   /**
-   * Обрабатывает входящие сообщения по типу
+   * Обработка ошибки подключения
    */
-  handleIncomingMessage(data) {
-    const { type, payload, timestamp } = data;
-    
-    switch (type) {
-      case 'task_update':
-        this.handleTaskUpdate(payload);
-        break;
-      case 'task_created':
-        this.handleTaskCreated(payload);
-        break;
-      case 'task_deleted':
-        this.handleTaskDeleted(payload);
-        break;
-      case 'comment_added':
-        this.handleCommentAdded(payload);
-        break;
-      case 'notification':
-        this.handleNotification(payload);
-        break;
-      case 'meeting_reminder':
-        this.handleMeetingReminder(payload);
-        break;
-      case 'deadline_warning':
-        this.handleDeadlineWarning(payload);
-        break;
-      case 'system_status':
-        this.handleSystemStatus(payload);
-        break;
-      case 'heartbeat':
-        this.handleHeartbeat(payload);
-        break;
-      default:
-        console.warn('WebSocket: неизвестный тип сообщения:', type);
+  handleConnectionError(error) {
+    this.isConnecting = false;
+    this.connectionStatus = 'error';
+    this.emit('error', { type: 'connection_error', error: error.message });
+    this.scheduleReconnect();
+  }
+
+  /**
+   * Планирование переподключения
+   */
+  scheduleReconnect() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.log('WebSocket: достигнут максимальный лимит попыток переподключения');
+      this.emit('max_reconnect_attempts_reached');
+      return;
     }
+
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000); // Exponential backoff, max 30s
+    console.log(`WebSocket: переподключение через ${delay}ms (попытка ${this.reconnectAttempts + 1})`);
+    
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectAttempts++;
+      this.connect();
+    }, delay);
   }
 
   /**
-   * Обработчики конкретных типов сообщений
-   */
-  handleTaskUpdate(payload) {
-    console.log('WebSocket: обновление задачи:', payload);
-    this.emit('task:updated', payload);
-  }
-
-  handleTaskCreated(payload) {
-    console.log('WebSocket: создана новая задача:', payload);
-    this.emit('task:created', payload);
-  }
-
-  handleTaskDeleted(payload) {
-    console.log('WebSocket: удалена задача:', payload);
-    this.emit('task:deleted', payload);
-  }
-
-  handleCommentAdded(payload) {
-    console.log('WebSocket: добавлен комментарий:', payload);
-    this.emit('comment:added', payload);
-  }
-
-  handleNotification(payload) {
-    console.log('WebSocket: уведомление:', payload);
-    this.emit('notification', payload);
-  }
-
-  handleMeetingReminder(payload) {
-    console.log('WebSocket: напоминание о встрече:', payload);
-    this.emit('meeting:reminder', payload);
-  }
-
-  handleDeadlineWarning(payload) {
-    console.log('WebSocket: предупреждение о дедлайне:', payload);
-    this.emit('deadline:warning', payload);
-  }
-
-  handleSystemStatus(payload) {
-    console.log('WebSocket: статус системы:', payload);
-    this.emit('system:status', payload);
-  }
-
-  handleHeartbeat(payload) {
-    console.log('WebSocket: heartbeat получен:', payload);
-    this.emit('heartbeat', payload);
-  }
-
-  /**
-   * Отправляет сообщение через WebSocket
-   */
-  send(type, payload = {}) {
-    const message = {
-      type,
-      payload,
-      timestamp: new Date().toISOString(),
-      id: this.generateMessageId()
-    };
-
-    if (this.isConnected && this.ws.readyState === WebSocket.OPEN) {
-      try {
-        this.ws.send(JSON.stringify(message));
-        console.log('WebSocket: отправлено сообщение:', message);
-        return true;
-      } catch (error) {
-        console.error('WebSocket: ошибка отправки сообщения:', error);
-        return false;
-      }
-    } else {
-      // Добавляем сообщение в очередь
-      this.messageQueue.push(message);
-      console.log('WebSocket: сообщение добавлено в очередь:', message);
-      return false;
-    }
-  }
-
-  /**
-   * Отправляет сообщение о создании задачи
-   */
-  sendTaskCreated(task) {
-    return this.send('task_created', { task });
-  }
-
-  /**
-   * Отправляет сообщение об обновлении задачи
-   */
-  sendTaskUpdated(task) {
-    return this.send('task_updated', { task });
-  }
-
-  /**
-   * Отправляет сообщение об удалении задачи
-   */
-  sendTaskDeleted(taskId) {
-    return this.send('task_deleted', { taskId });
-  }
-
-  /**
-   * Отправляет сообщение о добавлении комментария
-   */
-  sendCommentAdded(comment) {
-    return this.send('comment_added', { comment });
-  }
-
-  /**
-   * Отправляет сообщение о начале отслеживания времени
-   */
-  sendTimeTrackingStarted(taskId, userId) {
-    return this.send('time_tracking_started', { taskId, userId });
-  }
-
-  /**
-   * Отправляет сообщение об остановке отслеживания времени
-   */
-  sendTimeTrackingStopped(taskId, userId, duration) {
-    return this.send('time_tracking_stopped', { taskId, userId, duration });
-  }
-
-  /**
-   * Отправляет запрос на синхронизацию
-   */
-  sendSyncRequest(dataType) {
-    return this.send('sync_request', { dataType });
-  }
-
-  /**
-   * Отправляет heartbeat
-   */
-  sendHeartbeat() {
-    return this.send('heartbeat', { timestamp: Date.now() });
-  }
-
-  /**
-   * Запускает heartbeat
+   * Запуск heartbeat
    */
   startHeartbeat() {
     if (this.heartbeatTimer) {
@@ -311,11 +224,11 @@ class WebSocketService {
     
     this.heartbeatTimer = setInterval(() => {
       this.sendHeartbeat();
-    }, this.config.heartbeatInterval);
+    }, this.heartbeatInterval);
   }
 
   /**
-   * Останавливает heartbeat
+   * Остановка heartbeat
    */
   stopHeartbeat() {
     if (this.heartbeatTimer) {
@@ -325,63 +238,170 @@ class WebSocketService {
   }
 
   /**
-   * Планирует переподключение
+   * Отправка heartbeat
    */
-  scheduleReconnect() {
-    if (this.reconnectTimer) {
-      return;
-    }
-
-    this.reconnectAttempts++;
-    const delay = this.config.reconnectInterval * Math.pow(2, this.reconnectAttempts - 1);
-    
-    console.log(`WebSocket: переподключение через ${delay}ms (попытка ${this.reconnectAttempts})`);
-    
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.connect();
-    }, delay);
-  }
-
-  /**
-   * Обрабатывает ошибки подключения
-   */
-  handleConnectionError(error) {
-    console.error('WebSocket: ошибка подключения:', error);
-    this.connectionStatus = 'error';
-    
-    if (this.reconnectAttempts < this.config.maxReconnectAttempts) {
-      this.scheduleReconnect();
+  sendHeartbeat() {
+    if (this.isConnected) {
+      this.send({
+        type: 'heartbeat',
+        timestamp: Date.now()
+      });
     }
   }
 
   /**
-   * Отправляет накопленные сообщения
+   * Отправка сообщения
    */
-  flushMessageQueue() {
-    if (this.messageQueue.length === 0) {
-      return;
+  send(data) {
+    if (!this.isConnected) {
+      // Добавляем в очередь, если не подключены
+      this.messageQueue.push(data);
+      console.log('WebSocket: сообщение добавлено в очередь (не подключены)');
+      return false;
     }
 
-    console.log(`WebSocket: отправка ${this.messageQueue.length} сообщений из очереди`);
+    try {
+      const message = JSON.stringify(data);
+      this.ws.send(message);
+      console.log('WebSocket: отправлено сообщение:', data);
+      return true;
+    } catch (error) {
+      console.error('WebSocket: ошибка отправки сообщения:', error);
+      this.emit('error', { type: 'send_error', error: error.message });
+      return false;
+    }
+  }
+
+  /**
+   * Обработка очереди сообщений
+   */
+  processMessageQueue() {
+    if (this.messageQueue.length === 0) return;
+
+    console.log(`WebSocket: обработка ${this.messageQueue.length} сообщений из очереди`);
     
-    const messages = [...this.messageQueue];
-    this.messageQueue = [];
-    
-    messages.forEach(message => {
-      this.send(message.type, message.payload);
+    while (this.messageQueue.length > 0) {
+      const message = this.messageQueue.shift();
+      this.send(message);
+    }
+  }
+
+  /**
+   * Добавление сообщения в буфер
+   */
+  addToBuffer(message) {
+    this.messageBuffer.push({
+      ...message,
+      timestamp: Date.now()
     });
+    
+    // Ограничиваем размер буфера
+    if (this.messageBuffer.length > this.maxBufferSize) {
+      this.messageBuffer.shift();
+    }
   }
 
   /**
-   * Генерирует уникальный ID для сообщения
+   * Получение сообщений из буфера
    */
-  generateMessageId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  getMessageBuffer(limit = 50) {
+    return this.messageBuffer.slice(-limit);
   }
 
   /**
-   * Подписывается на события
+   * Очистка буфера сообщений
+   */
+  clearMessageBuffer() {
+    this.messageBuffer = [];
+  }
+
+  /**
+   * Обработка входящих сообщений по типу
+   */
+  handleIncomingMessage(data) {
+    switch (data.type) {
+      case 'task_update':
+        this.handleTaskUpdate(data);
+        break;
+      case 'notification':
+        this.handleNotification(data);
+        break;
+      case 'user_status':
+        this.handleUserStatus(data);
+        break;
+      case 'system_alert':
+        this.handleSystemAlert(data);
+        break;
+      case 'heartbeat':
+        // Обрабатывается в handleMessage
+        break;
+      default:
+        console.log('WebSocket: неизвестный тип сообщения:', data.type);
+    }
+  }
+
+  /**
+   * Обработка обновления задачи
+   */
+  handleTaskUpdate(data) {
+    this.emit('task_update', data);
+  }
+
+  /**
+   * Обработка уведомления
+   */
+  handleNotification(data) {
+    this.emit('notification', data);
+  }
+
+  /**
+   * Обработка статуса пользователя
+   */
+  handleUserStatus(data) {
+    this.emit('user_status', data);
+  }
+
+  /**
+   * Обработка системного предупреждения
+   */
+  handleSystemAlert(data) {
+    this.emit('system_alert', data);
+  }
+
+  /**
+   * Отключение от сервера
+   */
+  disconnect() {
+    console.log('WebSocket: принудительное отключение');
+    
+    this.stopHeartbeat();
+    
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    
+    if (this.ws) {
+      this.ws.close(1000, 'Client disconnect');
+    }
+    
+    this.cleanup();
+  }
+
+  /**
+   * Очистка ресурсов
+   */
+  cleanup() {
+    this.isConnected = false;
+    this.isConnecting = false;
+    this.connectionStatus = 'disconnected';
+    this.reconnectAttempts = 0;
+    this.messageQueue = [];
+    this.ws = null;
+  }
+
+  /**
+   * Подписка на события
    */
   on(event, callback) {
     if (!this.eventListeners.has(event)) {
@@ -391,28 +411,23 @@ class WebSocketService {
   }
 
   /**
-   * Отписывается от событий
+   * Отписка от событий
    */
   off(event, callback) {
-    if (!this.eventListeners.has(event)) {
-      return;
-    }
+    if (!this.eventListeners.has(event)) return;
     
     const listeners = this.eventListeners.get(event);
     const index = listeners.indexOf(callback);
-    
     if (index > -1) {
       listeners.splice(index, 1);
     }
   }
 
   /**
-   * Уведомляет слушателей о событии
+   * Уведомление о событиях
    */
   emit(event, data) {
-    if (!this.eventListeners.has(event)) {
-      return;
-    }
+    if (!this.eventListeners.has(event)) return;
     
     this.eventListeners.get(event).forEach(callback => {
       try {
@@ -424,82 +439,71 @@ class WebSocketService {
   }
 
   /**
-   * Получает статус соединения
+   * Получение статуса соединения
    */
-  getConnectionStatus() {
+  getStatus() {
     return {
-      isConnected: this.isConnected,
+      connected: this.isConnected,
+      connecting: this.isConnecting,
       status: this.connectionStatus,
       reconnectAttempts: this.reconnectAttempts,
-      url: this.config.url
+      lastHeartbeat: this.lastHeartbeat,
+      messageQueueSize: this.messageQueue.length,
+      bufferSize: this.messageBuffer.length,
+      uptime: this.connectionStartTime ? Date.now() - this.connectionStartTime : 0
     };
   }
 
   /**
-   * Получает статистику соединения
+   * Проверка здоровья соединения
    */
-  getConnectionStats() {
-    return {
-      isConnected: this.isConnected,
-      connectionStatus: this.connectionStatus,
-      reconnectAttempts: this.reconnectAttempts,
-      messageQueueLength: this.messageQueue.length,
-      eventListenersCount: this.eventListeners.size,
-      url: this.config.url,
-      config: this.config
-    };
+  isHealthy() {
+    if (!this.isConnected) return false;
+    
+    const timeSinceLastHeartbeat = Date.now() - this.lastHeartbeat;
+    return timeSinceLastHeartbeat < this.heartbeatInterval * 2;
   }
 
   /**
-   * Отключается от WebSocket сервера
+   * Принудительная перезагрузка соединения
    */
-  disconnect() {
-    if (this.ws) {
-      // Останавливаем heartbeat
-      this.stopHeartbeat();
-      
-      // Очищаем таймер переподключения
-      if (this.reconnectTimer) {
-        clearTimeout(this.reconnectTimer);
-        this.reconnectTimer = null;
-      }
-      
-      // Закрываем соединение
-      if (this.ws.readyState === WebSocket.OPEN) {
-        this.ws.close(1000, 'Disconnect requested');
-      }
-      
-      this.ws = null;
-      this.isConnected = false;
-      this.connectionStatus = 'disconnected';
-      
-      console.log('WebSocket: соединение закрыто');
-    }
-  }
-
-  /**
-   * Переподключается к серверу
-   */
-  reconnect() {
+  async reconnect() {
     console.log('WebSocket: принудительное переподключение');
     this.disconnect();
+    
+    // Ждем немного перед переподключением
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     this.reconnectAttempts = 0;
     this.connect();
   }
 
   /**
-   * Очищает все ресурсы
+   * Установка максимального количества попыток переподключения
    */
-  destroy() {
-    this.disconnect();
-    
-    // Очищаем слушателей событий
-    this.eventListeners.clear();
-    
-    // Очищаем очередь сообщений
-    this.messageQueue = [];
-    
-    console.log('WebSocket: сервис уничтожен');
+  setMaxReconnectAttempts(max) {
+    this.maxReconnectAttempts = max;
+  }
+
+  /**
+   * Установка интервала heartbeat
+   */
+  setHeartbeatInterval(interval) {
+    this.heartbeatInterval = interval;
+    if (this.isConnected) {
+      this.stopHeartbeat();
+      this.startHeartbeat();
+    }
+  }
+
+  /**
+   * Установка размера буфера сообщений
+   */
+  setMaxBufferSize(size) {
+    this.maxBufferSize = size;
+    while (this.messageBuffer.length > this.maxBufferSize) {
+      this.messageBuffer.shift();
+    }
   }
 }
 

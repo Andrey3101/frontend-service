@@ -14,7 +14,7 @@ const ENVIRONMENTS = {
     enableMetrics: true
   },
   staging: {
-    baseURL: 'https://staging-ai-service.example.com',
+    baseURL: 'https://staging-api.msb-platform.ru/ai',
     timeout: 45000,
     retryAttempts: 3,
     retryDelay: 3000,
@@ -22,7 +22,7 @@ const ENVIRONMENTS = {
     enableMetrics: true
   },
   production: {
-    baseURL: 'https://ai-service.example.com',
+    baseURL: 'https://api.msb-platform.ru/ai', // Исправлен URL
     timeout: 60000,
     retryAttempts: 2,
     retryDelay: 5000,

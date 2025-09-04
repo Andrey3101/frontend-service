@@ -1,490 +1,301 @@
 /**
- * Интеграционный сервис для documents-service
- * Обеспечивает взаимодействие между frontend и documents-service
+ * Обновленный интеграционный сервис для documents-service
+ * Использует единый API клиент с версионированием v2
  */
 
-import axios from 'axios';
-import { getDocumentsServiceConfig } from '../config/documents-service';
+import apiClient from './api-client.js';
 
 class DocumentsServiceIntegration {
   constructor() {
-    this.config = getDocumentsServiceConfig();
-    this.axiosInstance = this.createAxiosInstance();
-    this.setupInterceptors();
+    this.client = apiClient;
   }
-
-  /**
-   * Создает экземпляр axios с базовой конфигурацией
-   */
-  createAxiosInstance() {
-    const instance = axios.create({
-      baseURL: this.config.baseURL,
-      timeout: this.config.timeout,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
-    });
-
-    return instance;
-  }
-
-  /**
-   * Настраивает перехватчики для обработки ошибок
-   */
-  setupInterceptors() {
-    // Перехватчик запросов
-    this.axiosInstance.interceptors.request.use(
-      (config) => {
-        // Добавляем заголовки для CORS
-        config.headers['X-Requested-With'] = 'XMLHttpRequest';
-        
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
-
-    // Перехватчик ответов
-    this.axiosInstance.interceptors.response.use(
-      (response) => {
-        return response;
-      },
-      async (error) => {
-        // Обрабатываем различные типы ошибок
-        if (error.response) {
-          const { status, data } = error.response;
-          
-          switch (status) {
-            case 400:
-              this.handleBadRequest(data);
-              break;
-            case 422:
-              this.handleValidationError(data);
-              break;
-            case 500:
-              this.handleServerError(data);
-              break;
-            default:
-              this.handleGenericError(status, data);
-          }
-        } else if (error.request) {
-          // Запрос был отправлен, но ответ не получен
-          this.handleNetworkError();
-        } else {
-          // Ошибка при настройке запроса
-          this.handleRequestError(error);
-        }
-
-        return Promise.reject(error);
-      }
-    );
-  }
-
-  /**
-   * Методы для работы с документами
-   */
 
   /**
    * Создание документа
    */
   async createDocument(templateId, data, options = {}) {
-    try {
-      const response = await this.axiosInstance.post('/documents', {
-        template_id: templateId,
-        data,
-        options
-      });
-      
-      return {
-        success: true,
-        document: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+    return this.client.post('/v2/documents', {
+      template_id: templateId,
+      data,
+      options
+    });
   }
 
   /**
    * Получение списка документов
    */
-  async getDocuments(page = 1, limit = 50, filters = {}) {
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
-        ...filters
-      });
-
-      const response = await this.axiosInstance.get(`/documents?${params}`);
-      
-      return {
-        success: true,
-        documents: response.data.documents,
-        total: response.data.total,
-        page: response.data.page,
-        limit: response.data.limit
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async getDocuments(filters = {}) {
+    return this.client.get('/v2/documents', filters, { cache: true });
   }
 
   /**
    * Получение документа по ID
    */
   async getDocument(documentId) {
-    try {
-      const response = await this.axiosInstance.get(`/documents/${documentId}`);
-      
-      return {
-        success: true,
-        document: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+    return this.client.get(`/v2/documents/${documentId}`, null, { cache: true });
   }
 
   /**
    * Обновление документа
    */
-  async updateDocument(documentId, data) {
-    try {
-      const response = await this.axiosInstance.put(`/documents/${documentId}`, data);
-      
-      return {
-        success: true,
-        document: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async updateDocument(documentId, documentData) {
+    return this.client.put(`/v2/documents/${documentId}`, documentData);
   }
 
   /**
    * Удаление документа
    */
   async deleteDocument(documentId) {
-    try {
-      await this.axiosInstance.delete(`/documents/${documentId}`);
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+    return this.client.delete(`/v2/documents/${documentId}`);
   }
 
   /**
-   * Методы для работы с шаблонами
+   * Подписание документа
    */
-
-  /**
-   * Получение списка шаблонов
-   */
-  async getTemplates(category = null, type = null) {
-    try {
-      const params = new URLSearchParams();
-      if (category) params.append('category', category);
-      if (type) params.append('type', type);
-
-      const response = await this.axiosInstance.get(`/templates?${params}`);
-      
-      return {
-        success: true,
-        templates: response.data.templates,
-        total: response.data.total
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async signDocument(documentId, signatureData) {
+    return this.client.post(`/v2/documents/${documentId}/sign`, signatureData);
   }
 
   /**
-   * Получение шаблона по ID
+   * Экспорт документа
    */
-  async getTemplate(templateId) {
-    try {
-      const response = await this.axiosInstance.get(`/templates/${templateId}`);
-      
-      return {
-        success: true,
-        template: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async exportDocument(documentId, format = 'pdf') {
+    return this.client.get(`/v2/documents/${documentId}/export?format=${format}`);
   }
 
   /**
-   * Создание шаблона
+   * Получение шаблонов документов
    */
-  async createTemplate(templateData) {
-    try {
-      const response = await this.axiosInstance.post('/templates', templateData);
-      
-      return {
-        success: true,
-        template: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async getTemplates(type = null) {
+    const params = type ? { type } : {};
+    return this.client.get('/v2/documents/templates', params, { cache: true });
   }
 
   /**
-   * Обновление шаблона
+   * Получение шаблона по типу
    */
-  async updateTemplate(templateId, templateData) {
-    try {
-      const response = await this.axiosInstance.put(`/templates/${templateId}`, templateData);
-      
-      return {
-        success: true,
-        template: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async getTemplate(templateType) {
+    return this.client.get(`/v2/documents/templates/${templateType}`, null, { cache: true });
   }
-
-  /**
-   * Удаление шаблона
-   */
-  async deleteTemplate(templateId) {
-    try {
-      await this.axiosInstance.delete(`/templates/${templateId}`);
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
-  }
-
-  /**
-   * Методы для генерации документов
-   */
 
   /**
    * Генерация документа из шаблона
    */
-  async generateDocument(templateId, data, format = 'pdf') {
-    try {
-      const response = await this.axiosInstance.post('/generate', {
-        template_id: templateId,
-        data,
-        format
-      });
-      
-      return {
-        success: true,
-        document: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async generateDocument(templateType, variables) {
+    return this.client.post('/v2/documents/generate', {
+      template_type: templateType,
+      variables
+    });
   }
 
   /**
-   * Конвертация документа в другой формат
+   * Получение отчетов
+   */
+  async getReports(page = 1, limit = 50, type = null) {
+    const params = { page, limit };
+    if (type) params.type = type;
+    return this.client.get('/v2/documents/reports', params, { cache: true });
+  }
+
+  /**
+   * Создание отчета
+   */
+  async createReport(reportData) {
+    return this.client.post('/v2/documents/reports', reportData);
+  }
+
+  /**
+   * Получение актов
+   */
+  async getActs(page = 1, limit = 50, status = null) {
+    const params = { page, limit };
+    if (status) params.status = status;
+    return this.client.get('/v2/documents/acts', params, { cache: true });
+  }
+
+  /**
+   * Создание акта
+   */
+  async createAct(actData) {
+    return this.client.post('/v2/documents/acts', actData);
+  }
+
+  /**
+   * Получение аналитики товаров
+   */
+  async getInventoryAnalytics(category = null) {
+    const params = category ? { category } : {};
+    return this.client.get('/v2/documents/inventory', params, { cache: true });
+  }
+
+  /**
+   * Создание товара
+   */
+  async createProduct(productData) {
+    return this.client.post('/v2/documents/inventory/products', productData);
+  }
+
+  /**
+   * Создание транзакции товаров
+   */
+  async createInventoryTransaction(transactionData) {
+    return this.client.post('/v2/documents/inventory/transactions', transactionData);
+  }
+
+  /**
+   * Создание прогноза спроса
+   */
+  async createDemandForecast(forecastData) {
+    return this.client.post('/v2/documents/inventory/forecast', forecastData);
+  }
+
+  /**
+   * Генерация автоматических заказов
+   */
+  async generateAutoOrders() {
+    return this.client.post('/v2/documents/inventory/auto-orders');
+  }
+
+  /**
+   * Конвертация документа
    */
   async convertDocument(documentId, targetFormat) {
-    try {
-      const response = await this.axiosInstance.post(`/convert/${documentId}`, {
-        target_format: targetFormat
-      });
-      
-      return {
-        success: true,
-        converted: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+    return this.client.post(`/v2/documents/${documentId}/convert`, {
+      target_format: targetFormat
+    });
   }
 
   /**
    * Валидация документа
    */
   async validateDocument(documentId) {
-    try {
-      const response = await this.axiosInstance.post(`/validate/${documentId}`);
-      
-      return {
-        success: true,
-        validation: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
-  }
-
-  /**
-   * Методы для подписи документов
-   */
-
-  /**
-   * Подписание документа
-   */
-  async signDocument(documentId, signatureData) {
-    try {
-      const response = await this.axiosInstance.post(`/sign/${documentId}`, signatureData);
-      
-      return {
-        success: true,
-        signed: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
-  }
-
-  /**
-   * Проверка подписи документа
-   */
-  async verifySignature(documentId) {
-    try {
-      const response = await this.axiosInstance.get(`/sign/${documentId}/verify`);
-      
-      return {
-        success: true,
-        verification: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
-  }
-
-  /**
-   * Методы для экспорта и импорта
-   */
-
-  /**
-   * Экспорт документа
-   */
-  async exportDocument(documentId, format = 'pdf') {
-    try {
-      const response = await this.axiosInstance.get(`/export/${documentId}`, {
-        params: { format },
-        responseType: 'blob'
-      });
-      
-      return {
-        success: true,
-        blob: response.data,
-        filename: `document_${documentId}.${format}`
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+    return this.client.post(`/v2/documents/${documentId}/validate`);
   }
 
   /**
    * Импорт документа
    */
   async importDocument(file, options = {}) {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      if (options.template_id) {
-        formData.append('template_id', options.template_id);
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    Object.keys(options).forEach(key => {
+      formData.append(key, options[key]);
+    });
+    
+    return this.client.post('/v2/documents/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
       }
-      if (options.category) {
-        formData.append('category', options.category);
-      }
-
-      const response = await this.axiosInstance.post('/import', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      return {
-        success: true,
-        document: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+    });
   }
 
   /**
-   * Обработка ошибок
+   * Получение истории документа
    */
-
-  handleBadRequest(data) {
-    console.error('Некорректный запрос:', data);
+  async getDocumentHistory(documentId) {
+    return this.client.get(`/v2/documents/${documentId}/history`, null, { cache: true });
   }
 
-  handleValidationError(data) {
-    console.error('Ошибка валидации:', data);
+  /**
+   * Восстановление версии документа
+   */
+  async restoreDocumentVersion(documentId, versionId) {
+    return this.client.post(`/v2/documents/${documentId}/restore`, {
+      version_id: versionId
+    });
   }
 
-  handleServerError(data) {
-    console.error('Ошибка сервера:', data);
+  /**
+   * Получение статистики документов
+   */
+  async getDocumentStats(period = 'month') {
+    return this.client.get(`/v2/documents/stats?period=${period}`, null, { cache: true });
   }
 
-  handleGenericError(status, data) {
-    console.error(`HTTP ${status}:`, data);
+  /**
+   * Поиск документов
+   */
+  async searchDocuments(query, filters = {}) {
+    const params = { query, ...filters };
+    return this.client.get('/v2/documents/search', params, { cache: true });
   }
 
-  handleNetworkError() {
-    console.error('Ошибка сети');
+  /**
+   * Получение категорий документов
+   */
+  async getDocumentCategories() {
+    return this.client.get('/v2/documents/categories', null, { cache: true });
   }
 
-  handleRequestError(error) {
-    console.error('Ошибка запроса:', error);
+  /**
+   * Создание категории документов
+   */
+  async createDocumentCategory(categoryData) {
+    return this.client.post('/v2/documents/categories', categoryData);
+  }
+
+  /**
+   * Обновление категории документов
+   */
+  async updateDocumentCategory(categoryId, categoryData) {
+    return this.client.put(`/v2/documents/categories/${categoryId}`, categoryData);
+  }
+
+  /**
+   * Удаление категории документов
+   */
+  async deleteDocumentCategory(categoryId) {
+    return this.client.delete(`/v2/documents/categories/${categoryId}`);
+  }
+
+  /**
+   * Получение тегов документов
+   */
+  async getDocumentTags() {
+    return this.client.get('/v2/documents/tags', null, { cache: true });
+  }
+
+  /**
+   * Добавление тега к документу
+   */
+  async addDocumentTag(documentId, tag) {
+    return this.client.post(`/v2/documents/${documentId}/tags`, { tag });
+  }
+
+  /**
+   * Удаление тега из документа
+   */
+  async removeDocumentTag(documentId, tag) {
+    return this.client.delete(`/v2/documents/${documentId}/tags/${encodeURIComponent(tag)}`);
+  }
+
+  /**
+   * Получение комментариев к документу
+   */
+  async getDocumentComments(documentId) {
+    return this.client.get(`/v2/documents/${documentId}/comments`, null, { cache: true });
+  }
+
+  /**
+   * Добавление комментария к документу
+   */
+  async addDocumentComment(documentId, commentData) {
+    return this.client.post(`/v2/documents/${documentId}/comments`, commentData);
+  }
+
+  /**
+   * Обновление комментария к документу
+   */
+  async updateDocumentComment(documentId, commentId, commentData) {
+    return this.client.put(`/v2/documents/${documentId}/comments/${commentId}`, commentData);
+  }
+
+  /**
+   * Удаление комментария к документу
+   */
+  async deleteDocumentComment(documentId, commentId) {
+    return this.client.delete(`/v2/documents/${documentId}/comments/${commentId}`);
   }
 
   /**
@@ -492,19 +303,18 @@ class DocumentsServiceIntegration {
    */
   async checkHealth() {
     try {
-      const response = await this.axiosInstance.get('/health');
+      const response = await this.client.get('/v2/documents/health');
       return {
         healthy: true,
         status: response.data.status,
         timestamp: response.data.timestamp,
-        version: response.data.version,
-        storage: response.data.storage || {},
-        templates: response.data.templates || {}
+        version: response.data.version
       };
     } catch (error) {
       return {
         healthy: false,
-        error: error.message
+        error: error.message,
+        timestamp: new Date().toISOString()
       };
     }
   }
@@ -514,11 +324,10 @@ class DocumentsServiceIntegration {
    */
   async getServiceInfo() {
     try {
-      const response = await this.axiosInstance.get('/info');
+      const response = await this.client.get('/v2/documents/info');
       return response.data;
     } catch (error) {
-      console.error('Ошибка получения информации о documents-service:', error);
-      return null;
+      throw new Error(`Ошибка получения информации о Documents Service: ${error.message}`);
     }
   }
 
@@ -527,18 +336,8 @@ class DocumentsServiceIntegration {
    */
   getStatus() {
     return {
-      configured: !!this.config.baseURL,
-      baseURL: this.config.baseURL,
-      timeout: this.config.timeout,
-      features: {
-        documentGeneration: true,
-        templateEngine: true,
-        pdfConversion: true,
-        wordConversion: true,
-        digitalSigning: true,
-        documentValidation: true,
-        importExport: true
-      }
+      apiStatus: this.client.getStatus(),
+      lastHealthCheck: this.lastHealthCheck
     };
   }
 }

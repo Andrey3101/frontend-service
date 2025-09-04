@@ -1,330 +1,233 @@
 /**
- * Интеграционный сервис для ai-service
- * Обеспечивает взаимодействие между frontend и ai-service
+ * Обновленный интеграционный сервис для ai-service
+ * Использует единый API клиент с версионированием v2
  */
 
-import axios from 'axios';
-import { getAIServiceConfig } from '../config/ai-service';
+import apiClient from './api-client.js';
 
 class AIServiceIntegration {
   constructor() {
-    this.config = getAIServiceConfig();
-    this.axiosInstance = this.createAxiosInstance();
-    this.setupInterceptors();
+    this.client = apiClient;
   }
-
-  /**
-   * Создает экземпляр axios с базовой конфигурацией
-   */
-  createAxiosInstance() {
-    const instance = axios.create({
-      baseURL: this.config.baseURL,
-      timeout: this.config.timeout,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
-    });
-
-    return instance;
-  }
-
-  /**
-   * Настраивает перехватчики для обработки ошибок
-   */
-  setupInterceptors() {
-    // Перехватчик запросов
-    this.axiosInstance.interceptors.request.use(
-      (config) => {
-        // Добавляем заголовки для CORS
-        config.headers['X-Requested-With'] = 'XMLHttpRequest';
-        
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
-
-    // Перехватчик ответов
-    this.axiosInstance.interceptors.response.use(
-      (response) => {
-        return response;
-      },
-      async (error) => {
-        // Обрабатываем различные типы ошибок
-        if (error.response) {
-          const { status, data } = error.response;
-          
-          switch (status) {
-            case 400:
-              this.handleBadRequest(data);
-              break;
-            case 422:
-              this.handleValidationError(data);
-              break;
-            case 500:
-              this.handleServerError(data);
-              break;
-            default:
-              this.handleGenericError(status, data);
-          }
-        } else if (error.request) {
-          // Запрос был отправлен, но ответ не получен
-          this.handleNetworkError();
-        } else {
-          // Ошибка при настройке запроса
-          this.handleRequestError(error);
-        }
-
-        return Promise.reject(error);
-      }
-    );
-  }
-
-  /**
-   * Методы для анализа данных
-   */
 
   /**
    * Анализ данных
    */
   async analyzeData(data, analysisType = 'general') {
-    try {
-      const response = await this.axiosInstance.post('/analysis', {
-        data,
-        type: analysisType
-      });
-      
-      return {
-        success: true,
-        analysis: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+    return this.client.post('/v2/ai/analysis', {
+      data,
+      type: analysisType
+    });
   }
 
   /**
-   * Получение предсказания
+   * Генерация текста
    */
-  async getPrediction(model, input, options = {}) {
-    try {
-      const response = await this.axiosInstance.post('/prediction', {
-        model,
-        input,
-        options
-      });
-      
-      return {
-        success: true,
-        prediction: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async generateText(prompt, options = {}) {
+    return this.client.post('/v2/ai/generate', {
+      prompt,
+      ...options
+    });
+  }
+
+  /**
+   * Анализ конкурентов
+   */
+  async analyzeCompetitors(competitorUrls, industry = null, focusAreas = []) {
+    return this.client.post('/v2/ai/competitors/analyze', {
+      competitor_urls: competitorUrls,
+      industry,
+      focus_areas: focusAreas
+    });
+  }
+
+  /**
+   * Анализ цен
+   */
+  async analyzePricing(serviceName, currentPrice, serviceDescription, targetMarket = null, competitors = null) {
+    return this.client.post('/v2/ai/pricing/analyze', {
+      service_name: serviceName,
+      current_price: currentPrice,
+      service_description: serviceDescription,
+      target_market: targetMarket,
+      competitors
+    });
+  }
+
+  /**
+   * Генерация бизнес-инсайтов
+   */
+  async generateBusinessInsights(insightType, data, priority = 'medium') {
+    return this.client.post('/v2/ai/insights/generate', {
+      insight_type: insightType,
+      data,
+      priority
+    });
+  }
+
+  /**
+   * Создание бизнес-прогноза
+   */
+  async createBusinessForecast(forecastData) {
+    return this.client.post('/v2/ai/forecast', forecastData);
+  }
+
+  /**
+   * Генерация бизнес-рекомендаций
+   */
+  async generateBusinessRecommendations(recommendationData) {
+    return this.client.post('/v2/ai/recommendations', recommendationData);
+  }
+
+  /**
+   * Получение бизнес-рекомендаций
+   */
+  async getBusinessRecommendations(filters = {}) {
+    return this.client.get('/v2/ai/recommendations', filters, { cache: true });
   }
 
   /**
    * Обучение модели
    */
-  async trainModel(trainingData, modelType = 'regression', options = {}) {
-    try {
-      const response = await this.axiosInstance.post('/training', {
-        data: trainingData,
-        model_type: modelType,
-        options
-      });
-      
-      return {
-        success: true,
-        training: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async trainModel(modelName, modelType, trainingData, parameters = null) {
+    return this.client.post('/v2/ai/models/train', {
+      model_name: modelName,
+      model_type: modelType,
+      training_data: trainingData,
+      parameters
+    });
   }
 
   /**
-   * Получение списка доступных моделей
+   * Предсказание с помощью модели
    */
-  async getAvailableModels() {
-    try {
-      const response = await this.axiosInstance.get('/models');
-      
-      return {
-        success: true,
-        models: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async makePrediction(modelName, inputData) {
+    return this.client.post('/v2/ai/predict', {
+      model_name: modelName,
+      input_data: inputData
+    });
   }
 
   /**
-   * Методы для обработки речи
+   * Получение списка моделей
    */
+  async getModels(modelType = null) {
+    const params = modelType ? { model_type: modelType } : {};
+    return this.client.get('/v2/ai/models', params, { cache: true });
+  }
+
+  /**
+   * Получение предсказаний
+   */
+  async getPredictions(userId, filters = {}) {
+    const params = { user_id: userId, ...filters };
+    return this.client.get('/v2/ai/predictions', params, { cache: true });
+  }
 
   /**
    * Распознавание речи
    */
-  async recognizeSpeech(audioData, language = 'ru') {
-    try {
-      const formData = new FormData();
-      formData.append('audio', audioData);
-      formData.append('language', language);
-
-      const response = await this.axiosInstance.post('/speech/recognize', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      return {
-        success: true,
-        recognition: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async transcribeAudio(audioFile, language = 'ru') {
+    const formData = new FormData();
+    formData.append('audio_file', audioFile);
+    formData.append('language', language);
+    
+    return this.client.post('/v2/ai/speech/transcribe', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
   }
 
   /**
    * Синтез речи
    */
-  async synthesizeSpeech(text, voice = 'anna', language = 'ru') {
-    try {
-      const response = await this.axiosInstance.post('/speech/synthesize', {
-        text,
-        voice,
-        language
-      });
-      
-      return {
-        success: true,
-        synthesis: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async synthesizeSpeech(text, voice = 'default', language = 'ru') {
+    return this.client.post('/v2/ai/speech/synthesize', {
+      text,
+      voice,
+      language
+    });
   }
 
   /**
-   * Методы для NLP
-   */
-
-  /**
-   * Анализ тональности
+   * Анализ настроений
    */
   async analyzeSentiment(text, language = 'ru') {
-    try {
-      const response = await this.axiosInstance.post('/nlp/sentiment', {
-        text,
-        language
-      });
-      
-      return {
-        success: true,
-        sentiment: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
-  }
-
-  /**
-   * Классификация текста
-   */
-  async classifyText(text, categories = [], language = 'ru') {
-    try {
-      const response = await this.axiosInstance.post('/nlp/classify', {
-        text,
-        categories,
-        language
-      });
-      
-      return {
-        success: true,
-        classification: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+    return this.client.post('/v2/ai/sentiment/analyze', {
+      text,
+      language
+    });
   }
 
   /**
    * Извлечение ключевых слов
    */
-  async extractKeywords(text, maxKeywords = 10, language = 'ru') {
-    try {
-      const response = await this.axiosInstance.post('/nlp/keywords', {
-        text,
-        max_keywords: maxKeywords,
-        language
-      });
-      
-      return {
-        success: true,
-        keywords: response.data
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.detail || error.message
-      };
-    }
+  async extractKeywords(text, language = 'ru', maxKeywords = 10) {
+    return this.client.post('/v2/ai/keywords/extract', {
+      text,
+      language,
+      max_keywords: maxKeywords
+    });
   }
 
   /**
-   * Обработка ошибок
+   * Классификация текста
    */
-
-  handleBadRequest(data) {
-    console.error('Некорректный запрос:', data);
+  async classifyText(text, categories, language = 'ru') {
+    return this.client.post('/v2/ai/text/classify', {
+      text,
+      categories,
+      language
+    });
   }
 
-  handleValidationError(data) {
-    console.error('Ошибка валидации:', data);
+  /**
+   * Суммаризация текста
+   */
+  async summarizeText(text, maxLength = 200, language = 'ru') {
+    return this.client.post('/v2/ai/text/summarize', {
+      text,
+      max_length: maxLength,
+      language
+    });
   }
 
-  handleServerError(data) {
-    console.error('Ошибка сервера:', data);
+  /**
+   * Перевод текста
+   */
+  async translateText(text, sourceLanguage = 'ru', targetLanguage = 'en') {
+    return this.client.post('/v2/ai/translate', {
+      text,
+      source_language: sourceLanguage,
+      target_language: targetLanguage
+    });
   }
 
-  handleGenericError(status, data) {
-    console.error(`HTTP ${status}:`, data);
+  /**
+   * Анализ изображений
+   */
+  async analyzeImage(imageFile, analysisType = 'general') {
+    const formData = new FormData();
+    formData.append('image_file', imageFile);
+    formData.append('analysis_type', analysisType);
+    
+    return this.client.post('/v2/ai/vision/analyze', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
   }
 
-  handleNetworkError() {
-    console.error('Ошибка сети');
-  }
-
-  handleRequestError(error) {
-    console.error('Ошибка запроса:', error);
+  /**
+   * Генерация изображений
+   */
+  async generateImage(prompt, style = 'realistic', size = '1024x1024') {
+    return this.client.post('/v2/ai/vision/generate', {
+      prompt,
+      style,
+      size
+    });
   }
 
   /**
@@ -332,19 +235,18 @@ class AIServiceIntegration {
    */
   async checkHealth() {
     try {
-      const response = await this.axiosInstance.get('/health');
+      const response = await this.client.get('/v2/ai/health');
       return {
         healthy: true,
         status: response.data.status,
         timestamp: response.data.timestamp,
-        version: response.data.version,
-        models: response.data.models || [],
-        gpu: response.data.gpu || false
+        version: response.data.version
       };
     } catch (error) {
       return {
         healthy: false,
-        error: error.message
+        error: error.message,
+        timestamp: new Date().toISOString()
       };
     }
   }
@@ -354,11 +256,10 @@ class AIServiceIntegration {
    */
   async getServiceInfo() {
     try {
-      const response = await this.axiosInstance.get('/info');
+      const response = await this.client.get('/v2/ai/info');
       return response.data;
     } catch (error) {
-      console.error('Ошибка получения информации о ai-service:', error);
-      return null;
+      throw new Error(`Ошибка получения информации о AI сервисе: ${error.message}`);
     }
   }
 
@@ -367,16 +268,8 @@ class AIServiceIntegration {
    */
   getStatus() {
     return {
-      configured: !!this.config.baseURL,
-      baseURL: this.config.baseURL,
-      timeout: this.config.timeout,
-      features: {
-        dataAnalysis: true,
-        predictions: true,
-        modelTraining: true,
-        speechProcessing: true,
-        nlp: true
-      }
+      apiStatus: this.client.getStatus(),
+      lastHealthCheck: this.lastHealthCheck
     };
   }
 }

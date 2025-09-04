@@ -6,7 +6,7 @@
 // Базовые настройки для разных окружений
 const ENVIRONMENTS = {
   development: {
-    baseURL: 'http://localhost:8001',
+    baseURL: 'http://localhost:8000',
     timeout: 15000,
     retryAttempts: 3,
     retryDelay: 1000,
@@ -14,7 +14,7 @@ const ENVIRONMENTS = {
     enableMetrics: true
   },
   staging: {
-    baseURL: 'https://staging-auth-service.example.com',
+    baseURL: 'https://staging-api.msb-platform.ru',
     timeout: 20000,
     retryAttempts: 5,
     retryDelay: 2000,
@@ -22,7 +22,7 @@ const ENVIRONMENTS = {
     enableMetrics: true
   },
   production: {
-    baseURL: 'https://auth-service.example.com',
+    baseURL: 'https://api.msb-platform.ru',
     timeout: 25000,
     retryAttempts: 3,
     retryDelay: 3000,
@@ -67,43 +67,43 @@ export const getJWTConfig = () => {
     csrfTokenKey: 'csrf_token',
     tokenExpiryThreshold: 5 * 60 * 1000, // 5 минут до истечения
     autoRefresh: true,
-    refreshEndpoint: '/auth/refresh'
+    refreshEndpoint: '/v2/auth/refresh'
   };
 };
 
-// Конфигурация для аутентификации
+// Конфигурация для аутентификации с версионированием API
 export const getAuthConfig = () => {
   const baseConfig = getAuthServiceConfig();
   
   return {
     ...baseConfig,
     endpoints: {
-      login: '/login',
-      register: '/register',
-      logout: '/logout',
-      profile: '/profile',
-      refresh: '/refresh',
-      passwordReset: '/password/reset',
-      passwordResetConfirm: '/password/reset/confirm',
+      login: '/v2/auth/login',
+      register: '/v2/auth/register',
+      logout: '/v2/auth/logout',
+      profile: '/v2/auth/profile',
+      refresh: '/v2/auth/refresh',
+      passwordReset: '/v2/auth/password/reset',
+      passwordResetConfirm: '/v2/auth/password/reset/confirm',
       bank: {
-        connect: '/bank/connect',
-        accounts: '/bank/accounts',
-        disconnect: '/bank/accounts',
-        requestConnection: '/bank/request-connection',
-        connectionStatus: '/bank/connection-status'
+        connect: '/v2/auth/bank/connect',
+        accounts: '/v2/auth/bank/accounts',
+        disconnect: '/v2/auth/bank/accounts',
+        requestConnection: '/v2/auth/bank/request-connection',
+        connectionStatus: '/v2/auth/bank/connection-status'
       },
       users: {
-        list: '/users',
-        create: '/users',
-        update: '/users',
-        delete: '/users',
-        roles: '/users/roles'
+        list: '/v2/auth/users',
+        create: '/v2/auth/users',
+        update: '/v2/auth/users',
+        delete: '/v2/auth/users',
+        roles: '/v2/auth/users/roles'
       },
       companies: {
-        create: '/companies',
-        update: '/companies',
-        delete: '/companies',
-        list: '/companies'
+        create: '/v2/auth/companies',
+        update: '/v2/auth/companies',
+        delete: '/v2/auth/companies',
+        list: '/v2/auth/companies'
       }
     },
     features: {
@@ -112,7 +112,8 @@ export const getAuthConfig = () => {
       enableCompanyManagement: true,
       enablePasswordReset: true,
       enableCSRF: true,
-      enableRefreshTokens: true
+      enableRefreshTokens: true,
+      enableTokenEncryption: true
     }
   };
 };
@@ -134,6 +135,11 @@ export const getSecurityConfig = () => {
       requireLowercase: true,
       requireNumbers: true,
       requireSpecialChars: true
+    },
+    tokenEncryption: {
+      enabled: true,
+      algorithm: 'AES-GCM',
+      keyDerivation: 'PBKDF2'
     }
   };
 };
@@ -150,12 +156,15 @@ export const getMonitoringConfig = () => {
       enabled: true,
       collectAuthAttempts: true,
       collectTokenUsage: true,
-      collectUserActivity: true
+      collectUserActivity: true,
+      collectPerformanceMetrics: true
     },
     logging: {
       level: 'info',
       format: 'json',
-      includeSensitiveData: false
+      includeSensitiveData: false,
+      enableRequestLogging: true,
+      enableErrorLogging: true
     }
   };
 };
@@ -164,7 +173,7 @@ export const getMonitoringConfig = () => {
 export const checkAuthServiceHealth = async () => {
   try {
     const config = getAuthServiceConfig();
-    const response = await fetch(`${config.baseURL}/health`, {
+    const response = await fetch(`${config.baseURL}/v2/health`, {
       method: 'GET',
       timeout: config.timeout
     });
@@ -199,7 +208,7 @@ export const checkAuthServiceHealth = async () => {
 export const getAuthServiceInfo = async () => {
   try {
     const config = getAuthServiceConfig();
-    const response = await fetch(`${config.baseURL}/info`, {
+    const response = await fetch(`${config.baseURL}/v2/info`, {
       method: 'GET',
       timeout: config.timeout
     });

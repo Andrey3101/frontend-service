@@ -1,510 +1,294 @@
 /**
- * Интеграционный сервис для voice-assistant
- * Обеспечивает взаимодействие между frontend и voice-assistant
+ * Обновленный интеграционный сервис для voice-assistant
+ * Использует единый API клиент с версионированием v2
  */
 
-import { getVoiceAssistantConfig, getWebSocketConfig } from '../config/voice-assistant';
+import apiClient from './api-client.js';
+import websocketService from './websocket-service.js';
+import { getVoiceAssistantConfig } from '../config/voice-assistant';
 
 class VoiceAssistantIntegration {
   constructor() {
+    this.client = apiClient;
+    this.wsService = websocketService;
     this.config = getVoiceAssistantConfig();
-    this.wsConfig = getWebSocketConfig();
-    this.websocket = null;
-    this.isConnected = false;
-    this.reconnectAttempts = 0;
-    this.reconnectTimer = null;
-    this.heartbeatTimer = null;
-    this.messageQueue = [];
-    this.eventListeners = new Map();
+    this.isListening = false;
+    this.isSpeaking = false;
     this.recognitionStream = null;
     this.synthesisQueue = [];
+  }
+
+  /**
+   * Обработка голосовой команды
+   */
+  async processVoiceCommand(audioFile, language = 'ru') {
+    const formData = new FormData();
+    formData.append('audio_file', audioFile);
+    formData.append('language', language);
     
-    this.setupEventHandlers();
-  }
-
-  /**
-   * Настройка обработчиков событий
-   */
-  setupEventHandlers() {
-    // Обработчик успешного подключения
-    this.on('connected', () => {
-      console.log('Voice Assistant: WebSocket подключен');
-      this.isConnected = true;
-      this.reconnectAttempts = 0;
-      this.processMessageQueue();
-      this.startHeartbeat();
-    });
-
-    // Обработчик отключения
-    this.on('disconnected', () => {
-      console.log('Voice Assistant: WebSocket отключен');
-      this.isConnected = false;
-      this.stopHeartbeat();
-      this.scheduleReconnect();
-    });
-
-    // Обработчик ошибок
-    this.on('error', (error) => {
-      console.error('Voice Assistant: WebSocket ошибка:', error);
-      this.handleConnectionError(error);
-    });
-
-    // Обработчик сообщений
-    this.on('message', (data) => {
-      this.handleMessage(data);
-    });
-  }
-
-  /**
-   * Подключение к WebSocket
-   */
-  connect() {
-    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-      console.log('Voice Assistant: WebSocket уже подключен');
-      return;
-    }
-
-    try {
-      this.websocket = new WebSocket(this.wsConfig.url, this.wsConfig.protocols);
-      this.setupWebSocketHandlers();
-      console.log('Voice Assistant: попытка подключения к', this.wsConfig.url);
-    } catch (error) {
-      console.error('Voice Assistant: ошибка создания WebSocket:', error);
-      this.handleConnectionError(error);
-    }
-  }
-
-  /**
-   * Настройка обработчиков WebSocket
-   */
-  setupWebSocketHandlers() {
-    this.websocket.onopen = () => {
-      this.emit('connected');
-    };
-
-    this.websocket.onclose = (event) => {
-      console.log('Voice Assistant: WebSocket закрыт:', event.code, event.reason);
-      this.emit('disconnected', event);
-    };
-
-    this.websocket.onerror = (error) => {
-      console.error('Voice Assistant: WebSocket ошибка:', error);
-      this.emit('error', error);
-    };
-
-    this.websocket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.emit('message', data);
-      } catch (error) {
-        console.error('Voice Assistant: ошибка парсинга сообщения:', error);
-      }
-    };
-  }
-
-  /**
-   * Отключение от WebSocket
-   */
-  disconnect() {
-    if (this.websocket) {
-      this.websocket.close();
-      this.websocket = null;
-    }
-    this.isConnected = false;
-    this.stopHeartbeat();
-    this.clearReconnectTimer();
-  }
-
-  /**
-   * Планирование переподключения
-   */
-  scheduleReconnect() {
-    if (this.reconnectAttempts >= this.wsConfig.maxReconnectAttempts) {
-      console.error('Voice Assistant: превышено максимальное количество попыток переподключения');
-      return;
-    }
-
-    this.clearReconnectTimer();
-    const delay = this.wsConfig.reconnectInterval * Math.pow(2, this.reconnectAttempts);
-    
-    this.reconnectTimer = setTimeout(() => {
-      console.log(`Voice Assistant: попытка переподключения ${this.reconnectAttempts + 1}`);
-      this.reconnectAttempts++;
-      this.connect();
-    }, delay);
-  }
-
-  /**
-   * Очистка таймера переподключения
-   */
-  clearReconnectTimer() {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-  }
-
-  /**
-   * Запуск heartbeat
-   */
-  startHeartbeat() {
-    this.stopHeartbeat();
-    this.heartbeatTimer = setInterval(() => {
-      if (this.isConnected) {
-        this.sendMessage({ type: 'heartbeat', timestamp: Date.now() });
-      }
-    }, this.wsConfig.heartbeatInterval);
-  }
-
-  /**
-   * Остановка heartbeat
-   */
-  stopHeartbeat() {
-    if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
-      this.heartbeatTimer = null;
-    }
-  }
-
-  /**
-   * Отправка сообщения
-   */
-  sendMessage(message) {
-    if (this.isConnected && this.websocket) {
-      try {
-        this.websocket.send(JSON.stringify(message));
-      } catch (error) {
-        console.error('Voice Assistant: ошибка отправки сообщения:', error);
-        this.messageQueue.push(message);
-      }
-    } else {
-      this.messageQueue.push(message);
-    }
-  }
-
-  /**
-   * Обработка очереди сообщений
-   */
-  processMessageQueue() {
-    while (this.messageQueue.length > 0) {
-      const message = this.messageQueue.shift();
-      this.sendMessage(message);
-    }
-  }
-
-  /**
-   * Обработка входящих сообщений
-   */
-  handleMessage(data) {
-    switch (data.type) {
-      case 'recognition_result':
-        this.emit('recognitionResult', data);
-        break;
-      case 'synthesis_ready':
-        this.emit('synthesisReady', data);
-        break;
-      case 'command_executed':
-        this.emit('commandExecuted', data);
-        break;
-      case 'error':
-        this.emit('error', data);
-        break;
-      default:
-        console.log('Voice Assistant: неизвестный тип сообщения:', data.type);
-    }
-  }
-
-  /**
-   * Методы для распознавания речи
-   */
-
-  /**
-   * Начало распознавания речи
-   */
-  async startVoiceRecognition(options = {}) {
-    const defaultOptions = {
-      language: 'ru',
-      continuous: true,
-      interimResults: true,
-      maxAlternatives: 1
-    };
-
-    const finalOptions = { ...defaultOptions, ...options };
-
-    try {
-      // Проверяем поддержку Web Speech API
-      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        return this.startBrowserRecognition(finalOptions);
-      } else {
-        // Используем WebSocket для распознавания
-        return this.startWebSocketRecognition(finalOptions);
-      }
-    } catch (error) {
-      console.error('Voice Assistant: ошибка запуска распознавания:', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  /**
-   * Распознавание через браузер
-   */
-  startBrowserRecognition(options) {
-    return new Promise((resolve, reject) => {
-      try {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-
-        recognition.lang = options.language;
-        recognition.continuous = options.continuous;
-        recognition.interimResults = options.interimResults;
-        recognition.maxAlternatives = options.maxAlternatives;
-
-        recognition.onstart = () => {
-          this.emit('recognitionStarted');
-          resolve({ success: true, method: 'browser' });
-        };
-
-        recognition.onresult = (event) => {
-          const results = Array.from(event.results);
-          const transcript = results
-            .map(result => result[0].transcript)
-            .join('');
-
-          this.emit('recognitionResult', {
-            transcript,
-            isFinal: results[results.length - 1].isFinal,
-            confidence: results[results.length - 1][0].confidence
-          });
-        };
-
-        recognition.onerror = (event) => {
-          this.emit('recognitionError', event.error);
-          reject({ success: false, error: event.error });
-        };
-
-        recognition.onend = () => {
-          this.emit('recognitionEnded');
-        };
-
-        recognition.start();
-        this.recognitionStream = recognition;
-
-      } catch (error) {
-        reject({ success: false, error: error.message });
+    return this.client.post('/v2/voice/command', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
       }
     });
   }
 
   /**
-   * Распознавание через WebSocket
+   * Подключение к голосовому WebSocket
    */
-  startWebSocketRecognition(options) {
-    if (!this.isConnected) {
-      this.connect();
-    }
-
-    this.sendMessage({
-      type: 'start_recognition',
-      options
-    });
-
-    return { success: true, method: 'websocket' };
+  async connectVoiceWebSocket() {
+    const config = getVoiceAssistantConfig();
+    return this.wsService.connect(config.wsURL);
   }
 
   /**
-   * Остановка распознавания речи
+   * Отключение от голосового WebSocket
    */
-  stopVoiceRecognition() {
-    if (this.recognitionStream) {
-      this.recognitionStream.stop();
-      this.recognitionStream = null;
-    }
-
-    if (this.isConnected) {
-      this.sendMessage({ type: 'stop_recognition' });
-    }
-
-    this.emit('recognitionStopped');
+  async disconnectVoiceWebSocket() {
+    return this.wsService.disconnect();
   }
-
-  /**
-   * Методы для синтеза речи
-   */
 
   /**
    * Синтез речи
    */
-  async synthesizeSpeech(text, options = {}) {
-    const defaultOptions = {
-      voice: 'anna',
-      language: 'ru',
-      speed: 1.0,
-      pitch: 1.0
-    };
-
-    const finalOptions = { ...defaultOptions, ...options };
-
-    try {
-      // Проверяем поддержку Web Speech API
-      if ('speechSynthesis' in window) {
-        return this.browserSpeechSynthesis(text, finalOptions);
-      } else {
-        // Используем WebSocket для синтеза
-        return this.webSocketSpeechSynthesis(text, finalOptions);
-      }
-    } catch (error) {
-      console.error('Voice Assistant: ошибка синтеза речи:', error);
-      return { success: false, error: error.message };
-    }
+  async synthesizeSpeech(text, voice = 'default', language = 'ru') {
+    return this.client.post('/v2/voice/synthesize', {
+      text,
+      voice,
+      language
+    });
   }
 
   /**
-   * Синтез речи через браузер
+   * Распознавание речи
    */
-  browserSpeechSynthesis(text, options) {
-    return new Promise((resolve, reject) => {
-      try {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = options.language;
-        utterance.rate = options.speed;
-        utterance.pitch = options.pitch;
-
-        utterance.onstart = () => {
-          this.emit('synthesisStarted', { text, options });
-        };
-
-        utterance.onend = () => {
-          this.emit('synthesisEnded', { text, options });
-          resolve({ success: true, method: 'browser' });
-        };
-
-        utterance.onerror = (event) => {
-          this.emit('synthesisError', event.error);
-          reject({ success: false, error: event.error });
-        };
-
-        speechSynthesis.speak(utterance);
-
-      } catch (error) {
-        reject({ success: false, error: error.message });
+  async transcribeSpeech(audioFile, language = 'ru') {
+    const formData = new FormData();
+    formData.append('audio_file', audioFile);
+    formData.append('language', language);
+    
+    return this.client.post('/v2/voice/transcribe', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
       }
     });
   }
 
   /**
-   * Синтез речи через WebSocket
+   * Получение доступных голосов
    */
-  webSocketSpeechSynthesis(text, options) {
-    if (!this.isConnected) {
-      this.connect();
-    }
-
-    const message = {
-      type: 'synthesize_speech',
-      text,
-      options
-    };
-
-    this.sendMessage(message);
-    this.synthesisQueue.push({ text, options });
-
-    return { success: true, method: 'websocket' };
+  async getAvailableVoices(language = 'ru') {
+    return this.client.get('/v2/voice/voices', { language }, { cache: true });
   }
 
   /**
-   * Методы для голосовых команд
+   * Получение настроек голосового помощника
    */
-
-  /**
-   * Выполнение голосовой команды
-   */
-  async executeVoiceCommand(command, context = {}) {
-    try {
-      if (!this.isConnected) {
-        this.connect();
-      }
-
-      this.sendMessage({
-        type: 'execute_command',
-        command,
-        context,
-        timestamp: Date.now()
-      });
-
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+  async getVoiceSettings(userId) {
+    return this.client.get(`/v2/voice/settings/${userId}`, null, { cache: true });
   }
 
   /**
-   * Получение доступных команд
+   * Обновление настроек голосового помощника
    */
-  async getAvailableCommands() {
-    try {
-      if (!this.isConnected) {
-        this.connect();
-      }
-
-      this.sendMessage({
-        type: 'get_commands',
-        timestamp: Date.now()
-      });
-
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+  async updateVoiceSettings(userId, settings) {
+    return this.client.put(`/v2/voice/settings/${userId}`, settings);
   }
 
   /**
-   * Система событий
+   * Создание голосового события
    */
+  async createVoiceEvent(eventData) {
+    return this.client.post('/v2/voice/events', eventData);
+  }
 
   /**
-   * Подписка на событие
+   * Получение голосовых событий
+   */
+  async getVoiceEvents(filters = {}) {
+    return this.client.get('/v2/voice/events', filters, { cache: true });
+  }
+
+  /**
+   * Создание голосовой метрики
+   */
+  async createVoiceMetric(metricData) {
+    return this.client.post('/v2/voice/metrics', metricData);
+  }
+
+  /**
+   * Получение голосовых метрик
+   */
+  async getVoiceMetrics(filters = {}) {
+    return this.client.get('/v2/voice/metrics', filters, { cache: true });
+  }
+
+  /**
+   * Получение аналитики голосовых взаимодействий
+   */
+  async getVoiceAnalytics(userId, period = 'week') {
+    return this.client.get(`/v2/voice/analytics/${userId}?period=${period}`, null, { cache: true });
+  }
+
+  /**
+   * Отправка сообщения через WebSocket
+   */
+  async sendWebSocketMessage(type, payload = {}) {
+    return this.wsService.send({
+      type,
+      payload,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  /**
+   * Подписка на WebSocket события
    */
   on(event, callback) {
-    if (!this.eventListeners.has(event)) {
-      this.eventListeners.set(event, []);
-    }
-    this.eventListeners.get(event).push(callback);
+    return this.wsService.on(event, callback);
   }
 
   /**
-   * Отписка от события
+   * Отписка от WebSocket событий
    */
   off(event, callback) {
-    if (this.eventListeners.has(event)) {
-      const callbacks = this.eventListeners.get(event);
-      const index = callbacks.indexOf(callback);
-      if (index > -1) {
-        callbacks.splice(index, 1);
+    return this.wsService.off(event, callback);
+  }
+
+  /**
+   * Начало прослушивания
+   */
+  async startListening(language = 'ru') {
+    if (this.isListening) {
+      console.warn('Voice Assistant: уже прослушивает');
+      return;
+    }
+
+    try {
+      this.isListening = true;
+      await this.sendWebSocketMessage('start_listening', { language });
+      console.log('Voice Assistant: начало прослушивания');
+    } catch (error) {
+      this.isListening = false;
+      console.error('Voice Assistant: ошибка начала прослушивания:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Остановка прослушивания
+   */
+  async stopListening() {
+    if (!this.isListening) {
+      console.warn('Voice Assistant: не прослушивает');
+      return;
+    }
+
+    try {
+      this.isListening = false;
+      await this.sendWebSocketMessage('stop_listening');
+      console.log('Voice Assistant: остановка прослушивания');
+    } catch (error) {
+      console.error('Voice Assistant: ошибка остановки прослушивания:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Воспроизведение речи
+   */
+  async speak(text, voice = 'default', language = 'ru') {
+    if (this.isSpeaking) {
+      // Добавляем в очередь
+      this.synthesisQueue.push({ text, voice, language });
+      return;
+    }
+
+    try {
+      this.isSpeaking = true;
+      const response = await this.synthesizeSpeech(text, voice, language);
+      
+      if (response.success && response.data.audio_url) {
+        await this.playAudio(response.data.audio_url);
       }
+      
+      this.isSpeaking = false;
+      
+      // Обрабатываем очередь
+      if (this.synthesisQueue.length > 0) {
+        const next = this.synthesisQueue.shift();
+        await this.speak(next.text, next.voice, next.language);
+      }
+    } catch (error) {
+      this.isSpeaking = false;
+      console.error('Voice Assistant: ошибка воспроизведения речи:', error);
+      throw error;
     }
   }
 
   /**
-   * Эмиссия события
+   * Воспроизведение аудио
    */
-  emit(event, data) {
-    if (this.eventListeners.has(event)) {
-      this.eventListeners.get(event).forEach(callback => {
-        try {
-          callback(data);
-        } catch (error) {
-          console.error(`Voice Assistant: ошибка в обработчике события ${event}:`, error);
+  async playAudio(audioUrl) {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio(audioUrl);
+      
+      audio.onended = () => {
+        resolve();
+      };
+      
+      audio.onerror = (error) => {
+        reject(error);
+      };
+      
+      audio.play().catch(reject);
+    });
+  }
+
+  /**
+   * Обработка голосовой команды
+   */
+  async handleVoiceCommand(command) {
+    try {
+      const response = await this.processVoiceCommand(command);
+      
+      if (response.success) {
+        // Выполняем команду
+        await this.executeCommand(response.data.command);
+        
+        // Отвечаем голосом
+        if (response.data.response) {
+          await this.speak(response.data.response);
         }
-      });
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('Voice Assistant: ошибка обработки команды:', error);
+      throw error;
     }
   }
 
   /**
-   * Обработка ошибок подключения
+   * Выполнение команды
    */
-  handleConnectionError(error) {
-    this.emit('error', error);
-    this.scheduleReconnect();
+  async executeCommand(command) {
+    switch (command.type) {
+      case 'create_task':
+        // Создание задачи
+        break;
+      case 'get_tasks':
+        // Получение задач
+        break;
+      case 'send_message':
+        // Отправка сообщения
+        break;
+      case 'open_document':
+        // Открытие документа
+        break;
+      default:
+        console.warn('Voice Assistant: неизвестная команда:', command.type);
+    }
   }
 
   /**
@@ -512,28 +296,13 @@ class VoiceAssistantIntegration {
    */
   async checkHealth() {
     try {
-      const response = await fetch(`${this.config.baseURL}/health`, {
-        method: 'GET',
-        timeout: this.config.timeout
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        return {
-          healthy: true,
-          status: data.status,
-          timestamp: data.timestamp,
-          version: data.version,
-          features: data.features || [],
-          models: data.models || []
-        };
-      } else {
-        return {
-          healthy: false,
-          error: `HTTP ${response.status}`,
-          timestamp: new Date().toISOString()
-        };
-      }
+      const response = await this.client.get('/v2/voice/health');
+      return {
+        healthy: true,
+        status: response.data.status,
+        timestamp: response.data.timestamp,
+        version: response.data.version
+      };
     } catch (error) {
       return {
         healthy: false,
@@ -544,23 +313,43 @@ class VoiceAssistantIntegration {
   }
 
   /**
+   * Получение информации о сервисе
+   */
+  async getServiceInfo() {
+    try {
+      const response = await this.client.get('/v2/voice/info');
+      return response.data;
+    } catch (error) {
+      throw new Error(`Ошибка получения информации о Voice Assistant: ${error.message}`);
+    }
+  }
+
+  /**
    * Получение статуса сервиса
    */
   getStatus() {
     return {
-      configured: !!this.config.baseURL,
-      connected: this.isConnected,
-      baseURL: this.config.baseURL,
-      websocketURL: this.wsConfig.url,
-      timeout: this.config.timeout,
-      reconnectAttempts: this.reconnectAttempts,
-      features: {
-        speechRecognition: true,
-        speechSynthesis: true,
-        voiceCommands: true,
-        websocket: true
-      }
+      wsConnected: this.wsService.isConnected,
+      wsStatus: this.wsService.getStatus(),
+      apiStatus: this.client.getStatus(),
+      isListening: this.isListening,
+      isSpeaking: this.isSpeaking,
+      synthesisQueueLength: this.synthesisQueue.length
     };
+  }
+
+  /**
+   * Очистка ресурсов
+   */
+  cleanup() {
+    this.isListening = false;
+    this.isSpeaking = false;
+    this.synthesisQueue = [];
+    
+    if (this.recognitionStream) {
+      this.recognitionStream.stop();
+      this.recognitionStream = null;
+    }
   }
 }
 

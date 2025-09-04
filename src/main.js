@@ -1,141 +1,114 @@
-import { createApp } from 'vue';
-import { createPinia } from 'pinia';
-import { VueQueryPlugin } from '@tanstack/vue-query';
-import VueAnimateOnScroll from 'vue3-animate-onscroll';
-import VueTheMask from 'vue-the-mask';
-import { Toast } from 'vue-toastification';
-import 'vue-toastification/dist/index.css';
+import Vue from 'vue'
+import App from './App.vue'
+import router from './router'
+import vuetify from './plugins/vuetify'
+import { createPinia } from 'pinia'
+import serviceManager from './services/service-manager.js'
 
-import App from './App.vue';
-import router from './router';
+Vue.config.productionTip = false
 
-// Импорт Vuetify
-import 'vuetify/styles';
-import { createVuetify } from 'vuetify';
-import * as components from 'vuetify/components';
-import * as directives from 'vuetify/directives';
-import './assets/styles/mdi.css';
+// Создаем Pinia store
+const pinia = createPinia()
 
-// Импорт новых сервисов
-import adaptivePerformance from './services/adaptive-performance.js';
-import predictivePreloader from './services/predictive-preloader.js';
-import distributedProcessing from './services/distributed-processing.js';
-import wasmCalculator from './wasm/wasm-calculator.js';
-import performanceMetrics from './services/performance-metrics.js';
-import cacheService from './services/cache-service.js';
-import redisCache from './services/redis-cache.js';
+// Глобальные обработчики ошибок
+Vue.config.errorHandler = (err, vm, info) => {
+  console.error('Vue Error:', err, info)
+  // Отправляем ошибку в систему мониторинга
+  if (window.gtag) {
+    window.gtag('event', 'vue_error', {
+      event_category: 'error',
+      event_label: info,
+      value: 1
+    })
+  }
+}
 
-// Импорт новой структуры сервисов
-import { initializeServices } from './services/index.js';
+// Глобальные обработчики событий API
+window.addEventListener('api:auth:logout', (event) => {
+  console.log('API Logout event:', event.detail)
+  // Перенаправляем на страницу входа
+  router.push('/login')
+})
 
-// Создание экземпляра Vuetify с улучшенной конфигурацией
-const vuetify = createVuetify({
-  components,
-  directives,
-  theme: {
-    defaultTheme: 'light',
-    themes: {
-      light: { 
-        primary: '#1976d2',
-        secondary: '#424242',
-        accent: '#82B1FF',
-        error: '#FF5252',
-        info: '#2196F3',
-        success: '#4CAF50',
-        warning: '#FFC107'
-      },
-      dark: { 
-        primary: '#2196F3',
-        secondary: '#424242',
-        accent: '#FF4081',
-        error: '#FF5252',
-        info: '#2196F3',
-        success: '#4CAF50',
-        warning: '#FFC107'
-      },
-    },
-  },
-  defaults: {
-    VBtn: {
-      variant: 'elevated',
-      rounded: 'lg',
-    },
-    VCard: {
-      rounded: 'lg',
-      elevation: 2,
-    },
-    VTextField: {
-      variant: 'outlined',
-      density: 'comfortable',
-    },
-  },
-});
+window.addEventListener('api:network_error', (event) => {
+  console.error('API Network Error:', event.detail)
+  // Показываем уведомление пользователю
+  if (window.$notify) {
+    window.$notify.error('Ошибка сети. Проверьте подключение к интернету.')
+  }
+})
 
-// Создание приложения Vue
-const app = createApp(App);
+window.addEventListener('api:server_error', (event) => {
+  console.error('API Server Error:', event.detail)
+  // Показываем уведомление пользователю
+  if (window.$notify) {
+    window.$notify.error('Ошибка сервера. Попробуйте позже.')
+  }
+})
 
-// Настройка плагинов
-app.use(createPinia());
-app.use(router);
-app.use(vuetify);
-app.use(VueQueryPlugin);
-app.use(VueAnimateOnScroll);
-app.use(VueTheMask);
-app.use(Toast, { 
-  timeout: 5000,
-  position: 'top-right',
-  closeOnClick: true,
-  pauseOnFocusLoss: true,
-  pauseOnHover: true,
-  draggable: true,
-  draggablePercent: 0.6,
-  showCloseButtonOnHover: false,
-  hideProgressBar: false,
-  closeButton: 'button',
-  icon: true,
-  rtl: false
-});
+// Обработчики событий Service Manager
+window.addEventListener('service-manager:initialized', (event) => {
+  console.log('Services initialized:', event.detail)
+})
 
-// Инициализация новых сервисов
-const initializeServices = async () => {
+window.addEventListener('service-manager:health_warning', (event) => {
+  console.warn('Service health warning:', event.detail)
+})
+
+// Функция инициализации приложения
+async function initializeApp() {
   try {
-    // Инициализация адаптивной производительности
-    await adaptivePerformance.init();
-    console.log('Adaptive Performance initialized');
+    console.log('🚀 Запуск MSB Platform...')
     
-    // Инициализация предзагрузки
-    await predictivePreloader.init();
-    console.log('Predictive Preloader initialized');
+    // Инициализируем сервисы
+    const initResult = await serviceManager.initialize()
     
-    // Инициализация распределенной обработки
-    await distributedProcessing.init();
-    console.log('Distributed Processing initialized');
-    
-    // Инициализация WASM калькулятора
-    await wasmCalculator.init();
-    console.log('WASM Calculator initialized');
-    
-    // Инициализация метрик производительности
-    performanceMetrics.init();
-    console.log('Performance Metrics initialized');
-    
-    // Инициализация кэш сервиса
-    console.log('Cache Service initialized');
-    
-    // Инициализация Redis кэша
-    console.log('Redis Cache initialized');
-    
-    // Инициализация новой структуры сервисов
-    await initializeServices();
-    console.log('New Services Structure initialized');
+    if (initResult.success) {
+      console.log(`✅ Приложение готово к работе (${initResult.loadTime}ms)`)
+      
+      // Создаем Vue приложение
+      new Vue({
+        router,
+        vuetify,
+        pinia,
+        render: h => h(App)
+      }).$mount('#app')
+      
+    } else {
+      throw new Error('Ошибка инициализации сервисов')
+    }
     
   } catch (error) {
-    console.error('Error initializing services:', error);
+    console.error('❌ Критическая ошибка запуска приложения:', error)
+    
+    // Показываем страницу ошибки
+    document.body.innerHTML = `
+      <div style="
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        font-family: Arial, sans-serif;
+        background: #f5f5f5;
+      ">
+        <h1 style="color: #d32f2f; margin-bottom: 20px;">Ошибка запуска приложения</h1>
+        <p style="color: #666; margin-bottom: 20px;">Не удалось инициализировать сервисы</p>
+        <button onclick="location.reload()" style="
+          padding: 10px 20px;
+          background: #1976d2;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        ">Перезагрузить страницу</button>
+      </div>
+    `
   }
-};
+}
 
-// Запуск инициализации
-initializeServices();
+// Запускаем инициализацию
+initializeApp()
 
-// Монтирование приложения
-app.mount('#app');
+// Экспортируем для отладки
+window.serviceManager = serviceManager

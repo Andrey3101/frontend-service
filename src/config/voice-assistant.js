@@ -6,26 +6,29 @@
 // Базовые настройки для разных окружений
 const ENVIRONMENTS = {
   development: {
-    baseURL: 'http://localhost:8013',
-    timeout: 60000, // Голосовые запросы требуют времени
-    retryAttempts: 1,
+    baseURL: 'http://localhost:8005',
+    wsURL: 'ws://localhost:8005/ws',
+    timeout: 15000,
+    retryAttempts: 3,
     retryDelay: 1000,
     enableLogging: true,
     enableMetrics: true
   },
   staging: {
-    baseURL: 'https://staging-voice-assistant.example.com',
-    timeout: 90000,
-    retryAttempts: 2,
+    baseURL: 'https://staging-api.msb-platform.ru/voice',
+    wsURL: 'wss://staging-api.msb-platform.ru/voice/ws',
+    timeout: 20000,
+    retryAttempts: 5,
     retryDelay: 2000,
     enableLogging: true,
     enableMetrics: true
   },
   production: {
-    baseURL: 'https://voice-assistant.example.com',
-    timeout: 120000,
-    retryAttempts: 1,
-    retryDelay: 5000,
+    baseURL: 'https://api.msb-platform.ru/voice', // Исправлен URL
+    wsURL: 'wss://api.msb-platform.ru/voice/ws',
+    timeout: 25000,
+    retryAttempts: 3,
+    retryDelay: 3000,
     enableLogging: false,
     enableMetrics: true
   }
