@@ -1,24 +1,19 @@
-# Стадия сборки приложения
-FROM node:18-alpine AS builder
-
+# ---- build ----
+FROM node:22-alpine AS build
 WORKDIR /app
-
-# Установка зависимостей
-COPY package.json package-lock.json ./
-RUN npm install --silent
-
-# Копирование исходного кода
-COPY . .
-
-# Сборка приложения
+COPY package.json package-lock.json* ./
+# Пока package-lock.json не закоммичен — npm install; после — воспроизводимый npm ci.
+RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+COPY index.html vite.config.js ./
+COPY public ./public
+COPY src ./src
 RUN npm run build
 
-# Стадия развертывания
-FROM nginx:alpine
-
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/nginx.conf
-
+# ---- runtime: nginx = SPA + единый шлюз /api ----
+FROM nginx:1.27-alpine
+RUN rm -f /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/clerkai.conf
+COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \
+  CMD wget -qO- http://127.0.0.1/healthz || exit 1

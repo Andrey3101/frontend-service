@@ -1,857 +1,911 @@
 <template>
-  <v-container class="acts-container">
-    <v-row>
-      <v-col>
-        <h1 class="page-title">Акты</h1>
+  <div>
+    <v-card>
+      <v-tabs v-model="kind" color="primary">
+        <v-tab value="act" prepend-icon="mdi-file-document-outline">Акты</v-tab>
+        <v-tab value="invoice" prepend-icon="mdi-receipt-text-outline">Счета</v-tab>
+      </v-tabs>
+      <v-divider />
 
-        <!-- Поиск и экспорт -->
-        <div class="search-export-container">
-          <v-text-field
-            v-model="searchQuery"
-            label="Поиск по ID или типу"
-            outlined
-            dense
-            clearable
-            prepend-inner-icon="mdi-magnify"
-            class="search-field"
-            :error-messages="fieldErrors.search"
-          />
+      <v-card-text>
+        <!-- Фильтры -->
+        <v-row dense align="center" class="mb-2">
+          <v-col cols="12" md="3">
+            <v-text-field
+              v-model="filters.search"
+              label="Поиск: номер, клиент, заметки"
+              prepend-inner-icon="mdi-magnify"
+              clearable
+              hide-details
+              density="compact"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="2">
+            <v-select
+              v-model="filters.status"
+              :items="STATUS_ITEMS"
+              label="Статус"
+              clearable
+              hide-details
+              density="compact"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="3">
+            <v-autocomplete
+              v-model="filters.client_id"
+              :items="filterClients.items.value"
+              :loading="filterClients.loading.value"
+              item-title="name"
+              item-value="id"
+              label="Клиент"
+              no-filter
+              clearable
+              hide-details
+              density="compact"
+              no-data-text="Клиенты не найдены"
+              @update:search="filterClients.search"
+              @update:model-value="filterClients.pinById"
+              @update:focused="(f) => f && filterClients.loadOnce()"
+            />
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-text-field v-model="filters.date_from" type="date" label="С" hide-details density="compact" />
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-text-field v-model="filters.date_to" type="date" label="По" hide-details density="compact" />
+          </v-col>
+        </v-row>
 
-          <div class="action-buttons">
-            <v-btn 
-              color="primary" 
-              @click="showCreateDialog = true" 
-              class="create-btn"
-              :loading="loading"
-            >
-              <v-icon left>mdi-plus</v-icon> 
-              <span class="btn-text">Создать акт</span>
-            </v-btn>
-
-            <v-btn-toggle v-model="exportFormat" mandatory class="export-toggle">
-              <v-tooltip top>
-                <template v-slot:activator="{ on }">
-                  <v-btn 
-                    value="pdf" 
-                    color="primary" 
-                    class="export-btn" 
-                    @click="exportToPDF"
-                    v-on="on"
-                    :loading="exportLoading.pdf"
-                  >
-                    <v-icon left>mdi-file-pdf-box</v-icon> PDF
-                  </v-btn>
-                </template>
-                <span>Экспорт в PDF</span>
-              </v-tooltip>
-              
-              <v-tooltip top>
-                <template v-slot:activator="{ on }">
-                  <v-btn 
-                    value="xlsx" 
-                    color="primary" 
-                    class="export-btn" 
-                    @click="exportToExcel"
-                    v-on="on"
-                    :loading="exportLoading.xlsx"
-                  >
-                    <v-icon left>mdi-file-excel</v-icon> XLSX
-                  </v-btn>
-                </template>
-                <span>Экспорт в Excel</span>
-              </v-tooltip>
-            </v-btn-toggle>
-          </div>
+        <div class="d-flex flex-wrap ga-2 mb-3">
+          <v-btn color="primary" prepend-icon="mdi-plus" @click="openCreate">
+            {{ kind === 'invoice' ? 'Новый счёт' : 'Новый акт' }}
+          </v-btn>
+          <v-spacer />
+          <v-btn
+            variant="outlined"
+            prepend-icon="mdi-file-delimited-outline"
+            :loading="exporting"
+            :disabled="!total"
+            @click="exportCsv"
+          >
+            Экспорт CSV
+          </v-btn>
         </div>
 
-        <!-- Индикатор загрузки -->
-        <v-progress-linear 
-          v-if="loading" 
-          indeterminate 
-          color="blue" 
-          class="loading-bar"
-        />
-
-        <!-- Сообщение об ошибке -->
-        <v-dialog v-model="errorModal.show" max-width="500px" persistent>
-          <v-card class="dialog-card">
-            <v-card-title class="error-title">
-              <v-icon color="error" left>mdi-alert-circle</v-icon>
-              Ошибка
-            </v-card-title>
-            <v-card-text class="error-message">
-              {{ errorModal.message }}
-              <div v-if="errorModal.details" class="error-details">
-                {{ errorModal.details }}
-              </div>
-            </v-card-text>
-            <v-card-actions class="dialog-actions">
-              <v-spacer />
-              <v-btn 
-                color="primary" 
-                text 
-                @click="errorModal.show = false"
-              >
-                Закрыть
-              </v-btn>
-              <v-btn 
-                v-if="errorModal.message.includes('Подписка')"
-                color="primary" 
-                @click="router.push('/subscription')"
-              >
-                Оформить подписку
-              </v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-
-        <!-- Список актов -->
-        <v-card class="acts-card">
-          <v-list class="acts-list">
-            <v-list-item
-              v-for="act in filteredActs"
-              :key="act.id"
-              class="act-item"
-              :class="{ 'mobile-item': isMobile }"
-              @click="viewActDetails(act.id)"
-            >
-              <v-list-item-icon>
-                <v-icon color="blue-grey">mdi-file-document</v-icon>
-              </v-list-item-icon>
-              
-              <v-list-item-content>
-                <v-list-item-title class="act-title">
-                  Акт ID: {{ act.id }}
-                </v-list-item-title>
-                <v-list-item-subtitle class="act-subtitle">
-                  {{ isMobile ? act.type : `Тип: ${act.type}` }}
-                </v-list-item-subtitle>
-                <v-list-item-subtitle class="act-date">
-                  {{ formatDate(act.created_at) }}
-                </v-list-item-subtitle>
-              </v-list-item-content>
-              
-              <v-list-item-action>
-                <v-tooltip top>
-                  <template v-slot:activator="{ on }">
-                    <v-btn 
-                      icon 
-                      class="edit-btn" 
-                      @click.stop="handleUpdateAct(act.id)"
-                      v-on="on"
-                      :disabled="loading"
-                    >
-                      <v-icon color="blue-grey">mdi-pencil</v-icon>
-                    </v-btn>
-                  </template>
-                  <span>Редактировать акт</span>
-                </v-tooltip>
-              </v-list-item-action>
-            </v-list-item>
-            
-            <v-list-item v-if="!filteredActs.length && !loading" class="empty-item">
-              <v-list-item-content>
-                <v-list-item-title>Нет актов для отображения</v-list-item-title>
-              </v-list-item-content>
-            </v-list-item>
-          </v-list>
-        </v-card>
-
-        <!-- Диалог создания акта -->
-        <v-dialog v-model="showCreateDialog" max-width="500px" persistent>
-          <v-card class="dialog-card">
-            <v-card-title class="dialog-title">
-              <v-icon left>mdi-file-document-plus</v-icon>
-              Создать акт
-            </v-card-title>
-            
-            <v-card-text>
-              <v-form ref="createForm" v-model="createFormValid">
-                <v-text-field
-                  v-model="newAct.type"
-                  label="Тип акта"
-                  outlined
-                  dense
-                  class="input-field"
-                  :rules="typeRules"
-                  :error-messages="fieldErrors.type"
-                  @input="clearFieldError('type')"
+        <v-data-table-server
+          v-model:page="page"
+          v-model:items-per-page="limit"
+          :headers="headers"
+          :items="documents"
+          :items-length="total"
+          :items-per-page-options="[10, 20, 50, 100]"
+          :loading="loading"
+          loading-text="Загрузка…"
+          :no-data-text="kind === 'invoice' ? 'Счетов нет' : 'Актов нет'"
+          item-value="id"
+          hover
+          class="clickable-rows"
+          @click:row="onRowClick"
+        >
+          <template #[`item.number`]="{ item }">
+            <span class="font-weight-medium">№ {{ item.number }}</span>
+          </template>
+          <template #[`item.date`]="{ item }">{{ formatDate(item.date) }}</template>
+          <template #[`item.client_name`]="{ item }">{{ item.client_name || '—' }}</template>
+          <template #[`item.total`]="{ item }">
+            <div class="font-weight-medium">{{ formatMoney(item.total) }}</div>
+            <div class="text-caption text-medium-emphasis">{{ vatLabel(item.vat_rate) }}</div>
+          </template>
+          <template #[`item.due_date`]="{ item }">
+            <span :class="{ 'text-error': isOverdue(item) }">{{ formatDate(item.due_date) }}</span>
+          </template>
+          <template #[`item.status`]="{ item }">
+            <v-menu>
+              <template #activator="{ props: menuProps }">
+                <v-chip
+                  v-bind="menuProps"
+                  :color="statusColor(item.status)"
+                  size="small"
+                  variant="tonal"
+                  append-icon="mdi-menu-down"
+                  :disabled="statusSaving === item.id"
+                  @click.stop
+                >
+                  {{ statusLabel(item.status) }}
+                </v-chip>
+              </template>
+              <v-list density="compact">
+                <v-list-item
+                  v-for="s in STATUS_ITEMS"
+                  :key="s.value"
+                  :title="s.title"
+                  :active="s.value === item.status"
+                  @click="changeStatus(item, s.value)"
                 />
-                <v-text-field
-                  v-model="newAct.title"
-                  label="Название"
-                  outlined
-                  dense
-                  class="input-field"
-                  :rules="titleRules"
-                  :error-messages="fieldErrors.title"
-                  @input="clearFieldError('title')"
-                />
-                <v-textarea
-                  v-model="newAct.description"
-                  label="Описание"
-                  outlined
-                  dense
-                  class="input-field"
-                  :error-messages="fieldErrors.description"
-                  @input="clearFieldError('description')"
-                />
-              </v-form>
-            </v-card-text>
-            
-            <v-card-actions class="dialog-actions">
-              <v-spacer />
-              <v-btn 
-                color="grey" 
-                text 
-                @click="cancelCreate"
-                :disabled="createLoading"
-              >
-                Отмена
-              </v-btn>
-              <v-btn 
-                color="primary" 
-                class="action-btn-primary" 
-                @click="createAct"
-                :loading="createLoading"
-                :disabled="!createFormValid"
-              >
-                Создать
-              </v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-
-        <!-- Диалог редактирования -->
-        <v-dialog v-model="showEditDialog" max-width="500px" persistent>
-          <v-card class="dialog-card">
-            <v-card-title class="dialog-title">
-              <v-icon left>mdi-pencil</v-icon>
-              Редактировать акт #{{ selectedActId }}
-            </v-card-title>
-            
-            <v-card-text>
-              <v-text-field
-                v-model="newActType"
-                label="Тип акта"
-                outlined
-                dense
-                class="input-field"
-                :rules="typeRules"
-                :error-messages="fieldErrors.type"
-                @input="clearFieldError('type')"
+              </v-list>
+            </v-menu>
+          </template>
+          <template #[`item.actions`]="{ item }">
+            <div class="d-flex justify-end text-no-wrap">
+              <v-btn
+                icon="mdi-file-pdf-box"
+                size="small"
+                variant="text"
+                aria-label="Скачать PDF"
+                :loading="pdfLoading === item.id"
+                @click.stop="downloadPdf(item)"
               />
-            </v-card-text>
-            
-            <v-card-actions class="dialog-actions">
+              <v-btn icon="mdi-pencil" size="small" variant="text" aria-label="Изменить" @click.stop="openEdit(item)" />
+              <v-btn
+                icon="mdi-delete-outline"
+                size="small"
+                variant="text"
+                color="error"
+                aria-label="Удалить"
+                @click.stop="askDelete(item)"
+              />
+            </div>
+          </template>
+        </v-data-table-server>
+      </v-card-text>
+    </v-card>
+
+    <!-- Диалог создания / редактирования документа -->
+    <v-dialog v-model="editDialog" max-width="980" persistent scrollable>
+      <v-card>
+        <v-card-title>
+          {{ editingId ? `${kindMeta.title} № ${editingNumber}` : kind === 'invoice' ? 'Новый счёт' : 'Новый акт' }}
+        </v-card-title>
+        <v-divider />
+        <v-card-text>
+          <v-form ref="formRef" @submit.prevent="save">
+            <v-row dense>
+              <v-col cols="12" md="8" class="d-flex ga-2 align-start">
+                <v-autocomplete
+                  v-model="form.client_id"
+                  :items="formClients.items.value"
+                  :loading="formClients.loading.value"
+                  item-title="name"
+                  item-value="id"
+                  label="Клиент *"
+                  no-filter
+                  :rules="[rules.required]"
+                  no-data-text="Клиенты не найдены"
+                  @update:search="formClients.search"
+                  @update:model-value="formClients.pinById"
+                  @update:focused="(f) => f && formClients.loadOnce()"
+                >
+                  <template #item="{ props: itemProps, item }">
+                    <v-list-item v-bind="itemProps" :subtitle="item.raw.inn ? `ИНН ${item.raw.inn}` : ''" />
+                  </template>
+                </v-autocomplete>
+                <v-btn
+                  variant="tonal"
+                  color="primary"
+                  prepend-icon="mdi-account-plus"
+                  class="mt-2"
+                  @click="openQuickClient"
+                >
+                  Новый клиент
+                </v-btn>
+              </v-col>
+              <v-col cols="12" sm="6" md="4">
+                <v-select v-model="form.status" :items="STATUS_ITEMS" label="Статус" />
+              </v-col>
+              <v-col cols="12" sm="6" md="3">
+                <v-text-field
+                  v-model="form.number"
+                  label="Номер"
+                  :placeholder="editingId ? '' : 'авто'"
+                  :hint="editingId ? '' : 'Пусто — присвоится автоматически (ГГГГ-NNN)'"
+                  persistent-hint
+                  :rules="[rules.max32]"
+                />
+              </v-col>
+              <v-col cols="12" sm="6" md="3">
+                <v-text-field v-model="form.date" type="date" label="Дата *" :rules="[rules.required]" />
+              </v-col>
+              <v-col v-if="kind === 'invoice'" cols="12" sm="6" md="3">
+                <v-text-field
+                  v-model="form.due_date"
+                  type="date"
+                  label="Оплатить до"
+                  clearable
+                  :rules="[rules.dueDate]"
+                />
+              </v-col>
+              <v-col cols="12" sm="6" md="3">
+                <v-select v-model="form.vat" :items="vatItems" label="НДС" />
+              </v-col>
+            </v-row>
+
+            <!-- Позиции -->
+            <div class="text-subtitle-1 font-weight-medium mt-4 mb-2">Позиции</div>
+            <div v-for="(row, index) in form.items" :key="row.key" class="item-row">
+              <v-row dense align="start">
+                <v-col cols="12" md="5">
+                  <v-text-field
+                    v-model="row.name"
+                    :label="`Наименование ${index + 1} *`"
+                    density="compact"
+                    :rules="[rules.required, rules.max500]"
+                  />
+                </v-col>
+                <v-col cols="4" md="2">
+                  <v-text-field
+                    v-model="row.quantity"
+                    type="number"
+                    min="0"
+                    step="any"
+                    label="Кол-во *"
+                    density="compact"
+                    :rules="[rules.positive]"
+                  />
+                </v-col>
+                <v-col cols="4" md="1">
+                  <v-combobox
+                    v-model="row.unit"
+                    :items="UNIT_ITEMS"
+                    label="Ед."
+                    density="compact"
+                    :rules="[rules.required, rules.max20]"
+                  />
+                </v-col>
+                <v-col cols="4" md="2">
+                  <v-text-field
+                    v-model="row.price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    label="Цена, ₽ *"
+                    density="compact"
+                    :rules="[rules.nonNegative]"
+                  />
+                </v-col>
+                <v-col cols="10" md="1" class="d-flex align-center item-amount">
+                  {{ formatMoney(rowAmount(row)) }}
+                </v-col>
+                <v-col cols="2" md="1" class="d-flex justify-end">
+                  <v-btn
+                    icon="mdi-close"
+                    size="small"
+                    variant="text"
+                    aria-label="Удалить позицию"
+                    :disabled="form.items.length === 1"
+                    @click="removeRow(index)"
+                  />
+                </v-col>
+              </v-row>
+            </div>
+            <div class="d-flex flex-wrap align-center ga-2">
+              <v-btn variant="text" color="primary" prepend-icon="mdi-plus" @click="addRow">Добавить позицию</v-btn>
               <v-spacer />
-              <v-btn 
-                color="grey" 
-                text 
-                @click="cancelEdit"
-                :disabled="editLoading"
-              >
-                Отмена
-              </v-btn>
-              <v-btn 
-                color="primary" 
-                class="action-btn-primary" 
-                @click="saveActUpdate"
-                :loading="editLoading"
-                :disabled="!isEditFormValid"
-              >
-                Сохранить изменения
-              </v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-      </v-col>
-    </v-row>
-  </v-container>
+              <div class="text-right">
+                <div class="text-h6">Итого: {{ formatMoney(formTotal) }}</div>
+                <div class="text-caption text-medium-emphasis">
+                  <template v-if="form.vat === NO_VAT">Без НДС</template>
+                  <template v-else>в т.ч. НДС {{ form.vat }}%: {{ formatMoney(vatIncluded(formTotal, form.vat)) }}</template>
+                  · окончательную сумму рассчитает сервер
+                </div>
+              </div>
+            </div>
+
+            <v-divider class="my-4" />
+
+            <v-row dense>
+              <v-col cols="12" sm="8">
+                <v-text-field
+                  v-model="form.seller_name"
+                  :label="kind === 'invoice' ? 'Поставщик' : 'Исполнитель'"
+                  hint="Для PDF; по умолчанию — ваша компания"
+                  persistent-hint
+                  :rules="[rules.max255]"
+                />
+              </v-col>
+              <v-col cols="12" sm="4">
+                <v-text-field v-model="form.seller_inn" label="ИНН исполнителя" :rules="[rules.inn]" />
+              </v-col>
+              <v-col cols="12">
+                <v-textarea v-model="form.notes" label="Заметки" rows="2" auto-grow />
+              </v-col>
+            </v-row>
+          </v-form>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" :disabled="saving" @click="editDialog = false">Отмена</v-btn>
+          <v-btn color="primary" variant="flat" :loading="saving" @click="save">Сохранить</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Быстрое создание клиента -->
+    <v-dialog v-model="quickClientDialog" max-width="480" persistent>
+      <v-card>
+        <v-card-title>Новый клиент</v-card-title>
+        <v-card-text>
+          <v-form ref="quickClientFormRef" @submit.prevent="saveQuickClient">
+            <v-text-field
+              v-model="quickClient.name"
+              label="Наименование / ФИО *"
+              :rules="[rules.required, rules.max255]"
+              autofocus
+            />
+            <v-select v-model="quickClient.type" :items="CLIENT_TYPE_ITEMS" label="Тип" />
+            <v-text-field v-model="quickClient.inn" label="ИНН" :rules="[rules.inn]" />
+            <v-text-field v-model="quickClient.email" label="Email" type="email" :rules="[rules.email]" />
+            <v-text-field v-model="quickClient.phone" label="Телефон" :rules="[rules.max50]" />
+          </v-form>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" :disabled="quickClientSaving" @click="quickClientDialog = false">Отмена</v-btn>
+          <v-btn color="primary" variant="flat" :loading="quickClientSaving" @click="saveQuickClient">Создать</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Подтверждение удаления -->
+    <v-dialog v-model="deleteDialog" max-width="420">
+      <v-card>
+        <v-card-title>{{ kind === 'invoice' ? 'Удалить счёт?' : 'Удалить акт?' }}</v-card-title>
+        <v-card-text v-if="toDelete">
+          № {{ toDelete.number }} от {{ formatDate(toDelete.date) }} — {{ toDelete.client_name }},
+          {{ formatMoney(toDelete.total) }}
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" :disabled="deleting" @click="deleteDialog = false">Отмена</v-btn>
+          <v-btn color="error" variant="flat" :loading="deleting" @click="confirmDelete">Удалить</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
 </template>
 
-<script>
-import { ref, computed } from 'vue';
-import { useRouter } from 'vue-router';
-import { useToast } from 'vue-toastification';
-import { getActs, updateAct, createAct } from '@/api/index.js';
-import jsPDF from 'jspdf';
-import * as XLSX from 'xlsx';
+<script setup>
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import dayjs from 'dayjs';
+import {
+  createAct,
+  createClient,
+  createInvoice,
+  deleteAct,
+  deleteInvoice,
+  downloadActPdf,
+  downloadInvoicePdf,
+  listActs,
+  listClients,
+  listInvoices,
+  updateAct,
+  updateInvoice,
+} from '@/api';
+import { useAuthStore } from '@/stores/auth.js';
+import { useNotifyStore } from '@/stores/notify.js';
+import { downloadCsv } from '@/utils/csv.js';
+import { debounce } from '@/utils/debounce.js';
+import { formatDate, formatMoney } from '@/utils/format.js';
 
-export default {
-  name: 'ActsList',
-  setup() {
-    const router = useRouter();
-    const toast = useToast();
+const route = useRoute();
+const router = useRouter();
+const auth = useAuthStore();
+const notify = useNotifyStore();
 
-    const acts = ref([]);
-    const loading = ref(false);
-    const createLoading = ref(false);
-    const searchQuery = ref('');
-    const showCreateDialog = ref(false);
-    const showEditDialog = ref(false);
-    const newAct = ref({ type: '', title: '', description: '' });
-    const newActType = ref('');
-    const selectedActId = ref(null);
-    const exportFormat = ref('pdf');
-    const editLoading = ref(false);
-    const createFormValid = ref(false);
-    const exportLoading = ref({
-      pdf: false,
-      xlsx: false
-    });
-    const errorModal = ref({
-      show: false,
-      message: '',
-      details: ''
-    });
-    const fieldErrors = ref({});
-    const createForm = ref(null);
+const DATE = 'YYYY-MM-DD';
 
-    const typeRules = [
-      v => !!v || 'Тип акта обязателен',
-      v => (v && v.length <= 100) || 'Максимальная длина 100 символов'
-    ];
+// ------------------------------------------------------------------ справочники
+const STATUS_ITEMS = [
+  { title: 'Черновик', value: 'draft' },
+  { title: 'Отправлен', value: 'sent' },
+  { title: 'Подписан', value: 'signed' },
+  { title: 'Оплачен', value: 'paid' },
+  { title: 'Отменён', value: 'cancelled' },
+];
+const STATUS_COLORS = { draft: 'grey', sent: 'info', signed: 'primary', paid: 'success', cancelled: 'error' };
+const UNIT_ITEMS = ['шт', 'усл', 'час', 'кг', 'м', 'мес'];
+const CLIENT_TYPE_ITEMS = [
+  { title: 'Организация', value: 'company' },
+  { title: 'ИП', value: 'ip' },
+  { title: 'Физическое лицо', value: 'individual' },
+];
+/** v-select не показывает выбранный null, поэтому «без НДС» — отдельное значение. */
+const NO_VAT = 'none';
+const BASE_VAT_RATES = [20, 10, 5, 7];
 
-    const titleRules = [
-      v => !!v || 'Название обязательно',
-      v => (v && v.length <= 200) || 'Максимальная длина 200 символов'
-    ];
-
-    const isMobile = computed(() => window.innerWidth <= 960);
-
-    const filteredActs = computed(() => {
-      if (!searchQuery.value) return acts.value;
-      const query = searchQuery.value.toLowerCase();
-      return acts.value.filter(
-        act => act.id.toString().includes(query) || 
-               act.type.toLowerCase().includes(query)
-      );
-    });
-
-    const isEditFormValid = computed(() => {
-      return newActType.value && 
-             typeRules.every(rule => rule(newActType.value) === true);
-    });
-
-    const fetchActs = async () => {
-      loading.value = true;
-      try {
-        const response = await getActs();
-        
-        if (response.error) {
-          throw new Error(response.error);
-        }
-        
-        acts.value = (response.acts || []).map(act => ({
-          id: act.document_id,
-          type: act.type,
-          created_at: act.created_at
-        }));
-      } catch (error) {
-        handleError(
-          error, 
-          'Ошибка загрузки актов',
-          'Не удалось загрузить список актов. Пожалуйста, попробуйте позже.'
-        );
-      } finally {
-        loading.value = false;
-      }
-    };
-
-    const createAct = async () => {
-      if (!createForm.value.validate()) return;
-      
-      createLoading.value = true;
-      try {
-        const response = await createAct({ 
-          type: newAct.value.type,
-          title: newAct.value.title,
-          description: newAct.value.description
-        });
-        
-        if (response.error) {
-          if (response.errors) {
-            fieldErrors.value = response.errors;
-            throw new Error('Проверьте правильность заполнения полей');
-          }
-          throw new Error(response.error);
-        }
-        
-        toast.success('Акт успешно создан');
-        await fetchActs();
-        showCreateDialog.value = false;
-        newAct.value = { type: '', title: '', description: '' };
-        createForm.value.resetValidation();
-      } catch (error) {
-        handleError(
-          error,
-          'Ошибка создания акта',
-          'Не удалось создать акт. Пожалуйста, проверьте данные и попробуйте снова.'
-        );
-      } finally {
-        createLoading.value = false;
-      }
-    };
-
-    const cancelCreate = () => {
-      showCreateDialog.value = false;
-      newAct.value = { type: '', title: '', description: '' };
-      clearFieldErrors();
-      createForm.value.resetValidation();
-    };
-
-    const viewActDetails = (actId) => {
-      router.push(`/acts/${actId}`);
-    };
-
-    const handleUpdateAct = (actId) => {
-      const act = acts.value.find(a => a.id === actId);
-      if (!act) {
-        showError(
-          'Акт не найден',
-          'Выбранный акт не существует или был удален'
-        );
-        return;
-      }
-      
-      selectedActId.value = actId;
-      newActType.value = act.type;
-      showEditDialog.value = true;
-      clearFieldErrors();
-    };
-
-    const saveActUpdate = async () => {
-      if (!isEditFormValid.value) return;
-      
-      editLoading.value = true;
-      try {
-        const response = await updateAct(selectedActId.value, { 
-          type: newActType.value 
-        });
-        
-        if (response.error) {
-          if (response.errors) {
-            fieldErrors.value = response.errors;
-            throw new Error('Проверьте правильность заполнения полей');
-          }
-          throw new Error(response.error);
-        }
-        
-        toast.success('Акт успешно обновлен');
-        await fetchActs();
-        showEditDialog.value = false;
-      } catch (error) {
-        handleError(
-          error,
-          'Ошибка обновления акта',
-          'Не удалось обновить информацию об акте. Пожалуйста, проверьте данные и попробуйте снова.'
-        );
-      } finally {
-        editLoading.value = false;
-      }
-    };
-
-    const cancelEdit = () => {
-      showEditDialog.value = false;
-      clearFieldErrors();
-    };
-
-    const exportToPDF = async () => {
-      exportLoading.value.pdf = true;
-      try {
-        const doc = new jsPDF();
-        doc.setFont('helvetica');
-        doc.setFontSize(12);
-        
-        doc.text('Список актов', 10, 10);
-        doc.setFontSize(10);
-        doc.text(`Сформировано: ${dayjs().format('DD.MM.YYYY HH:mm')}`, 10, 18);
-        
-        let y = 30;
-        filteredActs.value.forEach(act => {
-          if (y > 280) {
-            doc.addPage();
-            y = 20;
-          }
-          doc.text(`ID: ${act.id}`, 10, y);
-          doc.text(`Тип: ${act.type}`, 50, y);
-          doc.text(`Дата: ${formatDate(act.created_at)}`, 120, y);
-          y += 10;
-        });
-        
-        doc.save(`acts_${dayjs().format('YYYYMMDD_HHmmss')}.pdf`);
-        toast.success('PDF экспортирован');
-      } catch (error) {
-        handleError(
-          error,
-          'Ошибка экспорта в PDF',
-          'Не удалось сформировать PDF-документ. Пожалуйста, попробуйте снова.'
-        );
-      } finally {
-        exportLoading.value.pdf = false;
-      }
-    };
-
-    const exportToExcel = async () => {
-      exportLoading.value.xlsx = true;
-      try {
-        const worksheet = XLSX.utils.json_to_sheet(
-          filteredActs.value.map(act => ({
-            'ID': act.id,
-            'Тип': act.type,
-            'Дата создания': formatDate(act.created_at)
-          }))
-        );
-        
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Акты');
-        XLSX.writeFile(
-          workbook, 
-          `acts_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`
-        );
-        toast.success('Excel экспортирован');
-      } catch (error) {
-        handleError(
-          error,
-          'Ошибка экспорта в Excel',
-          'Не удалось сформировать Excel-документ. Пожалуйста, попробуйте снова.'
-        );
-      } finally {
-        exportLoading.value.xlsx = false;
-      }
-    };
-
-    const formatDate = (dateString) => {
-      return dayjs(dateString).format('DD.MM.YYYY HH:mm');
-    };
-
-    const handleError = (error, defaultMessage, defaultDetails = '') => {
-      console.error('Error:', error);
-      
-      let message = defaultMessage;
-      let details = defaultDetails;
-      
-      if (error.response) {
-        switch(error.response.status) {
-          case 400:
-            message = 'Некорректные данные';
-            if (error.response.data?.errors) {
-              fieldErrors.value = error.response.data.errors;
-            }
-            break;
-          case 401:
-            message = 'Требуется авторизация';
-            details = 'Пожалуйста, войдите снова.';
-            router.push('/login');
-            break;
-          case 402:
-            message = 'Подписка истекла';
-            details = 'Оформите подписку для продолжения работы.';
-            router.push('/subscription');
-            break;
-          case 403:
-            message = 'Доступ запрещен';
-            details = 'У вас недостаточно прав.';
-            break;
-          case 404:
-            message = 'Данные не найдены';
-            break;
-          case 500:
-            message = 'Ошибка сервера';
-            details = 'Попробуйте позже.';
-            break;
-          default:
-            message = error.response.data?.message || error.response.data?.detail || defaultMessage;
-            details = error.response.data?.errors || defaultDetails;
-        }
-      } else if (error.request) {
-        message = 'Проблемы с соединением';
-        details = 'Проверьте интернет и попробуйте снова.';
-      } else {
-        message = error.message || defaultMessage;
-      }
-      
-      showError(message, details);
-    };
-
-    const showError = (message, details = '') => {
-      errorModal.value = {
-        show: true,
-        message,
-        details
-      };
-      toast.error(message);
-    };
-
-    const clearFieldErrors = () => {
-      fieldErrors.value = {};
-    };
-
-    const clearFieldError = (field) => {
-      if (fieldErrors.value[field]) {
-        delete fieldErrors.value[field];
-      }
-    };
-
-    fetchActs();
-
-    return {
-      acts,
-      loading,
-      createLoading,
-      searchQuery,
-      showCreateDialog,
-      showEditDialog,
-      newAct,
-      newActType,
-      selectedActId,
-      exportFormat,
-      editLoading,
-      createFormValid,
-      exportLoading,
-      errorModal,
-      fieldErrors,
-      typeRules,
-      titleRules,
-      isMobile,
-      filteredActs,
-      isEditFormValid,
-      fetchActs,
-      createAct,
-      cancelCreate,
-      viewActDetails,
-      handleUpdateAct,
-      saveActUpdate,
-      cancelEdit,
-      exportToPDF,
-      exportToExcel,
-      formatDate,
-      handleError,
-      showError,
-      clearFieldErrors,
-      clearFieldError,
-      router,
-      createForm
-    };
-  }
+const KINDS = {
+  act: {
+    title: 'Акт',
+    list: listActs,
+    create: createAct,
+    update: updateAct,
+    remove: deleteAct,
+    pdf: downloadActPdf,
+    csvName: 'acts',
+  },
+  invoice: {
+    title: 'Счёт',
+    list: listInvoices,
+    create: createInvoice,
+    update: updateInvoice,
+    remove: deleteInvoice,
+    pdf: downloadInvoicePdf,
+    csvName: 'invoices',
+  },
 };
+
+function statusLabel(status) {
+  return STATUS_ITEMS.find((s) => s.value === status)?.title ?? status;
+}
+function statusColor(status) {
+  return STATUS_COLORS[status] ?? 'grey';
+}
+function vatLabel(rate) {
+  return rate === null || rate === undefined ? 'без НДС' : `НДС ${Number(rate)}%`;
+}
+/** НДС, включённый в сумму (как в PDF: «В том числе НДС»). */
+function vatIncluded(total, rate) {
+  const r = Number(rate);
+  if (!r) return 0;
+  return Math.round(((Number(total) || 0) * r * 100) / (100 + r)) / 100;
+}
+function round2(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
+function isOverdue(doc) {
+  return Boolean(
+    doc.due_date && !['paid', 'cancelled'].includes(doc.status) && doc.due_date < dayjs().format(DATE),
+  );
+}
+
+// ------------------------------------------------------------------ вкладка (акты / счета)
+const kind = ref(route.query.kind === 'invoice' ? 'invoice' : 'act');
+const kindMeta = computed(() => KINDS[kind.value]);
+
+watch(kind, (value) => {
+  const query = { ...route.query };
+  if (value === 'invoice') query.kind = 'invoice';
+  else delete query.kind;
+  router.replace({ query });
+  reloadFromFirstPage();
+});
+
+watch(
+  () => route.query.kind,
+  (value) => {
+    const next = value === 'invoice' ? 'invoice' : 'act';
+    if (next !== kind.value) kind.value = next;
+  },
+);
+
+// ------------------------------------------------------------------ выбор клиента (серверный поиск)
+function createClientPicker() {
+  const results = ref([]);
+  const pinned = ref([]);
+  const loading = ref(false);
+  let seq = 0;
+  let loaded = false;
+
+  const items = computed(() => {
+    const ids = new Set(results.value.map((c) => c.id));
+    return [...pinned.value.filter((c) => !ids.has(c.id)), ...results.value];
+  });
+
+  async function load(query = '') {
+    const s = ++seq;
+    loading.value = true;
+    try {
+      const data = await listClients({ search: query?.trim(), limit: 20 });
+      if (s === seq) {
+        results.value = data.items;
+        loaded = true;
+      }
+    } catch (err) {
+      if (s === seq) notify.error(err);
+    } finally {
+      if (s === seq) loading.value = false;
+    }
+  }
+
+  /** Держим выбранного клиента в items, иначе autocomplete покажет UUID вместо имени. */
+  function pin(client) {
+    if (!client?.id) return;
+    pinned.value = [{ id: client.id, name: client.name, inn: client.inn ?? '' }];
+  }
+
+  function pinById(id) {
+    const client = items.value.find((c) => c.id === id);
+    if (client) pin(client);
+  }
+
+  function loadOnce() {
+    if (!loaded) load('');
+  }
+
+  return { items, loading, search: debounce(load, 300), pin, pinById, loadOnce, load };
+}
+
+const filterClients = createClientPicker();
+const formClients = createClientPicker();
+
+// ------------------------------------------------------------------ список
+const headers = computed(() => {
+  const list = [
+    { title: 'Номер', key: 'number', sortable: false, width: 130 },
+    { title: 'Дата', key: 'date', sortable: false, width: 110 },
+    { title: 'Клиент', key: 'client_name', sortable: false },
+    { title: 'Сумма', key: 'total', sortable: false, align: 'end', width: 160 },
+  ];
+  if (kind.value === 'invoice') list.push({ title: 'Оплатить до', key: 'due_date', sortable: false, width: 120 });
+  list.push(
+    { title: 'Статус', key: 'status', sortable: false, width: 150 },
+    { title: '', key: 'actions', sortable: false, align: 'end', width: 140 },
+  );
+  return list;
+});
+
+const filters = reactive({ search: '', status: null, client_id: null, date_from: '', date_to: '' });
+const documents = ref([]);
+const total = ref(0);
+const page = ref(1);
+const limit = ref(20);
+const loading = ref(false);
+
+function validPeriod() {
+  return !filters.date_from || !filters.date_to || filters.date_from <= filters.date_to;
+}
+
+function filterParams() {
+  return {
+    search: filters.search?.trim(),
+    status: filters.status,
+    client_id: filters.client_id,
+    date_from: filters.date_from,
+    date_to: filters.date_to,
+  };
+}
+
+let requestSeq = 0;
+async function load() {
+  if (!validPeriod()) return;
+  const seq = ++requestSeq;
+  loading.value = true;
+  try {
+    const data = await kindMeta.value.list({ ...filterParams(), page: page.value, limit: limit.value });
+    if (seq !== requestSeq) return;
+    documents.value = data.items;
+    total.value = data.total;
+  } catch (err) {
+    if (seq === requestSeq) notify.error(err);
+  } finally {
+    if (seq === requestSeq) loading.value = false;
+  }
+}
+
+function reloadFromFirstPage() {
+  if (page.value !== 1) page.value = 1;
+  else load();
+}
+const debouncedReload = debounce(reloadFromFirstPage, 400);
+
+watch([page, limit], load);
+watch(() => [filters.status, filters.client_id], reloadFromFirstPage);
+watch(() => filters.search, debouncedReload);
+watch(
+  () => [filters.date_from, filters.date_to],
+  () => {
+    if (!validPeriod()) {
+      notify.warning('Дата начала периода позже даты окончания');
+      return;
+    }
+    reloadFromFirstPage();
+  },
+);
+
+function onRowClick(_event, { item }) {
+  openDetail(item);
+}
+
+function openDetail(doc) {
+  router.push({
+    name: 'act-detail',
+    params: { id: doc.id },
+    query: kind.value === 'invoice' ? { kind: 'invoice' } : {},
+  });
+}
+
+// ------------------------------------------------------------------ смена статуса
+const statusSaving = ref(null);
+
+async function changeStatus(doc, status) {
+  if (doc.status === status) return;
+  statusSaving.value = doc.id;
+  try {
+    const updated = await kindMeta.value.update(doc.id, { status });
+    Object.assign(doc, updated);
+    notify.success(`Статус: ${statusLabel(status)}`);
+    if (filters.status && filters.status !== status) await load();
+  } catch (err) {
+    notify.error(err);
+  } finally {
+    statusSaving.value = null;
+  }
+}
+
+// ------------------------------------------------------------------ PDF и CSV
+const pdfLoading = ref(null);
+
+async function downloadPdf(doc) {
+  pdfLoading.value = doc.id;
+  try {
+    await kindMeta.value.pdf(doc.id, `${kindMeta.value.title}-${doc.number}.pdf`);
+  } catch (err) {
+    notify.error(err);
+  } finally {
+    pdfLoading.value = null;
+  }
+}
+
+const exporting = ref(false);
+const EXPORT_MAX_PAGES = 50; // до 5000 документов за раз
+
+async function exportCsv() {
+  if (!validPeriod()) return;
+  exporting.value = true;
+  try {
+    const rows = [];
+    for (let p = 1; p <= EXPORT_MAX_PAGES; p += 1) {
+      const data = await kindMeta.value.list({ ...filterParams(), page: p, limit: 100 });
+      rows.push(...data.items);
+      if (!data.items.length || rows.length >= data.total) break;
+    }
+    const columns = [
+      { key: 'number', title: 'Номер' },
+      { key: 'date', title: 'Дата', format: (v) => formatDate(v) },
+      { key: 'client_name', title: 'Клиент' },
+      { key: 'items', title: 'Позиции', format: (v) => (v ?? []).map((i) => i.name).join(', ') },
+      { key: 'total', title: 'Сумма, ₽', format: (v) => round2(v) },
+      { key: 'vat_rate', title: 'НДС', format: (v) => vatLabel(v) },
+      { key: 'status', title: 'Статус', format: (v) => statusLabel(v) },
+    ];
+    if (kind.value === 'invoice') {
+      columns.push({ key: 'due_date', title: 'Оплатить до', format: (v) => (v ? formatDate(v) : '') });
+    }
+    columns.push({ key: 'notes', title: 'Заметки' });
+    downloadCsv(rows, columns, `${kindMeta.value.csvName}-${dayjs().format(DATE)}.csv`);
+    if (rows.length < total.value) notify.warning(`Выгружено ${rows.length} из ${total.value} документов`);
+  } catch (err) {
+    notify.error(err);
+  } finally {
+    exporting.value = false;
+  }
+}
+
+// ------------------------------------------------------------------ форма документа
+const editDialog = ref(false);
+const editingId = ref(null);
+const editingNumber = ref('');
+const saving = ref(false);
+const formRef = ref(null);
+let rowKey = 0;
+
+function emptyRow() {
+  rowKey += 1;
+  return { key: rowKey, name: '', quantity: '1', unit: 'шт', price: '' };
+}
+
+function companyDefaults() {
+  const company = auth.user?.company;
+  return { seller_name: company?.name ?? '', seller_inn: company?.inn ?? '' };
+}
+
+function emptyForm() {
+  return {
+    client_id: null,
+    status: 'draft',
+    number: '',
+    date: dayjs().format(DATE),
+    due_date: '',
+    vat: NO_VAT,
+    items: [emptyRow()],
+    notes: '',
+    ...companyDefaults(),
+  };
+}
+const form = reactive(emptyForm());
+
+const vatItems = computed(() => {
+  const rates = [...BASE_VAT_RATES];
+  if (form.vat !== NO_VAT && !rates.includes(form.vat)) rates.push(form.vat);
+  return [{ title: 'Без НДС', value: NO_VAT }, ...rates.map((r) => ({ title: `${r}%`, value: r }))];
+});
+
+function rowAmount(row) {
+  return round2(Number(row.quantity) * Number(row.price));
+}
+const formTotal = computed(() => round2(form.items.reduce((sum, row) => sum + rowAmount(row), 0)));
+
+function addRow() {
+  form.items.push(emptyRow());
+}
+function removeRow(index) {
+  if (form.items.length > 1) form.items.splice(index, 1);
+}
+
+const rules = {
+  required: (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Обязательное поле',
+  positive: (v) => Number(v) > 0 || 'Больше нуля',
+  nonNegative: (v) => (v !== '' && v !== null && Number(v) >= 0) || 'Не меньше нуля',
+  max20: (v) => !v || String(v).length <= 20 || 'Не более 20 символов',
+  max32: (v) => !v || String(v).trim().length <= 32 || 'Не более 32 символов',
+  max50: (v) => !v || String(v).length <= 50 || 'Не более 50 символов',
+  max255: (v) => !v || String(v).length <= 255 || 'Не более 255 символов',
+  max500: (v) => !v || String(v).length <= 500 || 'Не более 500 символов',
+  inn: (v) => !v || /^(\d{10}|\d{12})$/.test(String(v).trim()) || 'ИНН — 10 или 12 цифр',
+  email: (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).trim()) || 'Некорректный email',
+  dueDate: (v) => !v || !form.date || v >= form.date || 'Срок оплаты раньше даты счёта',
+};
+
+function openCreate() {
+  editingId.value = null;
+  editingNumber.value = '';
+  Object.assign(form, emptyForm());
+  editDialog.value = true;
+  formClients.loadOnce();
+}
+
+/** @param {import('@/api/types.js').Document} doc */
+function openEdit(doc) {
+  editingId.value = doc.id;
+  editingNumber.value = doc.number;
+  const defaults = companyDefaults();
+  const hasSeller = Boolean(doc.seller_name || doc.seller_inn);
+  formClients.pin({ id: doc.client_id, name: doc.client_name });
+  Object.assign(form, {
+    client_id: doc.client_id,
+    status: doc.status,
+    number: doc.number,
+    date: doc.date,
+    due_date: doc.due_date ?? '',
+    vat: doc.vat_rate === null || doc.vat_rate === undefined ? NO_VAT : Number(doc.vat_rate),
+    items: (doc.items ?? []).map((i) => {
+      rowKey += 1;
+      return { key: rowKey, name: i.name, quantity: String(i.quantity), unit: i.unit, price: String(i.price) };
+    }),
+    notes: doc.notes ?? '',
+    seller_name: hasSeller ? doc.seller_name ?? '' : defaults.seller_name,
+    seller_inn: hasSeller ? doc.seller_inn ?? '' : defaults.seller_inn,
+  });
+  if (!form.items.length) form.items.push(emptyRow());
+  editDialog.value = true;
+}
+
+function buildPayload() {
+  const payload = {
+    client_id: form.client_id,
+    date: form.date,
+    items: form.items.map((row) => ({
+      name: row.name.trim(),
+      quantity: Number(row.quantity),
+      unit: String(row.unit ?? '').trim() || 'шт',
+      price: round2(row.price),
+    })),
+    status: form.status,
+    notes: form.notes ?? '',
+    vat_rate: form.vat === NO_VAT ? null : Number(form.vat),
+    seller_name: form.seller_name?.trim() ?? '',
+    seller_inn: form.seller_inn?.trim() ?? '',
+  };
+  const number = form.number?.trim();
+  if (number) payload.number = number;
+  if (kind.value === 'invoice') payload.due_date = form.due_date || null;
+  return payload;
+}
+
+async function save() {
+  const { valid } = await formRef.value.validate();
+  if (!valid) return;
+  saving.value = true;
+  try {
+    const payload = buildPayload();
+    if (editingId.value) {
+      await kindMeta.value.update(editingId.value, payload);
+      notify.success(`${kindMeta.value.title} сохранён`);
+    } else {
+      const created = await kindMeta.value.create(payload);
+      notify.success(`${kindMeta.value.title} № ${created.number} создан`);
+    }
+    editDialog.value = false;
+    await load();
+  } catch (err) {
+    notify.error(err);
+  } finally {
+    saving.value = false;
+  }
+}
+
+// ------------------------------------------------------------------ быстрый клиент
+const quickClientDialog = ref(false);
+const quickClientSaving = ref(false);
+const quickClientFormRef = ref(null);
+const quickClient = reactive({ name: '', type: 'company', inn: '', email: '', phone: '' });
+
+function openQuickClient() {
+  Object.assign(quickClient, { name: '', type: 'company', inn: '', email: '', phone: '' });
+  quickClientDialog.value = true;
+}
+
+async function saveQuickClient() {
+  const { valid } = await quickClientFormRef.value.validate();
+  if (!valid) return;
+  quickClientSaving.value = true;
+  try {
+    const client = await createClient({
+      name: quickClient.name.trim(),
+      type: quickClient.type,
+      inn: quickClient.inn?.trim() ?? '',
+      email: quickClient.email?.trim() ?? '',
+      phone: quickClient.phone?.trim() ?? '',
+    });
+    formClients.pin(client);
+    form.client_id = client.id;
+    quickClientDialog.value = false;
+    notify.success(`Клиент «${client.name}» создан`);
+  } catch (err) {
+    notify.error(err);
+  } finally {
+    quickClientSaving.value = false;
+  }
+}
+
+// ------------------------------------------------------------------ удаление
+const deleteDialog = ref(false);
+const toDelete = ref(null);
+const deleting = ref(false);
+
+function askDelete(doc) {
+  toDelete.value = doc;
+  deleteDialog.value = true;
+}
+
+async function confirmDelete() {
+  if (!toDelete.value) return;
+  deleting.value = true;
+  try {
+    await kindMeta.value.remove(toDelete.value.id);
+    notify.success(`${kindMeta.value.title} удалён`);
+    deleteDialog.value = false;
+    if (documents.value.length === 1 && page.value > 1) page.value -= 1;
+    else await load();
+  } catch (err) {
+    notify.error(err);
+  } finally {
+    deleting.value = false;
+  }
+}
+
+onMounted(load);
+
+// Отложенный вызов debounce после ухода со страницы дал бы лишний запрос.
+onUnmounted(() => {
+  debouncedReload.cancel();
+  filterClients.search.cancel();
+  formClients.search.cancel();
+});
 </script>
 
 <style scoped>
-.acts-container {
-  padding: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.page-title {
-  font-size: 2rem;
-  font-weight: 500;
-  color: #1976d2;
-  margin-bottom: 20px;
-  text-align: center;
-}
-
-.search-export-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  margin-bottom: 20px;
-  align-items: center;
-}
-
-.search-field {
-  flex: 1;
-  min-width: 300px;
-}
-
-.export-toggle {
-  flex-shrink: 0;
-}
-
-.export-btn {
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  text-transform: none;
-  border-radius: 8px;
-  padding: 8px 16px;
-  transition: all 0.3s ease;
-}
-
-.export-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.loading-bar {
-  margin-bottom: 20px;
-  border-radius: 4px;
-}
-
-.acts-card {
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-}
-
-.acts-list {
-  background: #ffffff;
-}
-
-.act-item {
-  padding: 16px;
-  transition: background-color 0.2s ease;
+.clickable-rows :deep(tbody tr) {
   cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
 }
-
-.act-item:hover {
-  background-color: #f5f7fa;
+.item-row {
+  border-bottom: 1px dashed rgba(var(--v-border-color), var(--v-border-opacity));
+  margin-bottom: 8px;
 }
-
-.mobile-item {
-  padding: 12px;
-}
-
-.act-title {
+.item-amount {
+  min-height: 40px;
   font-weight: 500;
-  color: #2c3e50;
-  margin-bottom: 4px;
-}
-
-.act-subtitle {
-  font-size: 0.9rem;
-  color: #546e7a;
-  margin-bottom: 4px;
-}
-
-.act-date {
-  font-size: 0.8rem;
-  color: #78909c;
-}
-
-.edit-btn {
-  transition: all 0.3s ease;
-}
-
-.edit-btn:hover {
-  transform: scale(1.1);
-  color: #1976d2 !important;
-}
-
-.empty-item {
-  text-align: center;
-  padding: 20px;
-  color: #78909c;
-}
-
-.dialog-card {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.dialog-title {
-  font-size: 1.25rem;
-  font-weight: 500;
-  color: #333;
-  background-color: #f5f7fa;
-  padding: 16px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.input-field {
-  margin-top: 16px;
-}
-
-.dialog-actions {
-  padding: 16px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.action-btn-primary {
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  text-transform: none;
-  border-radius: 8px;
-  padding: 8px 16px;
-  transition: all 0.3s ease;
-}
-
-.action-btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.error-title {
-  color: #d32f2f;
-  font-size: 1.25rem;
-  font-weight: 500;
-  padding: 16px;
-  border-bottom: 1px solid #ffcdd2;
-}
-
-.error-message {
-  padding: 20px;
-  color: #5f2120;
-  font-size: 1rem;
-  line-height: 1.5;
-}
-
-.error-details {
-  margin-top: 10px;
-  padding: 10px;
-  background-color: #ffebee;
-  border-radius: 4px;
-  font-size: 0.9rem;
-}
-
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.3s;
-}
-.fade-enter, .fade-leave-to {
-  opacity: 0;
-}
-
-@media (max-width: 960px) {
-  .acts-container {
-    padding: 16px;
-  }
-  
-  .page-title {
-    font-size: 1.5rem;
-  }
-  
-  .search-field {
-    min-width: 100%;
-  }
-  
-  .export-toggle {
-    width: 100%;
-  }
-  
-  .export-btn {
-    width: 100%;
-    margin-bottom: 10px;
-  }
-}
-
-@media (max-width: 600px) {
-  .page-title {
-    font-size: 1.3rem;
-  }
-  
-  .act-item {
-    padding: 12px;
-  }
-  
-  .act-title {
-    font-size: 1rem;
-  }
-  
-  .act-subtitle, .act-date {
-    font-size: 0.8rem;
-  }
+  white-space: nowrap;
 }
 </style>

@@ -1,299 +1,111 @@
 <template>
-  <div id="app">
-    <!-- Основное содержимое -->
-    <router-view v-if="!isAuthenticated" />
-    
-    <div v-else class="app-container">
-      <!-- Боковая панель -->
-      <SidebarForm v-if="showSidebar" />
-      
-      <!-- Основной контент -->
-      <main class="main-content" :class="{ 'with-sidebar': showSidebar }">
-        <!-- Уведомления о подписке -->
-        <v-alert
-          v-if="showSubscriptionAlert"
-          type="warning"
-          class="subscription-alert"
-          dismissible
-        >
-          <template v-slot:prepend>
-            <v-icon>mdi-alert-circle</v-icon>
-          </template>
-          Ваша подписка истекает через {{ subscriptionDaysLeft }} дней. 
-          <v-btn
-            text
-            color="primary"
-            @click="$router.push('/subscription')"
-            class="ml-2"
-          >
-            Продлить
-          </v-btn>
-        </v-alert>
-        
-        <!-- Основной роутер -->
-        <router-view />
-      </main>
-    </div>
+  <v-app>
+    <template v-if="showLayout">
+      <v-navigation-drawer v-model="drawer" color="secondary" width="272" mobile-breakpoint="md">
+        <SidebarForm />
+      </v-navigation-drawer>
 
-    <!-- Глобальные компоненты -->
-    <VoiceRecorderForm v-if="isAuthenticated" />
-    <Chat v-if="isAuthenticated" />
-    
-    <!-- Новые компоненты -->
-    <AccessibilityManager v-if="isAuthenticated" />
-    <ABTestingManager v-if="isAuthenticated" />
-    <EdgeComputingManager v-if="isAuthenticated" />
-    <VoiceControlManager v-if="isAuthenticated" />
-    
-    <!-- Мониторинг сервисов -->
-    <ServicesMonitor v-if="isAuthenticated && showServicesMonitor" />
-    
-    <!-- 3D графики (условно) -->
-    <ThreeJSChart 
-      v-if="isAuthenticated && show3DCharts"
-      :data="chartData"
-      type="bar3d"
-      :height="400"
-    />
-    
-    <!-- Микрофронтенды -->
-    <div id="micro-frontends-container" v-if="isAuthenticated"></div>
-  </div>
+      <v-app-bar color="surface" elevation="1" density="comfortable">
+        <v-app-bar-nav-icon aria-label="Меню" @click="drawer = !drawer" />
+        <v-app-bar-title>{{ pageTitle }}</v-app-bar-title>
+
+        <NotificationsBell />
+
+        <v-menu location="bottom end" offset="8">
+          <template #activator="{ props: activatorProps }">
+            <v-btn v-bind="activatorProps" variant="text" class="text-none ml-1" aria-label="Меню пользователя">
+              <v-avatar size="32" color="primary" class="mr-sm-2">
+                <span class="text-body-2 text-white">{{ initials }}</span>
+              </v-avatar>
+              <span class="d-none d-sm-inline">{{ auth.user?.full_name }}</span>
+              <v-icon icon="mdi-chevron-down" end />
+            </v-btn>
+          </template>
+          <v-list density="compact" min-width="240">
+            <v-list-item :title="auth.user?.full_name" :subtitle="auth.user?.email" />
+            <v-divider class="my-1" />
+            <v-list-item to="/profile" prepend-icon="mdi-account-outline" title="Профиль" />
+            <v-list-item to="/subscription" prepend-icon="mdi-credit-card-outline" title="Подписка" />
+            <v-list-item prepend-icon="mdi-logout" title="Выйти" @click="onLogout" />
+          </v-list>
+        </v-menu>
+      </v-app-bar>
+
+      <v-main>
+        <v-container fluid class="pa-4 pa-md-6">
+          <v-alert
+            v-if="subscription.isExpired && route.path !== '/subscription'"
+            type="warning"
+            variant="tonal"
+            class="mb-4"
+            prominent
+          >
+            Подписка истекла — часть функций может быть недоступна.
+            <router-link to="/subscription" class="font-weight-medium">Продлить подписку</router-link>
+          </v-alert>
+          <router-view />
+        </v-container>
+      </v-main>
+    </template>
+
+    <v-main v-else>
+      <router-view />
+    </v-main>
+
+    <AppSnackbar />
+  </v-app>
 </template>
 
-<script>
-import { computed, onMounted, onUnmounted } from 'vue';
-import { useAuthStore } from '@/stores/auth';
+<script setup>
+import { computed, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import AppSnackbar from '@/components/AppSnackbar.vue';
+import NotificationsBell from '@/components/NotificationsBell.vue';
 import SidebarForm from '@/components/SidebarForm.vue';
-import VoiceRecorderForm from '@/components/VoiceRecorderForm.vue';
-import Chat from '@/components/Chat.vue';
-import AccessibilityManager from '@/components/accessibility/AccessibilityManager.vue';
-import ABTestingManager from '@/components/ab-testing/ABTestingManager.vue';
-import EdgeComputingManager from '@/components/edge-computing/EdgeComputingManager.vue';
-import ThreeJSChart from '@/components/3d-visualization/ThreeJSChart.vue';
-import VoiceControlManager from '@/components/voice-control/VoiceControlManager.vue';
-import ServicesMonitor from '@/components/ServicesMonitor.vue';
-import registry from '@/micro-frontends/registry';
+import { useAuthStore } from '@/stores/auth.js';
+import { useSubscriptionStore } from '@/stores/subscription.js';
 
-export default {
-  name: 'App',
-  
-  components: {
-    SidebarForm,
-    VoiceRecorderForm,
-    Chat,
-    AccessibilityManager,
-    ABTestingManager,
-    EdgeComputingManager,
-    ThreeJSChart,
-    VoiceControlManager,
-    ServicesMonitor
-  },
-  
-  setup() {
-    const authStore = useAuthStore();
-    
-    // Вычисляемые свойства
-    const isAuthenticated = computed(() => authStore.isAuthenticated);
-    const showSidebar = computed(() => authStore.isAuthenticated);
-    const showSubscriptionAlert = computed(() => {
-      return authStore.isAuthenticated && 
-             authStore.subscriptionStatus === 'active' && 
-             authStore.subscriptionDaysLeft <= 7;
-    });
-    const subscriptionDaysLeft = computed(() => authStore.subscriptionDaysLeft);
-    const show3DCharts = computed(() => authStore.isAuthenticated);
-    
-    // Показывать мониторинг сервисов только администраторам
-    const showServicesMonitor = computed(() => 
-      authStore.isAuthenticated && authStore.isCompanyAdmin
-    );
-    
-    // Данные для 3D графиков
-    const chartData = computed(() => [
-      { label: 'Задачи', value: 25, category: 'tasks', period: 'today' },
-      { label: 'Клиенты', value: 18, category: 'clients', period: 'today' },
-      { label: 'Отчеты', value: 12, category: 'reports', period: 'today' },
-      { label: 'Акты', value: 8, category: 'acts', period: 'today' }
-    ]);
-    
-    // Инициализация микрофронтендов
-    const initMicroFrontends = async () => {
-      try {
-        // Загружаем основные модули
-        await registry.load('auth-module');
-        await registry.load('tasks-module');
-        await registry.load('analytics-module');
-        
-        console.log('Micro-frontends loaded successfully');
-      } catch (error) {
-        console.error('Failed to load micro-frontends:', error);
-      }
-    };
-    
-    // Инициализация PWA
-    const initPWA = () => {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
-          .then(registration => {
-            console.log('Service Worker registered:', registration);
-          })
-          .catch(error => {
-            console.error('Service Worker registration failed:', error);
-          });
-      }
-      
-      // Проверяем возможность установки
-      let deferredPrompt;
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        
-        // Показываем кнопку установки
-        console.log('PWA install prompt available');
+const route = useRoute();
+const router = useRouter();
+const auth = useAuthStore();
+const subscription = useSubscriptionStore();
+
+/** null — Vuetify сам решает: открыт на десктопе, закрыт на мобильных. */
+const drawer = ref(null);
+
+// Маршруты без meta.public доступны только после входа (см. guard в router), поэтому layout зависит только от маршрута:
+// иначе при выходе страница перемонтировалась бы без layout и успевала отправить запросы без токена.
+const showLayout = computed(() => route.matched.length > 0 && !route.meta.public);
+const pageTitle = computed(() => route.meta.title || 'ClerkAI');
+const initials = computed(() => {
+  const name = auth.user?.full_name || auth.user?.email || '';
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0].toUpperCase())
+      .join('') || '?'
+  );
+});
+
+// Статус подписки нужен баннеру; грузим при входе, сбрасываем при выходе.
+watch(
+  () => auth.isAuthenticated,
+  (authenticated) => {
+    if (authenticated) {
+      subscription.load().catch(() => {
+        /* баннер не критичен — ошибку покажет страница подписки */
       });
-    };
-    
-    // Инициализация GraphQL
-    const initGraphQL = () => {
-      // Здесь можно инициализировать GraphQL клиент
-      console.log('GraphQL client ready');
-    };
-    
-    // Жизненный цикл
-    onMounted(() => {
-      if (isAuthenticated.value) {
-        initMicroFrontends();
-        initPWA();
-        initGraphQL();
-      }
-    });
-    
-    onUnmounted(() => {
-      // Очистка ресурсов
-    });
-    
-    return {
-      isAuthenticated,
-      showSidebar,
-      showSubscriptionAlert,
-      subscriptionDaysLeft,
-      show3DCharts,
-      showServicesMonitor,
-      chartData
-    };
-  }
-};
+    } else {
+      subscription.reset();
+    }
+  },
+  { immediate: true },
+);
+
+async function onLogout() {
+  await auth.logout();
+  router.replace('/login');
+}
 </script>
-
-<style>
-#app {
-  font-family: 'Roboto', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.app-container {
-  display: flex;
-  height: 100vh;
-}
-
-.main-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  background-color: #f5f5f5;
-  transition: margin-left 0.3s ease;
-}
-
-.main-content.with-sidebar {
-  margin-left: 280px;
-}
-
-.subscription-alert {
-  margin-bottom: 20px;
-}
-
-/* PWA стили */
-@media (display-mode: standalone) {
-  .main-content {
-    padding-top: 40px;
-  }
-}
-
-/* Доступность */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-/* Высокий контраст */
-@media (prefers-contrast: high) {
-  .main-content {
-    background-color: #000;
-    color: #fff;
-  }
-}
-
-/* Темная тема */
-@media (prefers-color-scheme: dark) {
-  .main-content {
-    background-color: #121212;
-    color: #fff;
-  }
-}
-
-/* Адаптивность */
-@media (max-width: 768px) {
-  .main-content.with-sidebar {
-    margin-left: 0;
-  }
-  
-  .main-content {
-    padding: 10px;
-  }
-}
-
-/* Микрофронтенды */
-#micro-frontends-container {
-  position: relative;
-  z-index: 100;
-}
-
-/* Edge Computing индикаторы */
-.edge-status-indicator {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  z-index: 1000;
-}
-
-/* 3D графики */
-.threejs-chart-container {
-  margin: 20px 0;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-/* Голосовое управление */
-.voice-control-indicator {
-  position: fixed;
-  bottom: 80px;
-  left: 20px;
-  z-index: 1000;
-}
-
-/* A/B тестирование */
-.ab-testing-indicator {
-  position: fixed;
-  top: 60px;
-  left: 20px;
-  z-index: 1000;
-}
-</style>

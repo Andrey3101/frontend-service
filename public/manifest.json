@@ -1,130 +1,18 @@
 {
-  "name": "Self-Employed Platform",
-  "short_name": "SEP",
-  "description": "Платформа для самозанятых с AI аналитикой и голосовым управлением",
-  "start_url": "/",
+  "name": "ClerkAI",
+  "short_name": "ClerkAI",
+  "description": "Задачи, документы, финансы и налоги для самозанятых, ИП и малого бизнеса",
+  "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#1976d2",
-  "orientation": "portrait-primary",
-  "scope": "/",
+  "theme_color": "#1e88e5",
   "lang": "ru",
-  "categories": ["business", "productivity", "finance"],
   "icons": [
     {
-      "src": "/assets/logo-72x72.png",
-      "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/assets/logo-96x96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/assets/logo-128x128.png",
-      "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/assets/logo-144x144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/assets/logo-152x152.png",
-      "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/assets/logo-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/assets/logo-384x384.png",
-      "sizes": "384x384",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/assets/logo-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/assets/screenshot-wide.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide"
-    },
-    {
-      "src": "/assets/screenshot-narrow.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Дашборд",
-      "short_name": "Dashboard",
-      "description": "Открыть главный дашборд",
-      "url": "/dashboard",
-      "icons": [
-        {
-          "src": "/assets/dashboard-icon.png",
-          "sizes": "96x96"
-        }
-      ]
-    },
-    {
-      "name": "Задачи",
-      "short_name": "Tasks",
-      "description": "Управление задачами",
-      "url": "/tasks",
-      "icons": [
-        {
-          "src": "/assets/tasks-icon.png",
-          "sizes": "96x96"
-        }
-      ]
-    },
-    {
-      "name": "Аналитика",
-      "short_name": "Analytics",
-      "description": "AI аналитика",
-      "url": "/analytics",
-      "icons": [
-        {
-          "src": "/assets/analytics-icon.png",
-          "sizes": "96x96"
-        }
-      ]
-    }
-  ],
-  "related_applications": [],
-  "prefer_related_applications": false,
-  "edge_side_panel": {
-    "preferred_width": 400
-  },
-  "launch_handler": {
-    "client_mode": "focus-existing"
-  },
-  "handle_links": "preferred",
-  "protocol_handlers": [
-    {
-      "protocol": "web+sep",
-      "url": "/?action=%s"
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
     }
   ]
-} 
+}

@@ -1,265 +1,222 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import LoginForm from '../views/LoginForm.vue';
-import RegisterForm from '../views/RegisterForm.vue';
-import Dashboard from '../views/DashboardPage.vue';
-import Tasks from '../views/TasksList.vue';
-import Users from '../views/UsersList.vue';
-import Acts from '../views/ActsList.vue';
-import Reports from '../views/ReportList.vue';
-import Profile from '../views/ProfileForm.vue';
-import ActsDetail from '../components/ActsDetail.vue';
-import UsersDetail from '../components/UsersDetail.vue';
-import ReportsDetail from '../components/ReportsDetail.vue';
-import TaxCalculator from '@/components/TaxCalculator.vue';
-import ResetPassword from '../views/ResetPassword.vue';
-import NotFound from '../views/NotFound.vue';
-import CompetitorMonitor from '@/components/CompetitorMonitor.vue';
-import PromotionRecommendations from '@/components/PromotionRecommendations.vue';
-import Clients from '../views/ClientsList.vue';
-import SubscriptionForm from '../views/SubscriptionForm.vue';
-import AccessibilityManager from '@/components/accessibility/AccessibilityManager.vue';
-import ABTestingManager from '@/components/ab-testing/ABTestingManager.vue';
-import EdgeComputingManager from '@/components/edge-computing/EdgeComputingManager.vue';
-import ThreeJSChart from '@/components/3d-visualization/ThreeJSChart.vue';
-import VoiceControlManager from '@/components/voice-control/VoiceControlManager.vue';
+import { useAuthStore } from '@/stores/auth.js';
 
-// НОВЫЕ СТРАНИЦЫ ДЛЯ НОВЫХ ФИЧ
-import ContractorsPage from '../views/ContractorsPage.vue';
-import ClientAnalysisPage from '../views/ClientAnalysisPage.vue';
-import MeetingsPage from '../views/MeetingsPage.vue';
-import InventoryPage from '../views/InventoryPage.vue';
-import BankAccountsPage from '../views/BankAccountsPage.vue';
-
-// ИННОВАЦИОННЫЕ КОМПОНЕНТЫ
-import VirtualBoard from '@/components/ar-vr/VirtualBoard.vue';
-import MobileApp from '@/components/mobile/MobileApp.vue';
-import SmartBot from '@/components/bots/SmartBot.vue';
-import PersonalizedReports from '@/components/reports/PersonalizedReports.vue';
-import SmartNotifications from '@/components/notifications/SmartNotifications.vue';
-import TaskDetail from '../components/TaskDetail.vue';
-import ServicesTest from '../views/ServicesTest.vue';
-
+/**
+ * meta:
+ *   public  — доступно без авторизации, рендерится без layout (App.vue);
+ *   guest   — только для гостей: авторизованного уводим на /dashboard;
+ *   admin   — только owner/admin;
+ *   title   — заголовок в app-bar и вкладке.
+ * Все страницы загружаются лениво.
+ */
 const routes = [
-  { path: '/', redirect: '/login' },
-  { path: '/login', component: LoginForm },
-  { path: '/register', component: RegisterForm },
-  { 
-    path: '/dashboard', 
-    component: Dashboard, 
-    meta: { requiresAuth: true } 
+  { path: '/', redirect: '/dashboard' },
+
+  // ---- публичные ----
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/views/LoginForm.vue'),
+    meta: { public: true, guest: true, title: 'Вход' },
   },
-  { 
-    path: '/tax-calculator', 
-    name: 'TaxCalculator', 
-    component: TaxCalculator,
-    meta: { requiresAuth: true }
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('@/views/RegisterForm.vue'),
+    meta: { public: true, guest: true, title: 'Регистрация' },
   },
   {
     path: '/reset-password',
-    name: 'ResetPassword',
-    component: ResetPassword,
+    name: 'reset-password',
+    component: () => import('@/views/ResetPassword.vue'),
+    meta: { public: true, title: 'Восстановление пароля' },
+  },
+
+  // ---- приложение ----
+  {
+    path: '/dashboard',
+    name: 'dashboard',
+    component: () => import('@/views/DashboardPage.vue'),
+    meta: { title: 'Дашборд' },
   },
   {
-    path: '/clients',
-    name: 'Clients',
-    component: Clients,
-    meta: { requiresAuth: true }
-  },
-  { 
-    path: '/competitors', 
-    name: 'CompetitorMonitor', 
-    component: CompetitorMonitor,
-    meta: { requiresAuth: true }
-  },
-  { 
-    path: '/promotion', 
-    name: 'PromotionRecommendations', 
-    component: PromotionRecommendations,
-    meta: { requiresAuth: true }
-  },
-  
-  // Тестирование сервисов
-  {
-    path: '/services-test',
-    name: 'ServicesTest',
-    component: ServicesTest,
-    meta: { requiresAuth: true }
-  },
-  
-  // НОВЫЕ МАРШРУТЫ ДЛЯ НОВЫХ ФИЧ
-  {
-    path: '/contractors',
-    name: 'Contractors',
-    component: ContractorsPage,
-    meta: { requiresAuth: true }
+    path: '/tasks',
+    name: 'tasks',
+    component: () => import('@/views/TasksList.vue'),
+    meta: { title: 'Задачи' },
   },
   {
-    path: '/client-analysis',
-    name: 'ClientAnalysis',
-    component: ClientAnalysisPage,
-    meta: { requiresAuth: true }
+    path: '/tasks/:id',
+    name: 'task-detail',
+    component: () => import('@/components/TaskDetail.vue'),
+    props: true,
+    meta: { title: 'Задача' },
   },
   {
     path: '/meetings',
-    name: 'Meetings',
-    component: MeetingsPage,
-    meta: { requiresAuth: true }
+    name: 'meetings',
+    component: () => import('@/views/MeetingsPage.vue'),
+    meta: { title: 'Встречи и даты' },
   },
   {
-    path: '/inventory',
-    name: 'Inventory',
-    component: InventoryPage,
-    meta: { requiresAuth: true }
+    path: '/clients',
+    name: 'clients',
+    component: () => import('@/views/ClientsList.vue'),
+    meta: { title: 'Клиенты' },
+  },
+  {
+    // Страница анализа: клиент выбирается на странице или приходит в ?client=<id>.
+    path: '/client-analysis',
+    name: 'client-analysis',
+    component: () => import('@/views/ClientAnalysisPage.vue'),
+    meta: { title: 'Анализ клиента' },
+  },
+  {
+    path: '/clients/:id/analysis',
+    redirect: (to) => ({ path: '/client-analysis', query: { client: to.params.id } }),
+  },
+  {
+    path: '/acts',
+    name: 'acts',
+    component: () => import('@/views/ActsList.vue'),
+    meta: { title: 'Акты' },
+  },
+  {
+    path: '/acts/:id',
+    name: 'act-detail',
+    component: () => import('@/components/ActsDetail.vue'),
+    props: true,
+    meta: { title: 'Документ' },
+  },
+  {
+    path: '/reports',
+    name: 'reports',
+    component: () => import('@/views/ReportList.vue'),
+    meta: { title: 'Отчёты' },
+  },
+  {
+    path: '/reports/:id',
+    name: 'report-detail',
+    component: () => import('@/components/ReportsDetail.vue'),
+    props: true,
+    meta: { title: 'Отчёт' },
+  },
+  {
+    path: '/finance',
+    name: 'finance',
+    component: () => import('@/views/FinancePage.vue'),
+    meta: { title: 'Финансы' },
   },
   {
     path: '/bank-accounts',
-    name: 'BankAccounts',
-    component: BankAccountsPage,
-    meta: { requiresAuth: true }
-  },
-  
-  // ИННОВАЦИОННЫЕ КОМПОНЕНТЫ
-  {
-    path: '/virtual-board',
-    name: 'VirtualBoard',
-    component: VirtualBoard,
-    meta: { requiresAuth: true }
+    name: 'bank-accounts',
+    component: () => import('@/views/BankAccountsPage.vue'),
+    meta: { title: 'Банковские счета' },
   },
   {
-    path: '/mobile-app',
-    name: 'MobileApp',
-    component: MobileApp,
-    meta: { requiresAuth: true }
+    path: '/tax-calculator',
+    name: 'tax-calculator',
+    component: () => import('@/components/TaxCalculator.vue'),
+    meta: { title: 'Налоговый калькулятор' },
   },
   {
-    path: '/smart-bot',
-    name: 'SmartBot',
-    component: SmartBot,
-    meta: { requiresAuth: true }
+    path: '/contractors',
+    name: 'contractors',
+    component: () => import('@/views/ContractorsPage.vue'),
+    meta: { title: 'Проверка контрагентов' },
   },
   {
-    path: '/personalized-reports',
-    name: 'PersonalizedReports',
-    component: PersonalizedReports,
-    meta: { requiresAuth: true }
+    path: '/inventory',
+    name: 'inventory',
+    component: () => import('@/views/InventoryPage.vue'),
+    meta: { title: 'Склад' },
   },
   {
-    path: '/smart-notifications',
-    name: 'SmartNotifications',
-    component: SmartNotifications,
-    meta: { requiresAuth: true }
+    path: '/assistant',
+    name: 'assistant',
+    component: () => import('@/views/AssistantPage.vue'),
+    meta: { title: 'ИИ-ассистент' },
   },
-  
-  { 
-    path: '/tasks', 
-    component: Tasks, 
-    meta: { requiresAuth: true } 
+  {
+    path: '/competitors',
+    name: 'competitors',
+    component: () => import('@/components/CompetitorMonitor.vue'),
+    meta: { title: 'Анализ конкурентов' },
   },
-  { 
-    path: '/tasks/:id', 
-    component: TaskDetail, 
-    meta: { requiresAuth: true },
-    props: true 
+  {
+    path: '/promotion',
+    name: 'promotion',
+    component: () => import('@/components/PromotionRecommendations.vue'),
+    meta: { title: 'Продвижение' },
   },
-  { 
-    path: '/users', 
-    component: Users, 
-    meta: { requiresAuth: true } 
+  {
+    path: '/users',
+    name: 'users',
+    component: () => import('@/views/UsersList.vue'),
+    meta: { admin: true, title: 'Пользователи' },
   },
-  { 
-    path: '/users/:id', 
-    component: UsersDetail, 
-    meta: { requiresAuth: true },
-    props: true 
+  {
+    path: '/users/:id',
+    name: 'user-detail',
+    component: () => import('@/components/UsersDetail.vue'),
+    props: true,
+    meta: { admin: true, title: 'Пользователь' },
   },
-  { 
-    path: '/acts', 
-    component: Acts, 
-    meta: { requiresAuth: true } 
-  },
-  { 
-    path: '/acts/:id', 
-    component: ActsDetail, 
-    meta: { requiresAuth: true },
-    props: true 
-  },
-  { 
-    path: '/reports', 
-    component: Reports, 
-    meta: { requiresAuth: true } 
-  },
-  { 
-    path: '/reports/:id', 
-    component: ReportsDetail, 
-    meta: { requiresAuth: true },
-    props: true 
-  },
-  { 
-    path: '/profile', 
-    component: Profile, 
-    meta: { requiresAuth: true } 
+  {
+    path: '/profile',
+    name: 'profile',
+    component: () => import('@/views/ProfileForm.vue'),
+    meta: { title: 'Профиль' },
   },
   {
     path: '/subscription',
-    name: 'Subscription',
-    component: SubscriptionForm,
-    meta: { requiresAuth: true }
+    name: 'subscription',
+    component: () => import('@/views/SubscriptionForm.vue'),
+    meta: { title: 'Подписка' },
   },
-  {
-    path: '/accessibility',
-    name: 'Accessibility',
-    component: AccessibilityManager,
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/ab-testing',
-    name: 'ABTesting',
-    component: ABTestingManager,
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/edge-computing',
-    name: 'EdgeComputing',
-    component: EdgeComputingManager,
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/3d-visualization',
-    name: '3DVisualization',
-    component: ThreeJSChart,
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/voice-control',
-    name: 'VoiceControl',
-    component: VoiceControlManager,
-    meta: { requiresAuth: true }
-  },
-  {
-    path: '/404',
-    name: 'NotFound',
-    component: NotFound,
-  },
+
   {
     path: '/:pathMatch(.*)*',
-    redirect: '/404',
+    name: 'not-found',
+    component: () => import('@/views/NotFound.vue'),
+    meta: { public: true, title: 'Страница не найдена' },
   },
 ];
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior(to, from, saved) {
+    return saved || { top: 0 };
+  },
 });
 
-router.beforeEach((to, from, next) => {
-  const isAuthenticated = !!localStorage.getItem('token');
-  if (to.meta.requiresAuth && !isAuthenticated) {
-    next('/login');
-  } else if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
-    next('/dashboard');
-  } else {
-    next();
+router.beforeEach(async (to) => {
+  const auth = useAuthStore();
+  if (!auth.initialized) {
+    await auth.init();
   }
+
+  if (to.meta.public) {
+    if (to.meta.guest && auth.isAuthenticated) {
+      return { path: '/dashboard' };
+    }
+    return true;
+  }
+
+  if (!auth.isAuthenticated) {
+    return { path: '/login', query: { redirect: to.fullPath } };
+  }
+
+  if (to.meta.admin && !auth.isAdmin) {
+    return { path: '/dashboard' };
+  }
+  return true;
+});
+
+router.afterEach((to) => {
+  const title = to.meta.title;
+  document.title = title ? `${title} — ClerkAI` : 'ClerkAI';
 });
 
 export default router;

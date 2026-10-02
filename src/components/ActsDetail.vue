@@ -1,383 +1,246 @@
 <template>
-  <v-container class="acts-detail-container">
-    <v-row>
-      <v-col>
-        <h1 class="detail-title">Детали акта</h1>
-        <v-progress-circular
-          v-if="loading"
-          indeterminate
-          color="primary"
-          size="50"
-          class="loading-spinner"
-        />
-        <v-alert v-else-if="error" type="error" dense class="error-alert" dismissible @input="error = null">
-          {{ error }}
-        </v-alert>
-        <v-card v-else elevation="4" class="detail-card animate__animated animate__fadeInUp">
-          <v-card-title class="card-title">
-            Акт #{{ act.id }}
+  <div>
+    <div class="d-flex flex-wrap align-center ga-2 mb-4">
+      <v-btn variant="text" prepend-icon="mdi-arrow-left" :to="backLink">
+        {{ kind === 'invoice' ? 'К счетам' : 'К актам' }}
+      </v-btn>
+      <v-spacer />
+      <v-btn
+        v-if="doc"
+        color="primary"
+        variant="tonal"
+        prepend-icon="mdi-file-pdf-box"
+        :loading="pdfLoading"
+        @click="downloadPdf"
+      >
+        Скачать PDF
+      </v-btn>
+    </div>
+
+    <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
+
+    <v-alert v-else-if="loadError" type="error" variant="tonal" class="mb-4">
+      {{ loadError }}
+      <template #append>
+        <v-btn variant="text" @click="load">Повторить</v-btn>
+      </template>
+    </v-alert>
+
+    <v-row v-if="doc">
+      <v-col cols="12" lg="8">
+        <v-card>
+          <v-card-title class="d-flex flex-wrap align-center ga-2">
+            {{ meta.title }} № {{ doc.number }} от {{ formatDate(doc.date) }}
             <v-spacer />
-            <v-chip :color="statusColor(act.status)" small class="status-chip">
-              {{ act.status }}
-            </v-chip>
+            <v-chip :color="statusColor(doc.status)" variant="tonal">{{ statusLabel(doc.status) }}</v-chip>
           </v-card-title>
-          <v-card-text class="card-content">
-            <v-row>
+          <v-card-text>
+            <v-row dense class="mb-2">
               <v-col cols="12" sm="6">
-                <p><strong>Название:</strong> {{ act.title || 'Не указано' }}</p>
-                <p><strong>Дата создания:</strong> {{ formatDate(act.created_at) }}</p>
+                <div class="text-caption text-medium-emphasis">{{ kind === 'invoice' ? 'Плательщик' : 'Заказчик' }}</div>
+                <div class="text-body-1 font-weight-medium">
+                  <router-link :to="{ path: '/client-analysis', query: { client: doc.client_id } }">
+                    {{ doc.client_name || '—' }}
+                  </router-link>
+                </div>
               </v-col>
               <v-col cols="12" sm="6">
-                <p><strong>Статус:</strong> {{ act.status || 'Не определён' }}</p>
-                <p><strong>Ответственный:</strong> {{ act.responsible || 'Не назначен' }}</p>
+                <div class="text-caption text-medium-emphasis">{{ kind === 'invoice' ? 'Поставщик' : 'Исполнитель' }}</div>
+                <div class="text-body-1">{{ doc.seller_name || '—' }}</div>
+                <div v-if="doc.seller_inn" class="text-caption">ИНН {{ doc.seller_inn }}</div>
+              </v-col>
+              <v-col v-if="kind === 'invoice'" cols="12" sm="6">
+                <div class="text-caption text-medium-emphasis">Оплатить до</div>
+                <div class="text-body-1" :class="{ 'text-error': overdue }">
+                  {{ formatDate(doc.due_date) }}<span v-if="overdue"> — просрочен</span>
+                </div>
               </v-col>
             </v-row>
-            <v-divider class="content-divider" v-if="act.description" />
-            <p v-if="act.description" class="act-description"><strong>Описание:</strong> {{ act.description }}</p>
+
+            <v-table density="compact">
+              <thead>
+                <tr>
+                  <th class="text-left">№</th>
+                  <th class="text-left">Наименование</th>
+                  <th class="text-right">Кол-во</th>
+                  <th class="text-left">Ед.</th>
+                  <th class="text-right">Цена</th>
+                  <th class="text-right">Сумма</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(item, index) in doc.items" :key="index">
+                  <td>{{ index + 1 }}</td>
+                  <td>{{ item.name }}</td>
+                  <td class="text-right">{{ formatNumber(item.quantity) }}</td>
+                  <td>{{ item.unit }}</td>
+                  <td class="text-right text-no-wrap">{{ formatMoney(item.price) }}</td>
+                  <td class="text-right text-no-wrap">{{ formatMoney(item.amount) }}</td>
+                </tr>
+              </tbody>
+            </v-table>
+
+            <div class="text-right mt-4">
+              <div class="text-h6">Итого: {{ formatMoney(doc.total) }}</div>
+              <div class="text-body-2 text-medium-emphasis">
+                <template v-if="doc.vat_rate === null || doc.vat_rate === undefined">Без НДС</template>
+                <template v-else>
+                  в т.ч. НДС {{ formatNumber(doc.vat_rate) }}%: {{ formatMoney(vatIncluded(doc.total, doc.vat_rate)) }}
+                </template>
+              </div>
+            </div>
+
+            <div class="text-caption text-medium-emphasis mt-4">
+              Создан {{ formatDateTime(doc.created_at) }} · изменён {{ formatDateTime(doc.updated_at) }}
+            </div>
           </v-card-text>
-          <v-card-actions class="card-actions">
-            <v-btn color="primary" outlined @click="$router.push('/acts')" class="action-btn">
-              <v-icon left>mdi-arrow-left</v-icon> Назад
-            </v-btn>
+        </v-card>
+      </v-col>
+
+      <v-col cols="12" lg="4">
+        <v-card>
+          <v-card-title>Статус и заметки</v-card-title>
+          <v-card-text>
+            <v-select v-model="edit.status" :items="STATUS_ITEMS" label="Статус" />
+            <v-textarea v-model="edit.notes" label="Заметки" rows="4" auto-grow />
+          </v-card-text>
+          <v-card-actions>
+            <v-btn variant="text" :disabled="!dirty || saving" @click="resetEdit">Сбросить</v-btn>
             <v-spacer />
-            <v-btn color="blue" text @click="exportToPDF" class="action-btn">
-              <v-icon left>mdi-file-pdf-box</v-icon> PDF
-            </v-btn>
-            <v-btn color="green" text @click="exportToExcel" class="action-btn">
-              <v-icon left>mdi-file-excel</v-icon> XLSX
-            </v-btn>
-            <v-btn color="blue" text @click="showEditModal = true" class="action-btn">
-              <v-icon left>mdi-pencil</v-icon> Редактировать
+            <v-btn color="primary" variant="flat" :disabled="!dirty" :loading="saving" @click="save">
+              Сохранить
             </v-btn>
           </v-card-actions>
         </v-card>
-        <!-- Модальное окно редактирования -->
-        <edit-modal
-          v-model="showEditModal"
-          title="Редактировать акт"
-          :is-valid="!!editData.title"
-          @save="confirmSave"
-        >
-          <v-text-field
-            v-model="editData.title"
-            label="Название"
-            outlined
-            dense
-            class="input-field"
-          />
-          <v-select
-            v-model="editData.status"
-            :items="['Новый', 'В работе', 'Завершён']"
-            label="Статус"
-            outlined
-            dense
-            class="input-field"
-          />
-          <v-text-field
-            v-model="editData.responsible"
-            label="Ответственный"
-            outlined
-            dense
-            class="input-field"
-          />
-          <v-textarea
-            v-model="editData.description"
-            label="Описание"
-            outlined
-            dense
-            rows="3"
-            class="input-field"
-          />
-        </edit-modal>
-        <!-- Диалог подтверждения редактирования -->
-        <v-dialog v-model="showConfirmDialog" max-width="400" class="custom-dialog">
-          <v-card class="dialog-card">
-            <v-card-title class="dialog-title">Подтверждение</v-card-title>
-            <v-card-text class="dialog-text">Вы уверены, что хотите сохранить изменения в акте?</v-card-text>
-            <v-card-actions class="dialog-actions">
-              <v-spacer />
-              <v-btn color="grey" text @click="showConfirmDialog = false" class="dialog-btn">Отмена</v-btn>
-              <v-btn color="primary" @click="saveAct" class="dialog-btn primary-btn">Сохранить</v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
+        <div class="text-caption text-medium-emphasis mt-2 px-1">
+          Позиции, клиента и реквизиты можно изменить в списке документов (кнопка «Изменить»).
+        </div>
       </v-col>
     </v-row>
-  </v-container>
+  </div>
 </template>
 
-<script>
-import { ref, onMounted } from 'vue';
+<script setup>
+import { computed, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { getAct, updateAct } from '../api';  // Импортируем исправленные функции
-import EditModal from './EditModal.vue';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
+import {
+  downloadActPdf,
+  downloadInvoicePdf,
+  errorMessage,
+  getAct,
+  getInvoice,
+  updateAct,
+  updateInvoice,
+} from '@/api';
+import { useNotifyStore } from '@/stores/notify.js';
+import { formatDate, formatDateTime, formatMoney, formatNumber } from '@/utils/format.js';
 
-export default {
-  components: { EditModal },
-  setup() {
-    const route = useRoute();
-    const act = ref(null);
-    const loading = ref(true);
-    const error = ref(null);
-    const showEditModal = ref(false);
-    const showConfirmDialog = ref(false);
-    const editData = ref({});
+const props = defineProps({
+  id: { type: String, required: true },
+});
 
-    onMounted(async () => {
-      await fetchAct();
-    });
+const route = useRoute();
+const notify = useNotifyStore();
 
-    const fetchAct = async () => {
-      loading.value = true;
-      error.value = null;
-      try {
-        const response = await getAct(route.params.id);  // Используем getAct
-        act.value = response;
-        editData.value = { ...act.value };
-      } catch (err) {
-        const errorMessage = err.response?.data?.detail || err.message || 'Не удалось загрузить акт';
-        error.value = errorMessage;
-      } finally {
-        loading.value = false;
-      }
-    };
+const STATUS_ITEMS = [
+  { title: 'Черновик', value: 'draft' },
+  { title: 'Отправлен', value: 'sent' },
+  { title: 'Подписан', value: 'signed' },
+  { title: 'Оплачен', value: 'paid' },
+  { title: 'Отменён', value: 'cancelled' },
+];
+const STATUS_COLORS = { draft: 'grey', sent: 'info', signed: 'primary', paid: 'success', cancelled: 'error' };
 
-    const formatDate = (date) => {
-      return date ? dayjs(date).format('DD.MM.YYYY HH:mm') : 'Не указано';
-    };
-
-    const statusColor = (status) => {
-      switch (status?.toLowerCase()) {
-        case 'новый': return 'blue';
-        case 'в работе': return 'orange';
-        case 'завершён': return 'green';
-        default: return 'grey';
-      }
-    };
-
-    const confirmSave = () => {
-      if (!editData.value.title) return;
-      showConfirmDialog.value = true;
-      error.value = null;
-    };
-
-    const saveAct = async () => {
-      loading.value = true;
-      error.value = null;
-      try {
-        await updateAct(route.params.id, editData.value);  // Используем updateAct
-        await fetchAct();
-        showEditModal.value = false;
-        showConfirmDialog.value = false;
-      } catch (err) {
-        const errorMessage = err.response?.data?.detail || err.message || 'Не удалось сохранить изменения';
-        error.value = errorMessage;
-      } finally {
-        loading.value = false;
-      }
-    };
-
-    const exportToPDF = () => {
-      const doc = new jsPDF();
-      doc.setFont('helvetica');
-      doc.setFontSize(14);
-      doc.text(`Акт #${act.value.id}`, 10, 10);
-
-      doc.autoTable({
-        startY: 20,
-        head: [['Поле', 'Значение']],
-        body: [
-          ['Название', act.value.title || 'Не указано'],
-          ['Дата создания', formatDate(act.value.created_at)],
-          ['Статус', act.value.status || 'Не определён'],
-          ['Ответственный', act.value.responsible || 'Не назначен'],
-          ['Описание', act.value.description || 'Отсутствует'],
-        ],
-        styles: { font: 'helvetica', fontSize: 10, cellPadding: 2, overflow: 'linebreak' },
-        headStyles: { fillColor: [25, 118, 210], textColor: [255, 255, 255] },
-        alternateRowStyles: { fillColor: [240, 244, 248] },
-        columnStyles: { 1: { cellWidth: 120 } },
-      });
-
-      doc.save(`act_${act.value.id}.pdf`);
-    };
-
-    const exportToExcel = () => {
-      const data = [{
-        'ID': act.value.id,
-        'Название': act.value.title || 'Не указано',
-        'Дата создания': formatDate(act.value.created_at),
-        'Статус': act.value.status || 'Не определён',
-        'Ответственный': act.value.responsible || 'Не назначен',
-        'Описание': act.value.description || 'Отсутствует',
-      }];
-      const worksheet = XLSX.utils.json_to_sheet(data);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Act');
-      XLSX.writeFile(workbook, `act_${act.value.id}.xlsx`);
-    };
-
-    return { act, loading, error, showEditModal, showConfirmDialog, editData, formatDate, statusColor, confirmSave, saveAct, exportToPDF, exportToExcel };
-  },
+const KINDS = {
+  act: { title: 'Акт', get: getAct, update: updateAct, pdf: downloadActPdf },
+  invoice: { title: 'Счёт', get: getInvoice, update: updateInvoice, pdf: downloadInvoicePdf },
 };
+
+/** Тип документа: /acts/:id?kind=invoice — счёт, иначе акт (ссылки формирует ActsList). */
+const kind = computed(() => (route.query.kind === 'invoice' ? 'invoice' : 'act'));
+const meta = computed(() => KINDS[kind.value]);
+const backLink = computed(() => ({ path: '/acts', query: kind.value === 'invoice' ? { kind: 'invoice' } : {} }));
+
+function statusLabel(status) {
+  return STATUS_ITEMS.find((s) => s.value === status)?.title ?? status;
+}
+function statusColor(status) {
+  return STATUS_COLORS[status] ?? 'grey';
+}
+function vatIncluded(total, rate) {
+  const r = Number(rate);
+  if (!r) return 0;
+  return Math.round(((Number(total) || 0) * r * 100) / (100 + r)) / 100;
+}
+
+const doc = ref(null);
+const loading = ref(false);
+const loadError = ref('');
+
+const overdue = computed(
+  () =>
+    Boolean(doc.value?.due_date) &&
+    !['paid', 'cancelled'].includes(doc.value.status) &&
+    doc.value.due_date < dayjs().format('YYYY-MM-DD'),
+);
+
+const edit = reactive({ status: 'draft', notes: '' });
+const dirty = computed(
+  () => Boolean(doc.value) && (edit.status !== doc.value.status || edit.notes !== (doc.value.notes ?? '')),
+);
+
+function resetEdit() {
+  edit.status = doc.value?.status ?? 'draft';
+  edit.notes = doc.value?.notes ?? '';
+}
+
+let requestSeq = 0;
+async function load() {
+  const seq = ++requestSeq;
+  loading.value = true;
+  loadError.value = '';
+  try {
+    const data = await meta.value.get(props.id);
+    if (seq !== requestSeq) return;
+    doc.value = data;
+    resetEdit();
+  } catch (err) {
+    if (seq !== requestSeq) return;
+    doc.value = null;
+    loadError.value = errorMessage(err);
+  } finally {
+    if (seq === requestSeq) loading.value = false;
+  }
+}
+
+const saving = ref(false);
+async function save() {
+  if (!doc.value) return;
+  saving.value = true;
+  try {
+    doc.value = await meta.value.update(doc.value.id, { status: edit.status, notes: edit.notes ?? '' });
+    resetEdit();
+    notify.success('Сохранено');
+  } catch (err) {
+    notify.error(err);
+  } finally {
+    saving.value = false;
+  }
+}
+
+const pdfLoading = ref(false);
+async function downloadPdf() {
+  if (!doc.value) return;
+  pdfLoading.value = true;
+  try {
+    await meta.value.pdf(doc.value.id, `${meta.value.title}-${doc.value.number}.pdf`);
+  } catch (err) {
+    notify.error(err);
+  } finally {
+    pdfLoading.value = false;
+  }
+}
+
+watch(() => [props.id, kind.value], load, { immediate: true });
 </script>
-
-<style scoped>
-.acts-detail-container {
-  padding: 24px;
-  background: #f5f7fa;
-  min-height: 100vh;
-}
-
-.detail-title {
-  font-family: 'Gilroy-ExtraBold', sans-serif;
-  font-size: 2.25rem;
-  color: #1976d2;
-  margin-bottom: 24px;
-  text-align: center;
-}
-
-.loading-spinner {
-  display: block;
-  margin: 40px auto;
-}
-
-.error-alert {
-  font-family: 'Gilroy-Regular', sans-serif;
-  border-radius: 8px;
-  margin: 20px 0;
-}
-
-.error-close-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
-  text-transform: none;
-  border-radius: 8px;
-}
-
-.detail-card {
-  border-radius: 16px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  padding: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-}
-
-.card-title {
-  font-family: 'Gilroy-Bold', sans-serif;
-  font-size: 1.75rem;
-  color: #1976d2;
-  padding: 16px 24px;
-  border-bottom: 1px solid #e0e0e0;
-  display: flex;
-  align-items: center;
-}
-
-.status-chip {
-  font-family: 'Gilroy-Medium', sans-serif;
-  color: white;
-}
-
-.card-content p {
-  font-family: 'Gilroy-Regular', sans-serif;
-  font-size: 1.1rem;
-  color: #2c3e50;
-  margin: 12px 0;
-}
-
-.card-content strong {
-  font-family: 'Gilroy-Medium', sans-serif;
-  color: #34495e;
-}
-
-.content-divider {
-  margin: 16px 0;
-}
-
-.act-description {
-  background: #f0f4f8;
-  padding: 16px;
-  border-radius: 8px;
-  white-space: pre-wrap;
-}
-
-.card-actions {
-  padding: 16px 24px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.action-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
-  text-transform: none;
-  border-radius: 8px;
-  transition: transform 0.2s ease;
-}
-
-.action-btn:hover {
-  transform: translateY(-2px);
-}
-
-/* Стили для диалога */
-.dialog-card {
-  border-radius: 12px;
-  background: #ffffff;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
-}
-
-.dialog-title {
-  font-family: 'Gilroy-Bold', sans-serif;
-  font-size: 1.5rem;
-  color: #1976d2;
-  padding: 16px 24px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.dialog-text {
-  font-family: 'Gilroy-Regular', sans-serif;
-  font-size: 1.1rem;
-  color: #2c3e50;
-  padding: 20px 24px;
-}
-
-.dialog-actions {
-  padding: 16px 24px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.dialog-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
-  text-transform: none;
-  border-radius: 8px;
-  padding: 8px 16px;
-  transition: transform 0.2s ease;
-}
-
-.dialog-btn:hover {
-  transform: translateY(-2px);
-}
-
-.primary-btn {
-  background-color: #1976d2;
-  color: white !important;
-}
-
-@media (max-width: 600px) {
-  .detail-title {
-    font-size: 1.75rem;
-  }
-  .card-title {
-    font-size: 1.5rem;
-  }
-  .card-content p {
-    font-size: 1rem;
-  }
-  .dialog-title {
-    font-size: 1.25rem;
-  }
-  .dialog-text {
-    font-size: 1rem;
-  }
-}
-</style>

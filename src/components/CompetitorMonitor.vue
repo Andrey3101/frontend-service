@@ -1,384 +1,196 @@
 <template>
-  <v-card class="pa-4" elevation="2">
-    <v-card-title class="headline">Мониторинг конкурентов</v-card-title>
-    <v-card-subtitle>Введите URLs конкурентов для анализа их сайтов</v-card-subtitle>
-    <v-card-text>
-      <v-textarea
-        v-model="competitorUrls"
-        label="URLs конкурентов (по одному в строке)"
-        placeholder="https://example.com"
-        rows="5"
-        outlined
-        :rules="urlRules"
-        clearable
-        @input="clearResultsDebounced"
-        hint="Введите URLs сайтов конкурентов, например, https://example.com"
-        persistent-hint
-        aria-label="URLs конкурентов для мониторинга"
-      ></v-textarea>
-      <v-row class="mt-2">
-        <v-col>
-          <v-btn
-            @click="monitor"
-            :disabled="isMonitorButtonDisabled"
-            :loading="isLoading"
-            color="primary"
-            aria-label="Запустить мониторинг конкурентов"
-          >
-            Запустить мониторинг
-          </v-btn>
-          <v-btn
-            v-if="isLoading"
-            @click="cancelMonitor"
-            color="error"
-            class="ml-2"
-            :disabled="!isLoading"
-            aria-label="Остановить мониторинг"
-          >
-            Остановить
-          </v-btn>
-          <v-btn
-            @click="saveUrls"
-            :disabled="!competitorUrls.trim()"
-            color="secondary"
-            class="ml-2"
-            aria-label="Сохранить URLs конкурентов"
-          >
-            Сохранить URLs
-          </v-btn>
-          <v-btn
-            @click="loadUrls"
-            color="info"
-            class="ml-2"
-            aria-label="Загрузить сохранённые URLs"
-          >
-            Загрузить URLs
-          </v-btn>
-          <v-btn
-            @click="clearAll"
-            color="warning"
-            class="ml-2"
-            aria-label="Очистить все данные"
-            :disabled="!hasData"
-          >
-            Очистить все
-          </v-btn>
-        </v-col>
-      </v-row>
+  <div>
+    <v-row>
+      <v-col cols="12" lg="5">
+        <v-card>
+          <v-card-title class="d-flex align-center">
+            <v-icon icon="mdi-account-search-outline" class="mr-2" />
+            Анализ конкурентов
+          </v-card-title>
+          <v-card-subtitle class="text-wrap">
+            ИИ-ассистент сравнит ваш бизнес с конкурентами и предложит, как выделиться.
+          </v-card-subtitle>
+          <v-card-text>
+            <v-form ref="formRef" @submit.prevent="submit">
+              <v-text-field
+                v-model="form.business"
+                label="Вид бизнеса *"
+                placeholder="Например: кофейня с выпечкой навынос"
+                variant="outlined"
+                density="compact"
+                :rules="[rules.required, rules.max]"
+                :counter="FIELD_MAX"
+                class="mb-2"
+              />
+              <v-text-field
+                v-model="form.city"
+                label="Город"
+                placeholder="Например: Казань"
+                variant="outlined"
+                density="compact"
+                :rules="[rules.max]"
+                class="mb-2"
+              />
+              <v-combobox
+                v-model="form.competitors"
+                label="Конкуренты"
+                placeholder="Название или сайт, Enter — добавить"
+                variant="outlined"
+                density="compact"
+                multiple
+                chips
+                closable-chips
+                :items="[]"
+                :rules="[rules.competitors]"
+                hint="До 20 конкурентов. Сайты не загружаются — анализ строится на знаниях ИИ и ваших заметках."
+                persistent-hint
+                class="mb-4"
+              />
+              <v-textarea
+                v-model="form.notes"
+                label="Заметки"
+                placeholder="Цены, сильные и слабые стороны конкурентов, ваше преимущество…"
+                variant="outlined"
+                density="compact"
+                rows="4"
+                auto-grow
+                :rules="[rules.max]"
+                :counter="FIELD_MAX"
+              />
+              <div class="d-flex flex-wrap ga-2 mt-2">
+                <v-btn type="submit" color="primary" variant="flat" prepend-icon="mdi-creation" :loading="loading">
+                  Проанализировать
+                </v-btn>
+                <v-btn variant="text" :disabled="loading" @click="reset">Очистить</v-btn>
+              </div>
+            </v-form>
+          </v-card-text>
+        </v-card>
+      </v-col>
 
-      <!-- Прогресс -->
-      <v-progress-linear
-        v-if="isLoading"
-        :value="progress"
-        color="primary"
-        class="mt-4"
-        height="10"
-      >
-        <template v-slot:default>{{ Math.round(progress) }}%</template>
-      </v-progress-linear>
-
-      <!-- Сводка и фильтрация -->
-      <v-card-text v-if="results.length" class="mt-4">
-        <p>
-          Успешно: {{ results.filter((r) => r.status === 'Успешно').length }} | Ошибки:
-          {{ results.filter((r) => r.status === 'Ошибка').length }}
-        </p>
-      </v-card-text>
-      <v-row v-if="results.length" class="mt-2">
-        <v-col>
-          <v-btn-toggle v-model="filter" mandatory dense>
-            <v-btn value="all" aria-label="Показать все результаты">Все</v-btn>
-            <v-btn value="success" aria-label="Показать успешные результаты">Успешные</v-btn>
-            <v-btn value="error" aria-label="Показать ошибки">Ошибки</v-btn>
-          </v-btn-toggle>
-        </v-col>
-      </v-row>
-
-      <!-- Результаты -->
-      <v-expansion-panels ref="resultsPanel" v-if="filteredResults.length" class="mt-4" multiple>
-        <v-expansion-panel v-for="(result, index) in filteredResults" :key="`result-${index}`">
-          <v-expansion-panel-header>
-            {{ result.url }} - {{ result.status }}
-            <v-icon v-if="result.status === 'Ошибка'" color="error" class="ml-2">mdi-alert</v-icon>
-            <v-icon v-else color="success" class="ml-2">mdi-check</v-icon>
-          </v-expansion-panel-header>
-          <v-expansion-panel-content>
-            <v-alert v-if="result.error" type="error" dense>{{ result.error }}</v-alert>
-            <div v-else>
-              <p><strong>Последняя проверка:</strong> {{ formatDate(result.timestamp) }}</p>
-              <p><strong>Длина:</strong> {{ result.content?.length || 0 }} символов</p>
-              <v-expansion-panels v-if="result.content" class="mt-2" flat>
-                <v-expansion-panel>
-                  <v-expansion-panel-header>Показать содержимое</v-expansion-panel-header>
-                  <v-expansion-panel-content>
-                    <pre class="content-pre">{{ result.content }}</pre>
-                  </v-expansion-panel-content>
-                </v-expansion-panel>
-              </v-expansion-panels>
+      <v-col cols="12" lg="7">
+        <v-card class="h-100">
+          <v-card-title class="d-flex align-center flex-wrap ga-2">
+            <span>Результат</span>
+            <v-spacer />
+            <template v-if="analysis">
+              <v-btn size="small" variant="text" prepend-icon="mdi-content-copy" @click="copy">Копировать</v-btn>
+              <v-btn size="small" variant="text" prepend-icon="mdi-download" @click="exportMarkdown">Скачать .md</v-btn>
+            </template>
+          </v-card-title>
+          <v-card-text>
+            <div v-if="loading" class="py-6">
+              <v-progress-linear indeterminate color="primary" rounded />
+              <div class="text-body-2 text-medium-emphasis mt-3">Анализ может занять до минуты…</div>
             </div>
-          </v-expansion-panel-content>
-        </v-expansion-panel>
-      </v-expansion-panels>
-
-      <!-- Экспорт -->
-      <v-btn
-        v-if="results.length"
-        @click="exportResults"
-        color="success"
-        class="mt-4"
-        :disabled="isLoading"
-        aria-label="Экспортировать результаты в JSON"
-      >
-        Экспорт в JSON
-      </v-btn>
-
-      <!-- Ошибка -->
-      <v-alert v-if="error" type="error" class="mt-4" dense dismissible @input="error = null">
-        {{ error }}
-      </v-alert>
-    </v-card-text>
-  </v-card>
+            <div v-else-if="analysis" class="markdown-body" v-html="renderMarkdown(analysis)" />
+            <div v-else class="text-medium-emphasis py-6 text-center">
+              Заполните форму и нажмите «Проанализировать».
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+  </div>
 </template>
 
-<script>
-import { monitorCompetitors } from '@/api/index.js';
-import debounce from 'lodash/debounce';
-//import { saveAs } from 'file-saver';
+<script setup>
+import { reactive, ref } from 'vue';
+import { analyzeCompetitors } from '@/api';
+import { useNotifyStore } from '@/stores/notify.js';
+import { renderMarkdown } from '@/utils/markdown.js';
 
-export default {
-  name: 'CompetitorMonitor',
-  data() {
-    return {
-      competitorUrls: '',
-      results: [],
-      error: null,
-      isLoading: false,
-      progress: 0,
-      filter: 'all',
-      cancelToken: null,
-      urlRules: [
-        (v) => !!v || 'Введите хотя бы один URL',
-        (v) =>
-          v.split('\n').filter((url) => url.trim()).length <= 10 || 'Максимум 10 URL',
-        (v) =>
-          v
-            .split('\n')
-            .filter((url) => url.trim())
-            .every((url) => /^https?:\/\/[^\s/$.?#].[^\s]*$/.test(url)) ||
-          'Все URLs должны быть валидными',
-      ],
-    };
-  },
-  computed: {
-    isMonitorButtonDisabled() {
-      return !this.competitorUrls.trim() || this.isLoading;
-    },
-    normalizedUrls() {
-      return this.competitorUrls
-        .split('\n')
-        .map((url) => url.trim())
-        .filter((url) => url)
-        .map((url) => (url.match(/^https?:\/\//) ? url : `https://${url}`));
-    },
-    filteredResults() {
-      if (this.filter === 'all') return this.results;
-      return this.results.filter((result) =>
-        this.filter === 'success' ? result.status === 'Успешно' : result.status === 'Ошибка'
-      );
-    },
-    hasData() {
-      return this.competitorUrls.trim() || this.results.length;
-    },
-  },
-  methods: {
-    formatDate(timestamp) {
-      if (!timestamp) return 'Неизвестно';
-      return new Date(timestamp).toLocaleString();
-    },
-    clearAll() {
-      this.competitorUrls = '';
-      this.clearResults();
-      this.$toast?.info('Все данные очищены');
-    },
-    clearResults() {
-      this.results = [];
-      this.error = null;
-      this.progress = 0;
-    },
-    clearResultsDebounced: debounce(function () {
-      this.clearResults();
-    }, 300),
-    async monitor() {
-      this.isLoading = true;
-      this.clearResults();
-      this.cancelToken = new AbortController();
+/** Лимиты ai-service (CompetitorsRequest): поля ≤ 2000 символов, конкурентов ≤ 20. */
+const FIELD_MAX = 2000;
+const COMPETITORS_MAX = 20;
 
-      const urls = this.normalizedUrls;
-      if (!urls.length) {
-        this.error = 'Введите хотя бы один URL';
-        this.isLoading = false;
-        return;
-      }
+const notify = useNotifyStore();
 
-      try {
-        // Имитация прогресса для демонстрации
-        const progressInterval = setInterval(() => {
-          if (this.progress < 90) {
-            this.progress += 10;
-          }
-        }, 500);
+const formRef = ref(/** @type {any} */ (null));
+const loading = ref(false);
+const analysis = ref('');
+/** Параметры запроса, по которым получен текущий результат (для заголовка файла). */
+const lastRequest = ref(/** @type {{business: string, city: string}|null} */ (null));
 
-        const response = await monitorCompetitors(urls, { signal: this.cancelToken.signal });
-        clearInterval(progressInterval);
-        this.progress = 100;
+const form = reactive({
+  business: '',
+  city: '',
+  /** @type {string[]} */
+  competitors: [],
+  notes: '',
+});
 
-        if (response.error) {
-          this.error = response.error;
-          return;
-        }
-
-        if (!response.action) {
-          this.error = 'Неожиданный формат ответа от сервера';
-          return;
-        }
-
-        // Обработка разных форматов ответа
-        let processedResults = [];
-        if (Array.isArray(response.action)) {
-          processedResults = response.action.map((item) => ({
-            url: item.url,
-            status: item.error ? 'Ошибка' : 'Успешно',
-            content: item.content || null,
-            error: item.error || null,
-            timestamp: Date.now(),
-          }));
-        } else if (typeof response.action === 'object') {
-          processedResults = Object.entries(response.action).map(([url, content]) => ({
-            url,
-            status: content.includes('Error') || content.includes('Failed') ? 'Ошибка' : 'Успешно',
-            content: content.includes('Error') || content.includes('Failed') ? null : content,
-            error: content.includes('Error') || content.includes('Failed') ? content : null,
-            timestamp: Date.now(),
-          }));
-        } else {
-          this.error = 'Неизвестный формат данных в ответе';
-          return;
-        }
-
-        this.results = processedResults;
-        this.$nextTick(() => {
-          this.focusFirstResult();
-        });
-      } catch (err) {
-        clearInterval(progressInterval);
-        if (err.name === 'AbortError') {
-          this.error = 'Мониторинг отменён пользователем';
-        } else if (err.response) {
-          // Ошибка от сервера
-          this.error = `Ошибка сервера: ${err.response.data?.message || err.response.statusText}`;
-        } else if (err.request) {
-          // Ошибка сети
-          this.error = 'Ошибка сети: не удалось подключиться к серверу';
-        } else {
-          // Другие ошибки
-          this.error = `Ошибка мониторинга: ${err.message}`;
-        }
-        console.error('Ошибка мониторинга:', err);
-      } finally {
-        this.isLoading = false;
-      }
-    },
-    focusFirstResult() {
-      try {
-        const panels = this.$refs.resultsPanel?.$el?.querySelectorAll('.v-expansion-panel-header');
-        if (panels?.[0]) {
-          panels[0].focus();
-        }
-      } catch (e) {
-        console.warn('Не удалось сфокусироваться на результатах:', e);
-      }
-    },
-    cancelMonitor() {
-      this.cancelToken?.abort();
-      this.isLoading = false;
-      this.progress = 0;
-      this.$toast?.info('Мониторинг остановлен');
-    },
-    saveUrls() {
-      try {
-        localStorage.setItem('competitorUrls', this.competitorUrls);
-        this.$toast?.success('URLs сохранены');
-      } catch (e) {
-        this.$toast?.error('Не удалось сохранить URLs: ' + e.message);
-        console.error('Ошибка сохранения URLs:', e);
-      }
-    },
-    loadUrls() {
-      try {
-        const saved = localStorage.getItem('competitorUrls');
-        if (saved) {
-          this.competitorUrls = saved;
-          this.$toast?.info('URLs загружены');
-        } else {
-          this.$toast?.error('Нет сохранённых URLs');
-        }
-      } catch (e) {
-        this.$toast?.error('Не удалось загрузить URLs: ' + e.message);
-        console.error('Ошибка загрузки URLs:', e);
-      }
-    },
-    exportResults() {
-      try {
-        const dataToExport = {
-          meta: {
-            exportedAt: new Date().toISOString(),
-            total: this.results.length,
-            success: this.results.filter((r) => r.status === 'Успешно').length,
-            errors: this.results.filter((r) => r.status === 'Ошибка').length,
-          },
-          results: this.results,
-        };
-
-        const blob = new Blob([JSON.stringify(dataToExport, null, 2)], {
-          type: 'application/json;charset=utf-8',
-        });
-        saveAs(blob, `competitor_monitor_${new Date().toISOString().slice(0, 10)}.json`);
-        this.$toast?.success('Результаты экспортированы');
-      } catch (e) {
-        this.$toast?.error('Ошибка экспорта: ' + e.message);
-        console.error('Ошибка экспорта:', e);
-      }
-    },
+const rules = {
+  /** @param {string} v */
+  required: (v) => !!(v && v.trim()) || 'Обязательное поле',
+  /** @param {string} v */
+  max: (v) => !v || v.length <= FIELD_MAX || `Не более ${FIELD_MAX} символов`,
+  /** @param {string[]} v */
+  competitors: (v) => {
+    if ((v || []).length > COMPETITORS_MAX) return `Не более ${COMPETITORS_MAX} конкурентов`;
+    if ((v || []).some((x) => String(x).length > FIELD_MAX)) return `Каждый — не более ${FIELD_MAX} символов`;
+    return true;
   },
 };
+
+/** @param {unknown} err */
+function reportError(err) {
+  const status = /** @type {any} */ (err)?.response?.status;
+  if (status === 503) notify.warning('ИИ не настроен администратором');
+  else if (status === 429) notify.warning('Слишком много запросов, подождите минуту');
+  else notify.error(err);
+}
+
+async function submit() {
+  const { valid } = await formRef.value.validate();
+  if (!valid || loading.value) return;
+  const competitors = [...new Set((form.competitors || []).map((c) => String(c).trim()).filter(Boolean))];
+  const payload = {
+    business: (form.business || '').trim(),
+    city: (form.city || '').trim() || undefined,
+    competitors: competitors.length ? competitors : undefined,
+    notes: (form.notes || '').trim() || undefined,
+  };
+  loading.value = true;
+  try {
+    const data = await analyzeCompetitors(payload);
+    analysis.value = data.analysis || '';
+    lastRequest.value = { business: payload.business, city: payload.city || '' };
+  } catch (err) {
+    reportError(err);
+  } finally {
+    loading.value = false;
+  }
+}
+
+function reset() {
+  Object.assign(form, { business: '', city: '', competitors: [], notes: '' });
+  formRef.value?.resetValidation();
+  analysis.value = '';
+  lastRequest.value = null;
+}
+
+async function copy() {
+  try {
+    await navigator.clipboard.writeText(analysis.value);
+    notify.success('Скопировано в буфер обмена');
+  } catch {
+    notify.error('Не удалось скопировать — выделите текст вручную');
+  }
+}
+
+function exportMarkdown() {
+  const req = lastRequest.value;
+  const title = `# Анализ конкурентов${req ? `: ${req.business}${req.city ? ` (${req.city})` : ''}` : ''}`;
+  const date = new Date().toISOString().slice(0, 10);
+  const blob = new Blob([`${title}\n\n_${date}_\n\n${analysis.value}\n`], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `analiz-konkurentov-${date}.md`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 </script>
-
-<style scoped>
-.headline {
-  font-size: 1.5rem;
-  font-weight: 500;
-  font-family: 'Gilroy-Medium', sans-serif;
-}
-
-.pa-4 {
-  padding: 16px;
-}
-
-.content-pre {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  background-color: #f5f5f5;
-  padding: 12px;
-  border-radius: 4px;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.v-expansion-panel-header {
-  font-weight: 500;
-}
-
-.v-expansion-panel-content {
-  padding-top: 12px;
-}
-</style>

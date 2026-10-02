@@ -1,130 +1,54 @@
+/** Подписка компании (GET /api/subscription) — для баннера в App.vue и SubscriptionForm. */
 import { defineStore } from 'pinia';
-import { attachCard, detachCard, initiateSubscriptionPayment, confirmSubscriptionPayment, getCompanyCards, getPaymentHistory } from '@/api';
-import { useAuthStore } from './auth';
-import { useToast } from 'vue-toastification';
+import { computed, ref } from 'vue';
+import {
+  cancelAutoRenew as apiCancelAutoRenew,
+  getSubscription,
+  paySubscription,
+} from '@/api/subscription.js';
 
-export const useSubscriptionStore = defineStore('subscription', {
-  state: () => ({
-    paymentStatus: 'idle', // idle, pending, success, error
-    paymentError: null,
-    attachedCard: null,
-    companyCards: [],
-    paymentHistory: [],
-  }),
-  actions: {
-    async attachCard(cardData) {
-      const authStore = useAuthStore();
-      if (!authStore.isCompanyAdmin) {
-        useToast().error('Только администраторы могут прикреплять карты');
-        throw new Error('Access denied');
-      }
-      try {
-        this.paymentStatus = 'pending';
-        const response = await attachCard({
-          ...cardData,
-          company_id: authStore.user?.company_id,
-        });
-        this.attachedCard = response;
-        await authStore.fetchProfile();
-        await this.fetchCompanyCards();
-        this.paymentStatus = 'success';
-        useToast().success('Карта успешно прикреплена');
-      } catch (error) {
-        this.paymentStatus = 'error';
-        this.paymentError = error.message || 'Ошибка при прикреплении карты';
-        useToast().error(this.paymentError);
-        throw error;
-      }
-    },
-    async detachCard(cardId) {
-      const authStore = useAuthStore();
-      if (!authStore.isCompanyAdmin) {
-        useToast().error('Только администраторы могут откреплять карты');
-        throw new Error('Access denied');
-      }
-      try {
-        this.paymentStatus = 'pending';
-        await detachCard({
-          company_id: authStore.user?.company_id,
-          card_id: cardId,
-        });
-        this.attachedCard = null;
-        await authStore.fetchProfile();
-        await this.fetchCompanyCards();
-        this.paymentStatus = 'success';
-        useToast().success('Карта успешно откреплена');
-      } catch (error) {
-        this.paymentStatus = 'error';
-        this.paymentError = error.message || 'Ошибка при откреплении карты';
-        useToast().error(this.paymentError);
-        throw error;
-      }
-    },
-    async initiateSubscriptionPayment(cardId = null) {
-      const authStore = useAuthStore();
-      if (!authStore.isCompanyAdmin) {
-        useToast().error('Только администраторы могут инициировать платежи');
-        throw new Error('Access denied');
-      }
-      try {
-        this.paymentStatus = 'pending';
-        const response = await initiateSubscriptionPayment(authStore.user?.company_id, cardId);
-        this.paymentStatus = 'success';
-        useToast().success('Платеж инициирован');
-        await this.fetchPaymentHistory();
-        return response;
-      } catch (error) {
-        this.paymentStatus = 'error';
-        this.paymentError = error.message || 'Ошибка при инициализации платежа';
-        useToast().error(this.paymentError);
-        throw error;
-      }
-    },
-    async confirmSubscriptionPayment(paymentId) {
-      try {
-        this.paymentStatus = 'pending';
-        const response = await confirmSubscriptionPayment(paymentId);
-        this.paymentStatus = 'success';
-        useToast().success('Платеж подтвержден');
-        await this.fetchPaymentHistory();
-        return response;
-      } catch (error) {
-        this.paymentStatus = 'error';
-        this.paymentError = error.message || 'Ошибка при подтверждении платежа';
-        useToast().error(this.paymentError);
-        throw error;
-      }
-    },
-    async fetchCompanyCards() {
-      const authStore = useAuthStore();
-      if (!authStore.isCompanyAdmin) {
-        return;
-      }
-      try {
-        this.companyCards = await getCompanyCards();
-      } catch (error) {
-        useToast().error('Ошибка при загрузке списка карт');
-      }
-    },
-    async fetchPaymentHistory() {
-      const authStore = useAuthStore();
-      if (!authStore.isCompanyAdmin) {
-        return;
-      }
-      try {
-        this.paymentHistory = await getPaymentHistory();
-      } catch (error) {
-        useToast().error('Ошибка при загрузке истории платежей');
-      }
-    },
-    resetPaymentStatus() {
-      this.paymentStatus = 'idle';
-      this.paymentError = null;
-    },
-  },
-  getters: {
-    isPaymentPending: (state) => state.paymentStatus === 'pending',
-    hasAttachedCard: (state) => !!state.attachedCard,
-    activeCard: (state) => state.companyCards.find(card => card.is_active) || null,
-  },
+export const useSubscriptionStore = defineStore('subscription', () => {
+  /** @type {import('vue').Ref<import('@/api/types.js').Subscription|null>} */
+  const subscription = ref(null);
+  const loading = ref(false);
+
+  const status = computed(() => subscription.value?.status ?? null);
+  const isExpired = computed(() => status.value === 'expired');
+  const isTrial = computed(() => status.value === 'trial');
+  const daysLeft = computed(() => subscription.value?.days_left ?? null);
+
+  /**
+   * Загрузить статус. Ошибка пробрасывается (вызывающий решает, показывать ли её).
+   * @returns {Promise<import('@/api/types.js').Subscription>}
+   */
+  async function load() {
+    loading.value = true;
+    try {
+      subscription.value = await getSubscription();
+      return subscription.value;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  /**
+   * Перейти к оплате T-Bank (owner/admin). 503 — оплата не настроена.
+   * @returns {Promise<void>}
+   */
+  async function pay() {
+    const { payment_url: paymentUrl } = await paySubscription();
+    window.location.assign(paymentUrl);
+  }
+
+  /** Отключить автопродление (owner/admin). */
+  async function cancelAutoRenew() {
+    subscription.value = await apiCancelAutoRenew();
+    return subscription.value;
+  }
+
+  function reset() {
+    subscription.value = null;
+  }
+
+  return { subscription, loading, status, isExpired, isTrial, daysLeft, load, pay, cancelAutoRenew, reset };
 });

@@ -1,623 +1,446 @@
 <template>
-  <div class="client-analysis-page">
-    <v-container fluid>
-      <v-row>
-        <v-col cols="12">
-          <v-card>
-            <v-card-title class="d-flex align-center">
-              <v-icon class="mr-2">mdi-chart-line</v-icon>
-              Анализ клиентской базы
-              <v-spacer></v-spacer>
-              <v-btn
-                color="primary"
-                @click="showAnalysisDialog = true"
-                prepend-icon="mdi-plus"
-              >
-                Анализировать клиента
-              </v-btn>
-            </v-card-title>
-          </v-card>
-        </v-col>
-      </v-row>
-
-      <!-- Статистика по клиентам -->
-      <v-row>
-        <v-col cols="12" md="3">
-          <v-card>
-            <v-card-text class="text-center">
-              <div class="text-h4 text-primary">{{ totalClients }}</div>
-              <div class="text-subtitle-1">Всего клиентов</div>
-            </v-card-text>
-          </v-card>
-        </v-col>
-        
-        <v-col cols="12" md="3">
-          <v-card>
-            <v-card-text class="text-center">
-              <div class="text-h4 text-success">{{ vipClients }}</div>
-              <div class="text-subtitle-1">VIP клиенты</div>
-            </v-card-text>
-          </v-card>
-        </v-col>
-        
-        <v-col cols="12" md="3">
-          <v-card>
-            <v-card-text class="text-center">
-              <div class="text-h4 text-warning">{{ atRiskClients }}</div>
-              <div class="text-subtitle-1">Под угрозой оттока</div>
-            </v-card-text>
-          </v-card>
-        </v-col>
-        
-        <v-col cols="12" md="3">
-          <v-card>
-            <v-card-text class="text-center">
-              <div class="text-h4 text-info">{{ formatCurrency(totalRevenue) }}</div>
-              <div class="text-subtitle-1">Общий доход</div>
-            </v-card-text>
-          </v-card>
-        </v-col>
-      </v-row>
-
-      <!-- Графики и аналитика -->
-      <v-row>
-        <v-col cols="12" md="6">
-          <v-card>
-            <v-card-title>Сегментация клиентов</v-card-title>
-            <v-card-text>
-              <canvas ref="segmentChart" width="400" height="300"></canvas>
-            </v-card-text>
-          </v-card>
-        </v-col>
-        
-        <v-col cols="12" md="6">
-          <v-card>
-            <v-card-title>Топ клиенты по доходу</v-card-title>
-            <v-card-text>
-              <v-list>
-                <v-list-item
-                  v-for="(client, index) in topClients"
-                  :key="client.id"
-                  :class="index < 3 ? 'top-client' : ''"
-                >
-                  <template v-slot:prepend>
-                    <v-avatar
-                      :color="index < 3 ? 'primary' : 'grey'"
-                      size="32"
-                    >
-                      {{ index + 1 }}
-                    </v-avatar>
-                  </template>
-                  
-                  <v-list-item-title>{{ client.name }}</v-list-item-title>
-                  <v-list-item-subtitle>{{ formatCurrency(client.total_revenue) }}</v-list-item-subtitle>
-                  
-                  <template v-slot:append>
-                    <v-chip
-                      :color="getSegmentColor(client.segment)"
-                      size="small"
-                    >
-                      {{ getSegmentText(client.segment) }}
-                    </v-chip>
-                  </template>
-                </v-list-item>
-              </v-list>
-            </v-card-text>
-          </v-card>
-        </v-col>
-      </v-row>
-
-      <!-- Список клиентов с анализом -->
-      <v-row>
-        <v-col cols="12">
-          <v-card>
-            <v-card-title>
-              Клиенты с анализом ({{ filteredClients.length }})
-            </v-card-title>
-            
-            <v-card-text>
-              <v-text-field
-                v-model="searchQuery"
-                label="Поиск по имени клиента"
-                prepend-icon="mdi-magnify"
-                clearable
-                @input="filterClients"
-              ></v-text-field>
-              
-              <v-data-table
-                :headers="headers"
-                :items="filteredClients"
-                :loading="loading"
-                :items-per-page="10"
-                class="elevation-1"
-              >
-                <template v-slot:item.segment="{ item }">
-                  <v-chip
-                    :color="getSegmentColor(item.segment)"
-                    size="small"
-                  >
-                    {{ getSegmentText(item.segment) }}
-                  </v-chip>
-                </template>
-                
-                <template v-slot:item.churn_probability="{ item }">
-                  <v-chip
-                    :color="getChurnColor(item.churn_probability)"
-                    size="small"
-                  >
-                    {{ Math.round(item.churn_probability * 100) }}%
-                  </v-chip>
-                </template>
-                
-                <template v-slot:item.total_revenue="{ item }">
-                  {{ formatCurrency(item.total_revenue) }}
-                </template>
-                
-                <template v-slot:item.customer_lifetime_value="{ item }">
-                  {{ formatCurrency(item.customer_lifetime_value) }}
-                </template>
-                
-                <template v-slot:item.actions="{ item }">
-                  <v-btn
-                    icon="mdi-eye"
-                    size="small"
-                    variant="text"
-                    @click="viewClientAnalysis(item)"
-                  ></v-btn>
-                  <v-btn
-                    icon="mdi-refresh"
-                    size="small"
-                    variant="text"
-                    @click="refreshAnalysis(item)"
-                    :loading="refreshing === item.id"
-                  ></v-btn>
-                </template>
-              </v-data-table>
-            </v-card-text>
-          </v-card>
-        </v-col>
-      </v-row>
-
-      <!-- Диалог анализа клиента -->
-      <v-dialog v-model="showAnalysisDialog" max-width="600px">
-        <v-card>
-          <v-card-title>Анализ клиента</v-card-title>
-          <v-card-text>
-            <v-form ref="form" v-model="valid">
-              <v-select
-                v-model="selectedClient"
-                label="Выберите клиента"
-                :items="availableClients"
-                item-title="name"
-                item-value="id"
-                :rules="[rules.required]"
-                return-object
-              ></v-select>
-              
-              <v-select
-                v-model="analysisPeriod"
-                label="Период анализа"
-                :items="analysisPeriods"
-                :rules="[rules.required]"
-              ></v-select>
-            </v-form>
-          </v-card-text>
-          
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn @click="showAnalysisDialog = false">Отмена</v-btn>
-            <v-btn
-              color="primary"
-              @click="analyzeClient"
-              :loading="analyzing"
-              :disabled="!valid"
+  <div>
+    <!-- Выбор клиента -->
+    <v-card class="mb-4">
+      <v-card-text>
+        <v-row dense align="center">
+          <v-col cols="12" md="8">
+            <v-autocomplete
+              :model-value="pickerValue"
+              :items="pickerItems"
+              :loading="pickerLoading"
+              item-title="name"
+              item-value="id"
+              label="Клиент"
+              placeholder="Начните вводить имя или ИНН"
+              prepend-inner-icon="mdi-account-search"
+              no-filter
+              clearable
+              hide-details
+              no-data-text="Клиенты не найдены"
+              @update:model-value="selectClient"
+              @update:search="searchClients"
+              @update:focused="(f) => f && loadPickerOnce()"
             >
-              Анализировать
-            </v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+              <template #item="{ props: itemProps, item }">
+                <v-list-item v-bind="itemProps" :subtitle="item.raw.inn ? `ИНН ${item.raw.inn}` : ''" />
+              </template>
+            </v-autocomplete>
+          </v-col>
+          <v-col cols="12" md="4" class="d-flex justify-md-end">
+            <v-btn variant="text" prepend-icon="mdi-account-group-outline" to="/clients">Все клиенты</v-btn>
+          </v-col>
+        </v-row>
+      </v-card-text>
+    </v-card>
 
-      <!-- Диалог просмотра анализа -->
-      <v-dialog v-model="showViewDialog" max-width="800px">
-        <v-card>
-          <v-card-title>Анализ клиента: {{ selectedAnalysis?.client_name }}</v-card-title>
-          <v-card-text v-if="selectedAnalysis">
-            <v-row>
-              <v-col cols="6">
-                <v-list>
-                  <v-list-item>
-                    <template v-slot:prepend>
-                      <v-icon>mdi-currency-rub</v-icon>
-                    </template>
-                    <v-list-item-title>Общий доход</v-list-item-title>
-                    <v-list-item-subtitle>{{ formatCurrency(selectedAnalysis.total_revenue) }}</v-list-item-subtitle>
-                  </v-list-item>
-                  
-                  <v-list-item>
-                    <template v-slot:prepend>
-                      <v-icon>mdi-shopping</v-icon>
-                    </template>
-                    <v-list-item-title>Количество заказов</v-list-item-title>
-                    <v-list-item-subtitle>{{ selectedAnalysis.total_orders }}</v-list-item-subtitle>
-                  </v-list-item>
-                  
-                  <v-list-item>
-                    <template v-slot:prepend>
-                      <v-icon>mdi-calculator</v-icon>
-                    </template>
-                    <v-list-item-title>Средний чек</v-list-item-title>
-                    <v-list-item-subtitle>{{ formatCurrency(selectedAnalysis.average_order_value) }}</v-list-item-subtitle>
-                  </v-list-item>
-                </v-list>
-              </v-col>
-              
-              <v-col cols="6">
-                <v-list>
-                  <v-list-item>
-                    <template v-slot:prepend>
-                      <v-icon>mdi-tag</v-icon>
-                    </template>
-                    <v-list-item-title>Сегмент</v-list-item-title>
-                    <v-list-item-subtitle>
-                      <v-chip
-                        :color="getSegmentColor(selectedAnalysis.segment)"
-                        size="small"
-                      >
-                        {{ getSegmentText(selectedAnalysis.segment) }}
-                      </v-chip>
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                  
-                  <v-list-item>
-                    <template v-slot:prepend>
-                      <v-icon>mdi-alert</v-icon>
-                    </template>
-                    <v-list-item-title>Вероятность оттока</v-list-item-title>
-                    <v-list-item-subtitle>
-                      <v-chip
-                        :color="getChurnColor(selectedAnalysis.churn_probability)"
-                        size="small"
-                      >
-                        {{ Math.round(selectedAnalysis.churn_probability * 100) }}%
-                      </v-chip>
-                    </v-list-item-subtitle>
-                  </v-list-item>
-                  
-                  <v-list-item>
-                    <template v-slot:prepend>
-                      <v-icon>mdi-chart-line</v-icon>
-                    </template>
-                    <v-list-item-title>Lifetime Value</v-list-item-title>
-                    <v-list-item-subtitle>{{ formatCurrency(selectedAnalysis.customer_lifetime_value) }}</v-list-item-subtitle>
-                  </v-list-item>
-                </v-list>
-              </v-col>
-            </v-row>
-            
-            <!-- Рекомендации -->
-            <v-card class="mt-4" variant="outlined">
-              <v-card-title>Рекомендации</v-card-title>
+    <v-alert v-if="!clientId" type="info" variant="tonal">
+      Выберите клиента, чтобы увидеть статистику по актам и счетам и получить ИИ-анализ.
+    </v-alert>
+
+    <template v-else>
+      <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
+      <v-alert v-if="loadError" type="error" variant="tonal" class="mb-4">
+        {{ loadError }}
+        <template #append>
+          <v-btn variant="text" @click="loadClient">Повторить</v-btn>
+        </template>
+      </v-alert>
+
+      <template v-if="client">
+        <v-row>
+          <!-- Карточка клиента -->
+          <v-col cols="12" lg="4">
+            <v-card class="h-100">
+              <v-card-title class="text-wrap">{{ client.name }}</v-card-title>
+              <v-card-subtitle>{{ typeTitle(client.type) }}</v-card-subtitle>
               <v-card-text>
-                <v-list>
-                  <v-list-item
-                    v-for="(recommendation, index) in getRecommendations(selectedAnalysis)"
-                    :key="index"
-                  >
-                    <template v-slot:prepend>
-                      <v-icon color="primary">mdi-lightbulb</v-icon>
-                    </template>
-                    <v-list-item-title>{{ recommendation }}</v-list-item-title>
+                <v-list density="compact" class="py-0">
+                  <v-list-item v-for="row in clientRows" :key="row.label" class="px-0" :prepend-icon="row.icon">
+                    <v-list-item-subtitle>{{ row.label }}</v-list-item-subtitle>
+                    <v-list-item-title class="text-wrap">{{ row.value }}</v-list-item-title>
                   </v-list-item>
                 </v-list>
+                <div v-if="client.notes" class="text-body-2 mt-2 notes">{{ client.notes }}</div>
               </v-card-text>
             </v-card>
-          </v-card-text>
-          
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn @click="showViewDialog = false">Закрыть</v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
-    </v-container>
+          </v-col>
+
+          <!-- Статистика -->
+          <v-col cols="12" lg="8">
+            <v-row dense>
+              <v-col v-for="card in statCards" :key="card.key" cols="6" md="4">
+                <v-card variant="tonal" :color="card.color" class="h-100">
+                  <v-card-text>
+                    <div class="text-caption">{{ card.title }}</div>
+                    <div class="text-h6 font-weight-bold">{{ card.value }}</div>
+                    <div v-if="card.hint" class="text-caption text-medium-emphasis">{{ card.hint }}</div>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+            <v-card v-if="stats && stats.revenue_total > 0" class="mt-2">
+              <v-card-text class="d-flex flex-wrap align-center ga-4">
+                <div class="chart-box">
+                  <Doughnut :data="paymentChart" :options="chartOptions" />
+                </div>
+                <div class="text-body-2">
+                  Оплачено {{ paidPercent }}% выставленной суммы.<br />
+                  <span class="text-medium-emphasis">
+                    Учитываются документы, кроме черновиков и отменённых; «оплачено» — документы в статусе «Оплачен».
+                  </span>
+                </div>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+
+        <v-row>
+          <!-- Документы клиента -->
+          <v-col cols="12" lg="6">
+            <v-card class="h-100">
+              <v-tabs v-model="docKind" color="primary" density="compact">
+                <v-tab value="act">Акты</v-tab>
+                <v-tab value="invoice">Счета</v-tab>
+              </v-tabs>
+              <v-divider />
+              <v-data-table-server
+                v-model:page="docPage"
+                v-model:items-per-page="docLimit"
+                :headers="docHeaders"
+                :items="docs"
+                :items-length="docTotal"
+                :items-per-page-options="[10, 20, 50]"
+                :loading="docsLoading"
+                loading-text="Загрузка…"
+                :no-data-text="docKind === 'invoice' ? 'Счетов нет' : 'Актов нет'"
+                item-value="id"
+                density="compact"
+                hover
+                class="clickable-rows"
+                @click:row="onDocClick"
+              >
+                <template #[`item.number`]="{ item }">№ {{ item.number }}</template>
+                <template #[`item.date`]="{ item }">{{ formatDate(item.date) }}</template>
+                <template #[`item.total`]="{ item }">{{ formatMoney(item.total) }}</template>
+                <template #[`item.status`]="{ item }">
+                  <v-chip size="small" variant="tonal" :color="statusColor(item.status)">{{ statusLabel(item.status) }}</v-chip>
+                </template>
+              </v-data-table-server>
+            </v-card>
+          </v-col>
+
+          <!-- ИИ-анализ -->
+          <v-col cols="12" lg="6">
+            <v-card class="h-100">
+              <v-card-title class="d-flex align-center">
+                ИИ-анализ
+                <v-spacer />
+                <v-btn
+                  color="primary"
+                  variant="flat"
+                  prepend-icon="mdi-robot-outline"
+                  :loading="analyzing"
+                  :disabled="!stats"
+                  @click="runAnalysis"
+                >
+                  {{ summary ? 'Обновить' : 'Проанализировать' }}
+                </v-btn>
+              </v-card-title>
+              <v-card-text>
+                <v-alert v-if="aiWarning" type="warning" variant="tonal" density="compact" class="mb-2">
+                  {{ aiWarning }}
+                </v-alert>
+                <div v-if="summary" class="markdown-body" v-html="renderMarkdown(summary)" />
+                <div v-else-if="!aiWarning" class="text-body-2 text-medium-emphasis">
+                  {{ analyzing ? 'Готовим резюме…' : 'ИИ составит резюме по клиенту на основе его данных и статистики документов.' }}
+                </div>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+      </template>
+    </template>
   </div>
 </template>
 
-<script>
-import { analyzeClient, getClients } from '@/api/index.js';
-import Chart from 'chart.js/auto';
+<script setup>
+import { computed, onUnmounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { Doughnut } from 'vue-chartjs';
+import { ArcElement, Chart as ChartJS, Legend, Tooltip } from 'chart.js';
+import { analyzeClient, errorMessage, getClient, getClientStats, listActs, listClients, listInvoices } from '@/api';
+import { useNotifyStore } from '@/stores/notify.js';
+import { debounce } from '@/utils/debounce.js';
+import { formatDate, formatMoney, formatNumber } from '@/utils/format.js';
+import { renderMarkdown } from '@/utils/markdown.js';
 
-export default {
-  name: 'ClientAnalysisPage',
-  
-  data() {
-    return {
-      loading: false,
-      analyzing: false,
-      refreshing: null,
-      clients: [],
-      filteredClients: [],
-      searchQuery: '',
-      showAnalysisDialog: false,
-      showViewDialog: false,
-      selectedAnalysis: null,
-      valid: false,
-      
-      selectedClient: null,
-      analysisPeriod: 'all',
-      
-      analysisPeriods: [
-        { title: 'Все время', value: 'all' },
-        { title: 'За месяц', value: 'month' },
-        { title: 'За квартал', value: 'quarter' },
-        { title: 'За год', value: 'year' }
-      ],
-      
-      headers: [
-        { title: 'Имя клиента', key: 'client_name', sortable: true },
-        { title: 'Сегмент', key: 'segment', sortable: true },
-        { title: 'Общий доход', key: 'total_revenue', sortable: true },
-        { title: 'Количество заказов', key: 'total_orders', sortable: true },
-        { title: 'Средний чек', key: 'average_order_value', sortable: true },
-        { title: 'Вероятность оттока', key: 'churn_probability', sortable: true },
-        { title: 'Lifetime Value', key: 'customer_lifetime_value', sortable: true },
-        { title: 'Действия', key: 'actions', sortable: false }
-      ],
-      
-      rules: {
-        required: v => !!v || 'Обязательное поле'
-      },
-      
-      segmentChart: null
-    };
-  },
-  
-  computed: {
-    totalClients() {
-      return this.clients.length;
-    },
-    
-    vipClients() {
-      return this.clients.filter(c => c.segment === 'vip').length;
-    },
-    
-    atRiskClients() {
-      return this.clients.filter(c => c.churn_probability > 0.7).length;
-    },
-    
-    totalRevenue() {
-      return this.clients.reduce((sum, c) => sum + c.total_revenue, 0);
-    },
-    
-    topClients() {
-      return [...this.clients]
-        .sort((a, b) => b.total_revenue - a.total_revenue)
-        .slice(0, 5);
-    },
-    
-    availableClients() {
-      // В реальности здесь будет список клиентов без анализа
-      return [
-        { id: '1', name: 'ООО "Клиент 1"' },
-        { id: '2', name: 'ИП Иванов' },
-        { id: '3', name: 'ООО "Клиент 3"' }
-      ];
-    }
-  },
-  
-  async mounted() {
-    await this.loadClients();
-    this.initChart();
-  },
-  
-  methods: {
-    async loadClients() {
-      this.loading = true;
-      try {
-        // В реальности здесь будет вызов API для получения списка клиентов с анализом
-        // Пока используем моковые данные
-        this.clients = [
-          {
-            id: '1',
-            client_name: 'ООО "Клиент 1"',
-            total_revenue: 500000,
-            total_orders: 25,
-            average_order_value: 20000,
-            customer_lifetime_value: 50000,
-            churn_probability: 0.1,
-            segment: 'vip'
-          },
-          {
-            id: '2',
-            client_name: 'ИП Иванов',
-            total_revenue: 150000,
-            total_orders: 15,
-            average_order_value: 10000,
-            customer_lifetime_value: 15000,
-            churn_probability: 0.3,
-            segment: 'regular'
-          },
-          {
-            id: '3',
-            client_name: 'ООО "Клиент 3"',
-            total_revenue: 50000,
-            total_orders: 5,
-            average_order_value: 10000,
-            customer_lifetime_value: 5000,
-            churn_probability: 0.8,
-            segment: 'at_risk'
-          }
-        ];
-        this.filteredClients = [...this.clients];
-      } catch (error) {
-        console.error('Ошибка загрузки клиентов:', error);
-        this.$toast.error('Ошибка загрузки клиентов');
-      } finally {
-        this.loading = false;
-      }
-    },
-    
-    async analyzeClient() {
-      if (!this.$refs.form.validate()) return;
-      
-      this.analyzing = true;
-      try {
-        const response = await analyzeClient(
-          this.selectedClient.id,
-          this.analysisPeriod
-        );
-        
-        if (response.status === 'success') {
-          // Добавляем имя клиента к анализу
-          const analysis = {
-            ...response.analysis,
-            client_name: this.selectedClient.name
-          };
-          
-          this.clients.push(analysis);
-          this.filteredClients = [...this.clients];
-          this.showAnalysisDialog = false;
-          this.resetForm();
-          this.$toast.success('Анализ клиента выполнен успешно');
-        }
-      } catch (error) {
-        console.error('Ошибка анализа клиента:', error);
-        this.$toast.error('Ошибка анализа клиента');
-      } finally {
-        this.analyzing = false;
-      }
-    },
-    
-    async refreshAnalysis(client) {
-      this.refreshing = client.id;
-      try {
-        // В реальности здесь будет обновление анализа
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        this.$toast.success('Анализ клиента обновлен');
-      } catch (error) {
-        console.error('Ошибка обновления анализа:', error);
-        this.$toast.error('Ошибка обновления анализа');
-      } finally {
-        this.refreshing = null;
-      }
-    },
-    
-    viewClientAnalysis(client) {
-      this.selectedAnalysis = client;
-      this.showViewDialog = true;
-    },
-    
-    filterClients() {
-      if (!this.searchQuery) {
-        this.filteredClients = [...this.clients];
-        return;
-      }
-      
-      const query = this.searchQuery.toLowerCase();
-      this.filteredClients = this.clients.filter(client =>
-        client.client_name.toLowerCase().includes(query)
-      );
-    },
-    
-    resetForm() {
-      this.selectedClient = null;
-      this.analysisPeriod = 'all';
-      this.$refs.form.resetValidation();
-    },
-    
-    initChart() {
-      const ctx = this.$refs.segmentChart.getContext('2d');
-      this.segmentChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-          labels: ['VIP', 'Regular', 'At Risk'],
-          datasets: [{
-            data: [this.vipClients, this.clients.filter(c => c.segment === 'regular').length, this.atRiskClients],
-            backgroundColor: ['#4CAF50', '#FF9800', '#F44336']
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false
-        }
-      });
-    },
-    
-    getSegmentColor(segment) {
-      const colors = {
-        vip: 'success',
-        regular: 'warning',
-        at_risk: 'error'
-      };
-      return colors[segment] || 'grey';
-    },
-    
-    getSegmentText(segment) {
-      const texts = {
-        vip: 'VIP',
-        regular: 'Regular',
-        at_risk: 'At Risk'
-      };
-      return texts[segment] || segment;
-    },
-    
-    getChurnColor(probability) {
-      if (probability <= 0.3) return 'success';
-      if (probability <= 0.6) return 'warning';
-      return 'error';
-    },
-    
-    getRecommendations(analysis) {
-      const recommendations = [];
-      
-      if (analysis.segment === 'at_risk') {
-        recommendations.push('Предложить специальные условия для удержания клиента');
-        recommendations.push('Увеличить частоту коммуникации');
-        recommendations.push('Провести опрос удовлетворенности');
-      }
-      
-      if (analysis.average_order_value < 15000) {
-        recommendations.push('Предложить дополнительные товары/услуги');
-        recommendations.push('Создать программы лояльности');
-      }
-      
-      if (analysis.churn_probability > 0.5) {
-        recommendations.push('Персональный менеджер для клиента');
-        recommendations.push('Специальные предложения и скидки');
-      }
-      
-      if (recommendations.length === 0) {
-        recommendations.push('Клиент в хорошем состоянии, поддерживать текущий уровень сервиса');
-      }
-      
-      return recommendations;
-    },
-    
-    formatCurrency(amount) {
-      return new Intl.NumberFormat('ru-RU', {
-        style: 'currency',
-        currency: 'RUB'
-      }).format(amount);
-    }
-  }
+ChartJS.register(ArcElement, Tooltip, Legend);
+
+const route = useRoute();
+const router = useRouter();
+const notify = useNotifyStore();
+
+const TYPE_TITLES = { company: 'Организация', ip: 'Индивидуальный предприниматель', individual: 'Физическое лицо' };
+const STATUS_ITEMS = {
+  draft: ['Черновик', 'grey'],
+  sent: ['Отправлен', 'info'],
+  signed: ['Подписан', 'primary'],
+  paid: ['Оплачен', 'success'],
+  cancelled: ['Отменён', 'error'],
 };
+
+function typeTitle(type) {
+  return TYPE_TITLES[type] ?? type;
+}
+function statusLabel(status) {
+  return STATUS_ITEMS[status]?.[0] ?? status;
+}
+function statusColor(status) {
+  return STATUS_ITEMS[status]?.[1] ?? 'grey';
+}
+
+// ------------------------------------------------------------------ выбор клиента
+const pickerResults = ref([]);
+const pickerPinned = ref(null);
+const pickerLoading = ref(false);
+let pickerSeq = 0;
+let pickerLoaded = false;
+
+const pickerItems = computed(() => {
+  const list = pickerResults.value;
+  const pinned = pickerPinned.value;
+  return pinned && !list.some((c) => c.id === pinned.id) ? [pinned, ...list] : list;
+});
+
+async function loadPicker(query = '') {
+  const seq = ++pickerSeq;
+  pickerLoading.value = true;
+  try {
+    const data = await listClients({ search: query?.trim(), limit: 20 });
+    if (seq === pickerSeq) {
+      pickerResults.value = data.items;
+      pickerLoaded = true;
+    }
+  } catch (err) {
+    if (seq === pickerSeq) notify.error(err);
+  } finally {
+    if (seq === pickerSeq) pickerLoading.value = false;
+  }
+}
+const searchClients = debounce(loadPicker, 300);
+// Отложенный вызов debounce после ухода со страницы дал бы лишний запрос.
+onUnmounted(() => searchClients.cancel());
+
+function loadPickerOnce() {
+  if (!pickerLoaded) loadPicker('');
+}
+
+/** Выбор меняет ?client=<id>; загрузка — по изменению маршрута (ссылки из списка клиентов работают так же). */
+function selectClient(id) {
+  const picked = pickerItems.value.find((c) => c.id === id);
+  if (picked) pickerPinned.value = picked;
+  const query = { ...route.query };
+  if (id) query.client = id;
+  else delete query.client;
+  router.replace({ query });
+}
+
+const clientId = computed(() => (typeof route.query.client === 'string' && route.query.client) || null);
+/** Пока клиент не загружен, не показываем UUID в поле выбора. */
+const pickerValue = computed(() =>
+  clientId.value && pickerItems.value.some((c) => c.id === clientId.value) ? clientId.value : null,
+);
+
+// ------------------------------------------------------------------ клиент и статистика
+const client = ref(null);
+const stats = ref(null);
+const loading = ref(false);
+const loadError = ref('');
+
+let loadSeq = 0;
+async function loadClient() {
+  const id = clientId.value;
+  const seq = ++loadSeq;
+  client.value = null;
+  stats.value = null;
+  summary.value = '';
+  aiWarning.value = '';
+  loadError.value = '';
+  if (!id) return;
+  loading.value = true;
+  try {
+    const [c, s] = await Promise.all([getClient(id), getClientStats(id)]);
+    if (seq !== loadSeq) return;
+    client.value = c;
+    stats.value = s;
+    pickerPinned.value = c;
+  } catch (err) {
+    if (seq === loadSeq) loadError.value = errorMessage(err);
+  } finally {
+    if (seq === loadSeq) loading.value = false;
+  }
+}
+
+const clientRows = computed(() => {
+  const c = client.value;
+  if (!c) return [];
+  const rows = [
+    { label: 'ИНН', value: c.inn, icon: 'mdi-identifier' },
+    { label: 'КПП', value: c.kpp, icon: 'mdi-identifier' },
+    { label: c.type === 'ip' ? 'ОГРНИП' : 'ОГРН', value: c.ogrn, icon: 'mdi-identifier' },
+    { label: 'Контактное лицо', value: c.contact_person, icon: 'mdi-account-tie' },
+    { label: 'Телефон', value: c.phone, icon: 'mdi-phone' },
+    { label: 'Email', value: c.email, icon: 'mdi-email-outline' },
+    { label: 'Адрес', value: c.address, icon: 'mdi-map-marker-outline' },
+  ];
+  return rows.filter((r) => r.value);
+});
+
+const statCards = computed(() => {
+  const s = stats.value;
+  if (!s) return [];
+  const unpaid = Math.max(0, (s.revenue_total ?? 0) - (s.paid_total ?? 0));
+  return [
+    { key: 'revenue', title: 'Выставлено', value: formatMoney(s.revenue_total), color: 'primary', hint: 'без черновиков и отменённых' },
+    { key: 'paid', title: 'Оплачено', value: formatMoney(s.paid_total), color: 'success' },
+    { key: 'unpaid', title: 'Не оплачено', value: formatMoney(unpaid), color: unpaid > 0 ? 'warning' : 'grey' },
+    { key: 'avg', title: 'Средний чек', value: formatMoney(s.average_check), color: 'info' },
+    {
+      key: 'docs',
+      title: 'Документы',
+      value: `${formatNumber(s.acts_count)} / ${formatNumber(s.invoices_count)}`,
+      color: 'secondary',
+      hint: 'актов / счетов',
+    },
+    { key: 'last', title: 'Последний документ', value: formatDate(s.last_document_date), color: 'grey' },
+  ];
+});
+
+const paidPercent = computed(() => {
+  const s = stats.value;
+  if (!s || !s.revenue_total) return 0;
+  return Math.min(100, Math.round((s.paid_total / s.revenue_total) * 100));
+});
+
+const paymentChart = computed(() => {
+  const s = stats.value ?? { revenue_total: 0, paid_total: 0 };
+  const unpaid = Math.max(0, s.revenue_total - s.paid_total);
+  return {
+    labels: ['Оплачено', 'Не оплачено'],
+    datasets: [{ data: [s.paid_total, unpaid], backgroundColor: ['#43a047', '#fb8c00'] }],
+  };
+});
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { position: 'bottom' },
+    tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${formatMoney(ctx.parsed)}` } },
+  },
+};
+
+// ------------------------------------------------------------------ документы клиента
+const docKind = ref('act');
+const docs = ref([]);
+const docTotal = ref(0);
+const docPage = ref(1);
+const docLimit = ref(10);
+const docsLoading = ref(false);
+
+const docHeaders = [
+  { title: 'Номер', key: 'number', sortable: false },
+  { title: 'Дата', key: 'date', sortable: false },
+  { title: 'Сумма', key: 'total', sortable: false, align: 'end' },
+  { title: 'Статус', key: 'status', sortable: false },
+];
+
+let docsSeq = 0;
+async function loadDocs() {
+  const id = clientId.value;
+  const seq = ++docsSeq;
+  if (!id) {
+    docs.value = [];
+    docTotal.value = 0;
+    return;
+  }
+  docsLoading.value = true;
+  try {
+    const list = docKind.value === 'invoice' ? listInvoices : listActs;
+    const data = await list({ client_id: id, page: docPage.value, limit: docLimit.value });
+    if (seq !== docsSeq) return;
+    docs.value = data.items;
+    docTotal.value = data.total;
+  } catch (err) {
+    if (seq === docsSeq) notify.error(err);
+  } finally {
+    if (seq === docsSeq) docsLoading.value = false;
+  }
+}
+
+function reloadDocsFromFirstPage() {
+  if (docPage.value !== 1) docPage.value = 1;
+  else loadDocs();
+}
+
+watch([docPage, docLimit], loadDocs);
+watch(docKind, reloadDocsFromFirstPage);
+
+function onDocClick(_event, { item }) {
+  router.push({
+    name: 'act-detail',
+    params: { id: item.id },
+    query: docKind.value === 'invoice' ? { kind: 'invoice' } : {},
+  });
+}
+
+// ------------------------------------------------------------------ ИИ-анализ
+const summary = ref('');
+const analyzing = ref(false);
+const aiWarning = ref('');
+
+async function runAnalysis() {
+  if (!client.value || !stats.value) return;
+  const forId = client.value.id;
+  analyzing.value = true;
+  aiWarning.value = '';
+  try {
+    const result = await analyzeClient({ client: client.value, stats: stats.value });
+    if (client.value?.id === forId) summary.value = result.summary;
+  } catch (err) {
+    if (client.value?.id !== forId) return;
+    if (err?.response?.status === 503) {
+      aiWarning.value = 'ИИ не настроен на сервере — анализ недоступен. Обратитесь к администратору.';
+    } else {
+      notify.error(err);
+    }
+  } finally {
+    analyzing.value = false;
+  }
+}
+
+// ------------------------------------------------------------------ старт и смена клиента
+watch(
+  clientId,
+  () => {
+    loadClient();
+    reloadDocsFromFirstPage();
+  },
+  { immediate: true },
+);
 </script>
 
 <style scoped>
-.client-analysis-page {
-  padding: 20px;
+.chart-box {
+  position: relative;
+  width: 220px;
+  height: 180px;
 }
-
-.v-data-table {
-  margin-top: 20px;
+.notes {
+  white-space: pre-line;
 }
-
-.top-client {
-  background-color: rgba(33, 150, 243, 0.1);
+.clickable-rows :deep(tbody tr) {
+  cursor: pointer;
 }
-
-canvas {
-  max-height: 300px;
-}
-</style> 
+</style>

@@ -1,490 +1,192 @@
 <template>
-  <v-container class="login-container">
-    <v-row justify="center" align="center" class="fill-height">
-      <v-col cols="12" sm="8" md="6" lg="4" class="login-col">
-        <!-- Уведомления об ошибках и успехе -->
-        <v-snackbar
-          v-model="snackbar.show"
-          :timeout="snackbar.timeout"
-          :color="snackbar.color"
-          top
-          centered
-          elevation="24"
-        >
-          <div class="snackbar-content">
-            <v-icon left>{{ snackbar.icon }}</v-icon>
-            <div>
-              <div class="snackbar-title">{{ snackbar.title }}</div>
-              <div class="snackbar-message">{{ snackbar.message }}</div>
-            </div>
-          </div>
-          <template v-slot:action="{ attrs }">
-            <v-btn
-              icon
-              v-bind="attrs"
-              @click="snackbar.show = false"
+  <v-container class="fill-height auth-page">
+    <v-row justify="center" align="center">
+      <v-col cols="12" sm="8" md="6" lg="4">
+        <div class="text-center mb-6">
+          <v-icon icon="mdi-briefcase-check-outline" size="48" color="primary" />
+          <div class="text-h5 font-weight-bold mt-2">ClerkAI</div>
+          <div class="text-body-2 text-medium-emphasis">Помощник для самозанятых, ИП и малого бизнеса</div>
+        </div>
+
+        <v-card elevation="4">
+          <v-card-title class="text-h6 pt-5 px-6">Вход</v-card-title>
+          <v-card-text class="px-6">
+            <v-alert
+              v-if="errorText"
+              type="error"
+              variant="tonal"
+              density="compact"
+              class="mb-4"
+              closable
+              @click:close="errorText = ''"
             >
-              <v-icon>mdi-close</v-icon>
-            </v-btn>
-          </template>
-        </v-snackbar>
+              {{ errorText }}
+            </v-alert>
 
-        <!-- Основная форма входа -->
-        <v-card class="login-card" elevation="8">
-          <div class="login-header">
-            <v-img
-              src="@/assets/logo.png"
-              contain
-              height="60"
-              class="logo"
-            ></v-img>
-            <v-card-title class="login-title">Вход в систему</v-card-title>
-          </div>
-
-          <v-card-text>
-            <v-form @submit.prevent="login" ref="form" v-model="valid">
-              <!-- Поле email -->
+            <v-form ref="formRef" @submit.prevent="onSubmit">
               <v-text-field
-                v-model="email"
+                v-model.trim="form.email"
                 label="Email"
                 type="email"
-                required
+                autocomplete="username"
                 prepend-inner-icon="mdi-email-outline"
-                outlined
-                dense
-                class="input-field"
                 :rules="emailRules"
-                :error-messages="fieldErrors.email"
-                @input="clearFieldError('email')"
                 autofocus
-                aria-label="Введите ваш email"
-                placeholder="example@domain.com"
+                class="mb-2"
               />
-
-              <!-- Поле телефона -->
               <v-text-field
-                v-model="phone"
-                label="Телефон"
-                prepend-inner-icon="mdi-phone-outline"
-                outlined
-                dense
-                class="input-field"
-                :rules="phoneRules"
-                :error-messages="fieldErrors.phone"
-                @input="handlePhoneInput"
-                @focus="phoneFocused = true"
-                @blur="phoneFocused = false"
-                aria-label="Введите ваш номер телефона"
-                placeholder="+7 (___) ___-__-__"
-              />
-
-              <!-- Поле пароля -->
-              <v-text-field
-                v-model="password"
+                v-model="form.password"
                 :type="showPassword ? 'text' : 'password'"
                 label="Пароль"
-                required
+                autocomplete="current-password"
                 prepend-inner-icon="mdi-lock-outline"
-                :append-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
-                @click:append="showPassword = !showPassword"
-                outlined
-                dense
-                class="input-field"
+                :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
                 :rules="passwordRules"
-                :error-messages="fieldErrors.password"
-                @input="clearFieldError('password')"
-                aria-label="Введите ваш пароль"
+                @click:append-inner="showPassword = !showPassword"
               />
 
-              <!-- Кнопка входа -->
-              <v-btn
-                type="submit"
-                color="primary"
-                block
-                large
-                class="login-btn"
-                :disabled="!valid || loading"
-                :loading="loading"
-                aria-label="Войти в систему"
-              >
-                <v-icon left>mdi-login</v-icon>
+              <div class="d-flex justify-end mb-3">
+                <v-btn variant="text" size="small" class="text-none" @click="openResetDialog">Забыли пароль?</v-btn>
+              </div>
+
+              <v-btn type="submit" color="primary" size="large" block :loading="loading" prepend-icon="mdi-login">
                 Войти
               </v-btn>
-
-              <!-- Дополнительные действия -->
-              <div class="actions">
-                <v-btn
-                  text
-                  small
-                  class="action-btn"
-                  @click="requestResetPassword"
-                  :disabled="loading"
-                  aria-label="Восстановить пароль"
-                >
-                  Забыли пароль?
-                </v-btn>
-                <v-btn
-                  text
-                  small
-                  class="action-btn"
-                  @click="$router.push('/register')"
-                  :disabled="loading"
-                  aria-label="Зарегистрироваться"
-                >
-                  Создать аккаунт
-                </v-btn>
-              </div>
             </v-form>
+          </v-card-text>
+
+          <v-divider />
+          <v-card-text class="text-center text-body-2">
+            Нет аккаунта?
+            <router-link to="/register" class="font-weight-medium">Регистрация</router-link>
           </v-card-text>
         </v-card>
       </v-col>
     </v-row>
+
+    <!-- Восстановление пароля -->
+    <v-dialog v-model="resetDialog" max-width="440">
+      <v-card>
+        <v-card-title class="pt-4">Восстановление пароля</v-card-title>
+        <v-card-text>
+          <template v-if="resetSent">
+            <v-alert type="success" variant="tonal">
+              Если адрес зарегистрирован, мы отправили письмо со ссылкой для сброса пароля. Проверьте почту, в том
+              числе папку «Спам».
+            </v-alert>
+          </template>
+          <v-form v-else ref="resetFormRef" @submit.prevent="sendReset">
+            <p class="text-body-2 text-medium-emphasis mb-4">
+              Укажите email, с которым вы регистрировались. Мы пришлём ссылку для установки нового пароля.
+            </p>
+            <v-text-field
+              v-model.trim="resetEmail"
+              label="Email"
+              type="email"
+              autocomplete="email"
+              prepend-inner-icon="mdi-email-outline"
+              :rules="emailRules"
+              autofocus
+            />
+          </v-form>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <template v-if="resetSent">
+            <v-btn color="primary" variant="flat" @click="resetDialog = false">Понятно</v-btn>
+          </template>
+          <template v-else>
+            <v-btn variant="text" @click="resetDialog = false">Отмена</v-btn>
+            <v-btn color="primary" variant="flat" :loading="resetLoading" @click="sendReset">Отправить</v-btn>
+          </template>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
-<script>
-import { useAuthStore } from '@/stores/auth';
-import { requestPasswordReset } from '@/api/index.js';
-//import { mapPhoneNumber } from '@/utils/format';
+<script setup>
+import { reactive, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { errorMessage, requestPasswordReset } from '@/api';
+import { useAuthStore } from '@/stores/auth.js';
+import { useNotifyStore } from '@/stores/notify.js';
+import { safeRedirect } from '@/utils/redirect';
 
-export default {
-  name: 'LoginForm',
-  data() {
-    return {
-      valid: false,
-      loading: false,
-      email: '',
-      phone: '',
-      password: '',
-      showPassword: false,
-      phoneFocused: false,
-      
-      // Обработка ошибок
-      snackbar: {
-        show: false,
-        title: '',
-        message: '',
-        color: 'error',
-        icon: 'mdi-alert-circle',
-        timeout: 6000
-      },
-      fieldErrors: {
-        email: [],
-        phone: [],
-        password: []
-      },
+const route = useRoute();
+const router = useRouter();
+const auth = useAuthStore();
+const notify = useNotifyStore();
 
-      // Правила валидации
-      emailRules: [
-        v => !!v || 'Email обязателен',
-        v => /.+@.+\..+/.test(v) || 'Введите корректный email'
-      ],
-      phoneRules: [
-        v => !!v || 'Телефон обязателен',
-        v => {
-          const cleaned = v.replace(/\D/g, '');
-          return cleaned.length >= 11 || 'Введите корректный номер';
-        }
-      ],
-      passwordRules: [
-        v => !!v || 'Пароль обязателен',
-        v => v.length >= 6 || 'Минимум 6 символов',
-        v => /[A-Z]/.test(v) || 'Хотя бы одна заглавная буква',
-        v => /\d/.test(v) || 'Хотя бы одна цифра'
-      ]
-    };
-  },
-  computed: {
-    formattedPhone() {
-      return this.phoneFocused ? this.phone : mapPhoneNumber(this.phone);
-    }
-  },
-  methods: {
-    async login() {
-      if (!this.$refs.form.validate()) return;
-      
-      this.loading = true;
-      this.clearErrors();
-      
-      try {
-        const authStore = useAuthStore();
-        await authStore.login({
-          email: this.email,
-          phone: this.phone.replace(/\D/g, ''),
-          password: this.password
-        });
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const emailRules = [(v) => !!v || 'Введите email', (v) => EMAIL_RE.test(v || '') || 'Некорректный email'];
+const passwordRules = [(v) => !!v || 'Введите пароль'];
 
-        this.showSuccess('Успешный вход', 'Перенаправляем на главную страницу...');
-        setTimeout(() => {
-          this.$router.push('/dashboard');
-        }, 1500);
-      } catch (error) {
-        this.handleLoginError(error);
-      } finally {
-        this.loading = false;
-      }
-    },
+const formRef = ref(null);
+const form = reactive({ email: '', password: '' });
+const showPassword = ref(false);
+const loading = ref(false);
+const errorText = ref('');
 
-    async requestResetPassword() {
-      if (!this.email) {
-        this.showError('Ошибка', 'Введите email для восстановления пароля');
-        return;
-      }
+/** Текст ошибки входа по коду ответа (401 / 429 / 403). */
+function loginErrorText(err) {
+  const status = err?.response?.status;
+  if (status === 401) return 'Неверный email или пароль.';
+  if (status === 429) return 'Слишком много попыток входа. Подождите 15 минут и попробуйте снова.';
+  if (status === 403) return 'Учётная запись отключена. Обратитесь к администратору вашей компании.';
+  return errorMessage(err);
+}
 
-      this.loading = true;
-      try {
-        await requestPasswordReset(this.email);
-        this.showSuccess(
-          'Запрос отправлен', 
-          'Инструкции по восстановлению пароля отправлены на ваш email'
-        );
-      } catch (error) {
-        this.handleError(
-          error,
-          'Ошибка восстановления',
-          'Не удалось отправить запрос на восстановление пароля'
-        );
-      } finally {
-        this.loading = false;
-      }
-    },
-
-    handlePhoneInput(value) {
-      // Очищаем от всех нецифровых символов
-      let cleaned = value.replace(/\D/g, '');
-      
-      // Если номер начинается с 7 или 8, заменяем на +7
-      if (cleaned.startsWith('8')) {
-        cleaned = '7' + cleaned.substring(1);
-      } else if (!cleaned.startsWith('7')) {
-        cleaned = '7' + cleaned;
-      }
-      
-      // Ограничиваем длину номера
-      if (cleaned.length > 11) {
-        cleaned = cleaned.substring(0, 11);
-      }
-      
-      this.phone = cleaned;
-    },
-
-    handleLoginError(error) {
-      let message = 'Неверный email или пароль';
-      let fieldErrors = {};
-
-      if (error.response) {
-        switch (error.response.status) {
-          case 400:
-            if (error.response.data.errors) {
-              fieldErrors = error.response.data.errors;
-              message = 'Проверьте правильность введённых данных';
-            }
-            break;
-          case 401:
-            message = 'Неверные учетные данные';
-            break;
-          case 403:
-            message = 'Аккаунт не активирован';
-            break;
-          case 429:
-            message = 'Слишком много попыток. Попробуйте позже';
-            break;
-          case 500:
-            message = 'Ошибка сервера. Попробуйте позже';
-            break;
-        }
-      } else if (error.request) {
-        message = 'Ошибка сети. Проверьте подключение';
-      }
-
-      this.fieldErrors = fieldErrors;
-      this.showError('Ошибка входа', message);
-    },
-
-    handleError(error, title, defaultMessage) {
-      console.error(title, error);
-      
-      let message = defaultMessage;
-      if (error.response) {
-        message = error.response.data?.message || 
-                 error.response.data?.detail || 
-                 defaultMessage;
-      } else if (error.message) {
-        message = error.message;
-      }
-
-      this.showError(title, message);
-    },
-
-    showError(title, message) {
-      this.snackbar = {
-        show: true,
-        title,
-        message,
-        color: 'error',
-        icon: 'mdi-alert-circle',
-        timeout: 6000
-      };
-    },
-
-    showSuccess(title, message) {
-      this.snackbar = {
-        show: true,
-        title,
-        message,
-        color: 'success',
-        icon: 'mdi-check-circle',
-        timeout: 4000
-      };
-    },
-
-    clearErrors() {
-      this.fieldErrors = {
-        email: [],
-        phone: [],
-        password: []
-      };
-    },
-
-    clearFieldError(field) {
-      if (this.fieldErrors[field]) {
-        this.fieldErrors[field] = [];
-      }
-    }
+async function onSubmit() {
+  const { valid } = await formRef.value.validate();
+  if (!valid) return;
+  loading.value = true;
+  errorText.value = '';
+  try {
+    await auth.login({ email: form.email, password: form.password });
+    router.replace(safeRedirect(route.query.redirect));
+  } catch (err) {
+    errorText.value = loginErrorText(err);
+    form.password = '';
+  } finally {
+    loading.value = false;
   }
-};
+}
+
+// ---- сброс пароля ----
+const resetDialog = ref(false);
+const resetFormRef = ref(null);
+const resetEmail = ref('');
+const resetLoading = ref(false);
+const resetSent = ref(false);
+
+function openResetDialog() {
+  resetEmail.value = form.email;
+  resetSent.value = false;
+  resetDialog.value = true;
+}
+
+async function sendReset() {
+  const { valid } = await resetFormRef.value.validate();
+  if (!valid) return;
+  resetLoading.value = true;
+  try {
+    await requestPasswordReset({ email: resetEmail.value });
+    resetSent.value = true;
+  } catch (err) {
+    if (err?.response?.status === 429) {
+      notify.error('Слишком много запросов. Попробуйте позже.');
+    } else {
+      notify.error(err);
+    }
+  } finally {
+    resetLoading.value = false;
+  }
+}
 </script>
 
 <style scoped>
-.login-container {
-  height: 100vh;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  padding: 16px;
-}
-
-.login-col {
-  max-width: 450px;
-}
-
-.login-card {
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-}
-
-.login-header {
-  padding: 24px 24px 16px;
-  text-align: center;
-  background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%);
-}
-
-.logo {
-  margin: 0 auto 12px;
-  max-width: 120px;
-}
-
-.login-title {
-  color: white;
-  font-size: 1.5rem;
-  font-weight: 600;
-  width: 100%;
-  padding: 0;
-  margin-bottom: 8px;
-}
-
-.input-field {
-  margin-bottom: 16px;
-}
-
-.login-btn {
-  margin-top: 8px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  height: 48px;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(25, 118, 210, 0.2);
-  transition: all 0.3s ease;
-}
-
-.login-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 10px rgba(25, 118, 210, 0.3);
-}
-
-.login-btn:active {
-  transform: translateY(0);
-}
-
-.actions {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 16px;
-}
-
-.action-btn {
-  font-size: 0.8rem;
-  color: #1976d2;
-  transition: all 0.2s ease;
-}
-
-.action-btn:hover {
-  color: #0d47a1;
-  text-decoration: underline;
-}
-
-.snackbar-content {
-  display: flex;
-  align-items: center;
-}
-
-.snackbar-title {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.snackbar-message {
-  font-size: 0.9rem;
-  opacity: 0.9;
-}
-
-/* Адаптация для мобильных устройств */
-@media (max-width: 600px) {
-  .login-col {
-    padding: 8px;
-  }
-
-  .login-card {
-    border-radius: 8px;
-  }
-
-  .login-header {
-    padding: 16px 16px 12px;
-  }
-
-  .login-title {
-    font-size: 1.3rem;
-  }
-
-  .input-field {
-    margin-bottom: 12px;
-  }
-
-  .login-btn {
-    height: 44px;
-    font-size: 0.9rem;
-  }
-
-  .actions {
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-  }
-}
-
-@media (max-width: 400px) {
-  .login-title {
-    font-size: 1.2rem;
-  }
+.auth-page {
+  max-width: 1200px;
 }
 </style>

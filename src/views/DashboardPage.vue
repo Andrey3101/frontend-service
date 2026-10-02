@@ -1,599 +1,501 @@
 <template>
-  <v-container class="dashboard-container">
-    <v-row>
-      <v-col>
-        <h1 class="dashboard-title">Дашборд</h1>
+  <div>
+    <div class="d-flex flex-wrap align-center mb-4 ga-2">
+      <div>
+        <div class="text-h6">{{ greeting }}</div>
+        <div class="text-body-2 text-medium-emphasis text-capitalize">{{ todayLabel }}</div>
+      </div>
+      <v-spacer />
+      <v-btn variant="text" prepend-icon="mdi-refresh" :loading="refreshing" @click="loadAll">Обновить</v-btn>
+    </div>
 
-        <!-- Система уведомлений -->
-        <v-snackbar
-          v-model="snackbar.show"
-          :timeout="snackbar.timeout"
-          :color="snackbar.color"
-          elevation="24"
-          top
-          right
-          multi-line
-        >
-          <div class="snackbar-content">
-            <v-icon left>{{ snackbar.icon }}</v-icon>
-            <div>
-              <div class="snackbar-title">{{ snackbar.title }}</div>
-              <div class="snackbar-message">{{ snackbar.message }}</div>
+    <!-- Статистика задач -->
+    <v-row dense class="mb-2">
+      <v-col v-for="card in statCards" :key="card.key" cols="6" md="3">
+        <v-card :loading="w.stats.loading" class="h-100" :to="card.to">
+          <v-card-text>
+            <div class="d-flex align-center text-caption text-medium-emphasis mb-1">
+              <v-icon :icon="card.icon" :color="card.color" size="small" class="mr-1" />
+              {{ card.title }}
             </div>
-          </div>
-          <template v-slot:action="{ attrs }">
-            <v-btn icon v-bind="attrs" @click="snackbar.show = false">
-              <v-icon>mdi-close</v-icon>
-            </v-btn>
-          </template>
-        </v-snackbar>
-
-        <!-- Основные метрики -->
-        <v-row>
-          <v-col v-for="(metric, index) in quickMetrics" :key="index" cols="12" sm="6" md="3">
-            <v-card
-              class="metric-card"
-              :class="`metric-${index}`"
-              v-animate-onscroll="'animated fadeInUp'"
-              :style="`animation-delay: ${index * 0.1}s`"
-            >
-              <v-card-text>
-                <div class="metric-title">{{ metric.title }}</div>
-                <div class="metric-value">
-                  <template v-if="!loadingQuickMetrics">
-                    {{ metric.value }}
-                    <span v-if="metric.unit" class="metric-unit">{{ metric.unit }}</span>
-                  </template>
-                  <v-skeleton-loader v-else type="text" width="80%"></v-skeleton-loader>
-                </div>
-                <v-divider class="my-3"></v-divider>
-                <div class="metric-change">
-                  <v-icon small :color="metric.change >= 0 ? 'success' : 'error'">
-                    {{ metric.change >= 0 ? 'mdi-arrow-up' : 'mdi-arrow-down' }}
-                  </v-icon>
-                  <span
-                    :class="{
-                      'success--text': metric.change >= 0,
-                      'error--text': metric.change < 0
-                    }"
-                  >
-                    {{ Math.abs(metric.change) }}% {{ metric.change >= 0 ? 'рост' : 'снижение' }}
-                  </span>
-                </div>
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
-
-        <!-- Основные графики -->
-        <v-row class="mt-4">
-          <v-col cols="12" lg="8">
-            <v-card
-              class="main-chart-card"
-              v-animate-onscroll="'animated fadeInUp'"
-              style="animation-delay: 0.2s"
-            >
-              <v-card-title class="chart-title">
-                Активность за период
-                <v-spacer></v-spacer>
-                <v-select
-                  v-model="activityPeriod"
-                  :items="periods"
-                  outlined
-                  dense
-                  hide-details
-                  label="Период"
-                  class="period-select"
-                  @change="fetchActivityData"
-                ></v-select>
-              </v-card-title>
-              <v-card-text>
-                <BarChart
-                  v-if="activityData.labels.length && !loadingActivity"
-                  :chart-data="activityData"
-                  :chart-options="activityOptions"
-                  height="350"
-                />
-                <v-skeleton-loader v-else type="image" height="350"></v-skeleton-loader>
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
-
-        <!-- Таблица последних задач -->
-        <v-row class="mt-4">
-          <v-col cols="12">
-            <v-card
-              class="table-card"
-              v-animate-onscroll="'animated fadeInUp'"
-              style="animation-delay: 0.5s"
-            >
-              <v-card-title class="chart-title">
-                Последние задачи
-                <v-spacer></v-spacer>
-                <v-text-field
-                  v-model="taskSearch"
-                  append-icon="mdi-magnify"
-                  label="Поиск"
-                  single-line
-                  hide-details
-                  class="search-field"
-                ></v-text-field>
-              </v-card-title>
-              <v-card-text>
-                <v-data-table
-                  :headers="taskHeaders"
-                  :items="filteredTasks"
-                  :search="taskSearch"
-                  :loading="loadingTasks"
-                  loading-text="Загрузка задач..."
-                  no-data-text="Нет задач для отображения"
-                  :items-per-page="5"
-                  class="elevation-0"
-                >
-                  <template v-slot:item.status="{ item }">
-                    <v-chip small :color="getStatusColor(item.status)" dark>
-                      {{ item.status }}
-                    </v-chip>
-                  </template>
-                  <template v-slot:item.actions="{ item }">
-                    <v-btn icon small @click="viewTask(item)">
-                      <v-icon>mdi-eye</v-icon>
-                    </v-btn>
-                  </template>
-                </v-data-table>
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
+            <div class="text-h4 font-weight-bold" :class="card.valueClass">
+              {{ w.stats.data ? card.value : '—' }}
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+      <v-col v-if="w.stats.error" cols="12">
+        <v-alert type="warning" variant="tonal" density="compact">
+          Статистика задач недоступна: {{ w.stats.error }}
+        </v-alert>
       </v-col>
     </v-row>
-  </v-container>
+
+    <v-row>
+      <!-- Активность -->
+      <v-col cols="12" lg="8">
+        <v-card class="h-100" :loading="w.activity.loading">
+          <v-card-title class="d-flex flex-wrap align-center ga-2">
+            Активность по задачам
+            <v-spacer />
+            <v-btn-toggle v-model="activityDays" mandatory density="compact" variant="outlined" color="primary" divided>
+              <v-btn :value="7" size="small">7 дн.</v-btn>
+              <v-btn :value="30" size="small">30 дн.</v-btn>
+              <v-btn :value="90" size="small">90 дн.</v-btn>
+            </v-btn-toggle>
+          </v-card-title>
+          <v-card-text>
+            <div v-if="activityHasData" class="chart-box">
+              <Line :data="activityChart" :options="activityOptions" />
+            </div>
+            <WidgetEmpty
+              v-else
+              :loading="w.activity.loading"
+              :error="w.activity.error"
+              empty-text="За период не было созданных и завершённых задач"
+              @retry="w.activity.load"
+            />
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <!-- Подсказки -->
+      <v-col cols="12" lg="4">
+        <v-card class="h-100" :loading="w.suggestions.loading">
+          <v-card-title class="d-flex align-center">
+            <v-icon icon="mdi-lightbulb-on-outline" color="warning" class="mr-2" />
+            Обратите внимание
+          </v-card-title>
+          <v-list v-if="w.suggestions.data?.items.length" density="compact" class="py-0">
+            <v-list-item
+              v-for="s in w.suggestions.data.items.slice(0, 6)"
+              :key="s.task_id"
+              :to="{ name: 'task-detail', params: { id: s.task_id } }"
+              :title="s.title"
+              :subtitle="s.reason"
+            >
+              <template #prepend>
+                <v-icon v-bind="reasonIcon(s.reason)" />
+              </template>
+            </v-list-item>
+          </v-list>
+          <v-card-text v-else>
+            <WidgetEmpty
+              :loading="w.suggestions.loading"
+              :error="w.suggestions.error"
+              empty-text="Срочных и просроченных задач нет"
+              empty-icon="mdi-check-circle-outline"
+              @retry="w.suggestions.load"
+            />
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <!-- Последние задачи -->
+      <v-col cols="12" lg="8">
+        <v-card class="h-100" :loading="w.recent.loading">
+          <v-card-title class="d-flex align-center">
+            Последние задачи
+            <v-spacer />
+            <v-btn variant="text" size="small" append-icon="mdi-arrow-right" :to="{ name: 'tasks' }">Все задачи</v-btn>
+          </v-card-title>
+          <v-table v-if="w.recent.data?.items.length" density="compact" hover>
+            <thead>
+              <tr>
+                <th>Задача</th>
+                <th>Статус</th>
+                <th>Срок</th>
+                <th class="d-none d-sm-table-cell">Исполнитель</th>
+                <th class="d-none d-md-table-cell">Изменена</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="t in w.recent.data.items" :key="t.id" class="clickable" @click="openTask(t.id)">
+                <td class="font-weight-medium">{{ t.title }}</td>
+                <td>
+                  <v-chip size="x-small" :color="STATUS[t.status]?.color" variant="flat">
+                    {{ STATUS[t.status]?.title ?? t.status }}
+                  </v-chip>
+                </td>
+                <td class="text-no-wrap">{{ t.due_date ? formatDate(t.due_date) : '—' }}</td>
+                <td class="d-none d-sm-table-cell">{{ t.assignee_name || '—' }}</td>
+                <td class="d-none d-md-table-cell text-no-wrap">{{ formatDateTime(t.updated_at) }}</td>
+              </tr>
+            </tbody>
+          </v-table>
+          <v-card-text v-else>
+            <WidgetEmpty
+              :loading="w.recent.loading"
+              :error="w.recent.error"
+              empty-text="Задач пока нет"
+              @retry="w.recent.load"
+            />
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <!-- Финансы за месяц -->
+      <v-col cols="12" lg="4">
+        <v-card class="h-100" :loading="w.finance.loading">
+          <v-card-title class="d-flex align-center">
+            Финансы за {{ monthLabel }}
+            <v-spacer />
+            <v-btn icon="mdi-arrow-right" variant="text" size="small" aria-label="Финансы" :to="{ name: 'finance' }" />
+          </v-card-title>
+          <v-card-text>
+            <template v-if="w.finance.data">
+              <div class="d-flex justify-space-between mb-2">
+                <span class="text-medium-emphasis">Доходы</span>
+                <span class="text-success font-weight-medium">{{ formatMoney(w.finance.data.income) }}</span>
+              </div>
+              <div class="d-flex justify-space-between mb-2">
+                <span class="text-medium-emphasis">Расходы</span>
+                <span class="text-error font-weight-medium">{{ formatMoney(w.finance.data.expense) }}</span>
+              </div>
+              <v-divider class="my-2" />
+              <div class="d-flex justify-space-between">
+                <span class="font-weight-medium">Прибыль</span>
+                <span class="text-h6 font-weight-bold" :class="w.finance.data.profit < 0 ? 'text-error' : 'text-primary'">
+                  {{ formatMoney(w.finance.data.profit) }}
+                </span>
+              </div>
+            </template>
+            <WidgetEmpty v-else :loading="w.finance.loading" :error="w.finance.error" @retry="w.finance.load" />
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <!-- Встречи на 7 дней -->
+      <v-col cols="12" md="6">
+        <v-card class="h-100" :loading="w.meetings.loading">
+          <v-card-title class="d-flex align-center">
+            <v-icon icon="mdi-calendar-clock" class="mr-2" />
+            Встречи на неделю
+            <v-spacer />
+            <v-btn variant="text" size="small" append-icon="mdi-arrow-right" :to="{ name: 'meetings' }">Все</v-btn>
+          </v-card-title>
+          <v-list v-if="w.meetings.data?.items.length" density="compact" class="py-0">
+            <v-list-item v-for="m in w.meetings.data.items" :key="m.id" :title="m.title">
+              <template #prepend>
+                <v-chip size="small" variant="tonal" color="primary" class="mr-3 text-no-wrap">
+                  {{ meetingWhen(m.start_at) }}
+                </v-chip>
+              </template>
+              <v-list-item-subtitle v-if="m.location">
+                <v-icon icon="mdi-map-marker-outline" size="x-small" /> {{ m.location }}
+              </v-list-item-subtitle>
+            </v-list-item>
+            <v-list-item v-if="w.meetings.data.total > w.meetings.data.items.length" class="text-caption text-medium-emphasis">
+              и ещё {{ w.meetings.data.total - w.meetings.data.items.length }}…
+            </v-list-item>
+          </v-list>
+          <v-card-text v-else>
+            <WidgetEmpty
+              :loading="w.meetings.loading"
+              :error="w.meetings.error"
+              empty-text="В ближайшие 7 дней встреч нет"
+              empty-icon="mdi-calendar-blank-outline"
+              @retry="w.meetings.load"
+            />
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <!-- Налоговые сроки -->
+      <v-col cols="12" md="6">
+        <v-card class="h-100" :loading="w.tax.loading">
+          <v-card-title class="d-flex align-center">
+            <v-icon icon="mdi-bank-outline" class="mr-2" />
+            Ближайшие налоговые сроки
+          </v-card-title>
+          <v-list v-if="w.tax.data?.length" density="compact" class="py-0">
+            <v-list-item v-for="item in w.tax.data" :key="item.date + item.title" :title="item.title" :subtitle="item.description">
+              <template #prepend>
+                <v-chip size="small" variant="tonal" :color="daysUntil(item.date) <= 7 ? 'error' : 'warning'" class="mr-3 text-no-wrap">
+                  {{ formatDate(item.date) }}
+                </v-chip>
+              </template>
+              <template #append>
+                <span class="text-caption text-medium-emphasis text-no-wrap">{{ daysUntilText(item.date) }}</span>
+              </template>
+            </v-list-item>
+          </v-list>
+          <v-card-text v-else>
+            <WidgetEmpty
+              :loading="w.tax.loading"
+              :error="w.tax.error"
+              empty-text="Ближайших налоговых сроков нет"
+              @retry="w.tax.load"
+            />
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+  </div>
 </template>
 
-<script>
-import { ref, computed } from 'vue';
+<script setup>
+/** Дашборд: независимые виджеты (ошибка одного не ломает остальные). */
+import { computed, defineComponent, h, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import BarChart from '@/components/BarChart.vue';
-import { getDashboardMetrics, getActivityData, getRecentTasks } from '@/api/index.js';
-import { useAuthStore } from '@/stores/auth';
+import dayjs from 'dayjs';
+import { Line } from 'vue-chartjs';
+import {
+  CategoryScale,
+  Chart as ChartJS,
+  Filler,
+  Legend,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Tooltip,
+} from 'chart.js';
+// Точечные импорты: barrel 'vuetify/components' затянул бы в чанк все компоненты Vuetify и их стили.
+import { VBtn } from 'vuetify/components/VBtn';
+import { VIcon } from 'vuetify/components/VIcon';
+import { VProgressCircular } from 'vuetify/components/VProgressCircular';
+import {
+  errorMessage,
+  getFinanceSummary,
+  getTaskActivity,
+  getTaskStats,
+  getTaskSuggestions,
+  getTaxCalendar,
+  listMeetings,
+  listTasks,
+} from '@/api';
+import { useAuthStore } from '@/stores/auth.js';
+import { formatDate, formatDateTime, formatMoney } from '@/utils/format.js';
 
-export default {
-  name: 'DashboardPage',
-  components: {
-    BarChart
-  },
-  setup() {
-    const router = useRouter();
-    const authStore = useAuthStore();
+ChartJS.register(LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend, Filler);
 
-    const loadingQuickMetrics = ref(true);
-    const loadingActivity = ref(true);
-    const loadingTasks = ref(true);
+const router = useRouter();
+const auth = useAuthStore();
 
-    const snackbar = ref({
-      show: false,
-      title: '',
-      message: '',
-      color: 'error',
-      icon: 'mdi-alert-circle',
-      timeout: 6000
-    });
-
-    const quickMetrics = ref([
-      { title: 'Всего задач', value: 0, change: 0, unit: 'шт.' },
-      { title: 'Новых клиентов', value: 0, change: 0, unit: 'чел.' },
-      { title: 'Общая сумма', value: 0, change: 0, unit: '₽' },
-      { title: 'Продуктивность', value: 0, change: 0, unit: '%' }
-    ]);
-
-    const activityPeriod = ref('month');
-    const periods = ref([
-      { text: 'Неделя', value: 'week' },
-      { text: 'Месяц', value: 'month' },
-      { text: 'Квартал', value: 'quarter' }
-    ]);
-    const activityData = ref({
-      labels: [],
-      datasets: []
-    });
-    const activityOptions = ref({
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top' },
-        tooltip: {
-          callbacks: {
-            label: (context) => `${context.dataset.label}: ${context.raw} задач`
-          }
-        }
-      },
-      scales: {
-        y: { beginAtZero: true, title: { display: true, text: 'Количество задач' } },
-        x: { title: { display: true, text: 'Дата' } }
-      }
-    });
-
-    const taskSearch = ref('');
-    const taskHeaders = ref([
-      { text: 'Название', value: 'title' },
-      { text: 'Статус', value: 'status' },
-      { text: 'Срок', value: 'due_date' },
-      { text: 'Действия', value: 'actions', sortable: false }
-    ]);
-    const tasks = ref([]);
-
-    const isAdmin = computed(() => authStore.user?.role === 'admin');
-
-    const filteredTasks = computed(() => {
-      return tasks.value.filter(task => {
-        const search = taskSearch.value.toLowerCase();
-        return (
-          task.title.toLowerCase().includes(search) ||
-          task.status.toLowerCase().includes(search)
-        );
-      });
-    });
-
-    const loadAllData = async () => {
-      try {
-        await Promise.all([
-          fetchQuickMetrics(),
-          fetchActivityData(),
-          fetchRecentTasks()
-        ]);
-      } catch (error) {
-        handleError('Ошибка загрузки данных', 'Не удалось загрузить данные дашборда', error);
-      }
-    };
-
-    const fetchQuickMetrics = async () => {
-      loadingQuickMetrics.value = true;
-      try {
-        const metrics = await getDashboardMetrics();
-        quickMetrics.value = [
-          { title: 'Всего задач', value: metrics.completed_tasks, change: metrics.tasks_change, unit: 'шт.' },
-          { title: 'Новых клиентов', value: metrics.new_clients, change: metrics.clients_change, unit: 'чел.' },
-          { title: 'Общая сумма', value: metrics.total_amount.toLocaleString(), change: metrics.amount_change, unit: '₽' },
-          { title: 'Продуктивность', value: metrics.productivity, change: metrics.productivity_change, unit: '%' }
-        ];
-      } catch (error) {
-        throw error;
-      } finally {
-        loadingQuickMetrics.value = false;
-      }
-    };
-
-    const fetchActivityData = async () => {
-      loadingActivity.value = true;
-      try {
-        const data = await getActivityData(activityPeriod.value);
-        activityData.value = {
-          labels: data.labels,
-          datasets: [
-            {
-              label: 'Завершённые задачи',
-              backgroundColor: '#42A5F5',
-              borderColor: '#1976D2',
-              borderWidth: 2,
-              data: data.completed
-            },
-            {
-              label: 'Созданные задачи',
-              backgroundColor: '#66BB6A',
-              borderColor: '#388E3C',
-              borderWidth: 2,
-              data: data.created
-            }
-          ]
-        };
-      } catch (error) {
-        throw error;
-      } finally {
-        loadingActivity.value = false;
-      }
-    };
-
-    const fetchRecentTasks = async () => {
-      loadingTasks.value = true;
-      try {
-        tasks.value = await getRecentTasks();
-      } catch (error) {
-        throw error;
-      } finally {
-        loadingTasks.value = false;
-      }
-    };
-
-    const viewTask = (task) => {
-      router.push(`/tasks/${task.id}`);
-    };
-
-    const getStatusColor = (status) => {
-      const statusColors = {
-        'Новая': 'blue',
-        'В работе': 'orange',
-        'Завершена': 'green',
-        'Отменена': 'red'
-      };
-      return statusColors[status] || 'grey';
-    };
-
-    const handleError = (title, message, error) => {
-      console.error(title, error);
-      
-      let detailedMessage = message;
-      if (error.response) {
-        switch (error.response.status) {
-          case 401:
-            detailedMessage = 'Требуется авторизация';
-            router.push('/login');
-            break;
-          case 402:
-            detailedMessage = 'Подписка истекла. Оформите подписку для продолжения.';
-            break;
-          case 403:
-            detailedMessage = 'У вас нет прав для просмотра этой информации';
-            break;
-          case 404:
-            detailedMessage = 'Данные не найдены';
-            break;
-          case 500:
-            detailedMessage = 'Ошибка сервера. Пожалуйста, попробуйте позже.';
-            break;
-          default:
-            detailedMessage = error.response.data?.message || error.response.data?.detail || message;
-        }
-      } else if (error.message) {
-        detailedMessage = error.message;
-      }
-      
-      showError(title, detailedMessage);
-    };
-
-    const showError = (title, message) => {
-      snackbar.value = {
-        show: true,
-        title,
-        message,
-        color: 'error',
-        icon: 'mdi-alert-circle',
-        timeout: 6000
-      };
-    };
-
-    const showSuccess = (title, message) => {
-      snackbar.value = {
-        show: true,
-        title,
-        message,
-        color: 'success',
-        icon: 'mdi-check-circle',
-        timeout: 4000
-      };
-    };
-
-    loadAllData();
-
-    return {
-      loadingQuickMetrics,
-      loadingActivity,
-      loadingTasks,
-      snackbar,
-      quickMetrics,
-      activityPeriod,
-      periods,
-      activityData,
-      activityOptions,
-      taskSearch,
-      taskHeaders,
-      tasks,
-      isAdmin,
-      filteredTasks,
-      loadAllData,
-      fetchQuickMetrics,
-      fetchActivityData,
-      fetchRecentTasks,
-      viewTask,
-      getStatusColor,
-      handleError,
-      showError,
-      showSuccess,
-      router
-    };
-  }
+const STATUS = {
+  todo: { title: 'К выполнению', color: 'grey' },
+  in_progress: { title: 'В работе', color: 'primary' },
+  done: { title: 'Выполнена', color: 'success' },
+  cancelled: { title: 'Отменена', color: 'error' },
 };
+const DATE = 'YYYY-MM-DD';
+
+/** Заглушка виджета: загрузка / ошибка (503 — «не настроено») / пусто. */
+const WidgetEmpty = defineComponent({
+  name: 'WidgetEmpty',
+  props: {
+    loading: Boolean,
+    error: { type: String, default: '' },
+    emptyText: { type: String, default: 'Нет данных' },
+    emptyIcon: { type: String, default: 'mdi-information-outline' },
+  },
+  emits: ['retry'],
+  setup(props, { emit }) {
+    return () => {
+      if (props.loading) {
+        return h('div', { class: 'text-center py-6' }, [h(VProgressCircular, { indeterminate: true, color: 'primary' })]);
+      }
+      if (props.error) {
+        return h('div', { class: 'text-center py-6 text-medium-emphasis' }, [
+          h(VIcon, { icon: 'mdi-cloud-off-outline', size: 32, class: 'mb-1' }),
+          h('div', { class: 'text-body-2' }, 'Нет данных'),
+          h('div', { class: 'text-caption mb-2' }, props.error),
+          h(VBtn, { size: 'small', variant: 'tonal', onClick: () => emit('retry') }, () => 'Повторить'),
+        ]);
+      }
+      return h('div', { class: 'text-center py-6 text-medium-emphasis' }, [
+        h(VIcon, { icon: props.emptyIcon, size: 32, class: 'mb-1' }),
+        h('div', { class: 'text-body-2' }, props.emptyText),
+      ]);
+    };
+  },
+});
+
+/**
+ * Состояние одного виджета. Ошибки не пробрасываются — показываются в самом виджете.
+ * @template T
+ * @param {() => Promise<T>} loader
+ */
+function useWidget(loader) {
+  const state = reactive({
+    data: null,
+    loading: false,
+    error: '',
+    async load() {
+      state.loading = true;
+      state.error = '';
+      try {
+        state.data = await loader();
+      } catch (err) {
+        state.data = null;
+        state.error = err?.response?.status === 503 ? 'Сервис не настроен на сервере' : errorMessage(err);
+      } finally {
+        state.loading = false;
+      }
+    },
+  });
+  return state;
+}
+
+// ------------------------------------------------------------------ виджеты
+const activityDays = ref(30);
+
+async function loadTaxDeadlines() {
+  const today = dayjs().format(DATE);
+  const year = dayjs().year();
+  let items = (await getTaxCalendar({ year })).items.filter((i) => i.date >= today);
+  if (items.length < 3) {
+    try {
+      items = items.concat((await getTaxCalendar({ year: year + 1 })).items);
+    } catch {
+      // календаря на следующий год может не быть — показываем то, что есть
+    }
+  }
+  return items.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+}
+
+const w = {
+  stats: useWidget(() => getTaskStats()),
+  activity: useWidget(() => getTaskActivity({ days: activityDays.value })),
+  recent: useWidget(() => listTasks({ sort: '-updated_at', limit: 5 })),
+  suggestions: useWidget(() => getTaskSuggestions()),
+  finance: useWidget(() =>
+    getFinanceSummary({
+      date_from: dayjs().startOf('month').format(DATE),
+      date_to: dayjs().endOf('month').format(DATE),
+    }),
+  ),
+  tax: useWidget(loadTaxDeadlines),
+  meetings: useWidget(() =>
+    listMeetings({
+      from: dayjs().toISOString(),
+      to: dayjs().add(7, 'day').endOf('day').toISOString(),
+      limit: 8,
+    }),
+  ),
+};
+
+const refreshing = ref(false);
+
+async function loadAll() {
+  refreshing.value = true;
+  await Promise.allSettled(Object.values(w).map((widget) => widget.load()));
+  refreshing.value = false;
+}
+
+watch(activityDays, () => w.activity.load());
+
+// ------------------------------------------------------------------ заголовок
+const greeting = computed(() => {
+  const hour = dayjs().hour();
+  const part = hour < 5 ? 'Доброй ночи' : hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
+  const name = auth.user?.full_name?.split(/\s+/)[0];
+  return name ? `${part}, ${name}!` : `${part}!`;
+});
+const todayLabel = dayjs().format('dddd, D MMMM YYYY');
+const monthLabel = dayjs().format('MMMM');
+
+// ------------------------------------------------------------------ статистика
+const statCards = computed(() => {
+  const s = w.stats.data;
+  return [
+    {
+      key: 'total', title: 'Всего задач', icon: 'mdi-format-list-checks', color: 'primary',
+      value: s?.total ?? 0, to: { name: 'tasks' },
+    },
+    {
+      key: 'in_progress', title: 'В работе', icon: 'mdi-progress-clock', color: 'primary',
+      value: s?.by_status.in_progress ?? 0, to: { name: 'tasks', query: { status: 'in_progress' } },
+    },
+    {
+      key: 'overdue', title: 'Просрочено', icon: 'mdi-alert-circle-outline', color: 'error',
+      value: s?.overdue ?? 0, valueClass: s?.overdue ? 'text-error' : '',
+      to: { name: 'tasks', query: { due: 'overdue' } },
+    },
+    {
+      key: 'done_week', title: 'Выполнено за неделю', icon: 'mdi-check-all', color: 'success',
+      value: s?.completed_this_week ?? 0, to: { name: 'tasks', query: { status: 'done' } },
+    },
+  ];
+});
+
+// ------------------------------------------------------------------ график
+const activityItems = computed(() => w.activity.data?.items ?? []);
+const activityHasData = computed(() => activityItems.value.some((i) => i.created || i.completed));
+
+const activityChart = computed(() => ({
+  labels: activityItems.value.map((i) => dayjs(i.date).format('DD.MM')),
+  datasets: [
+    {
+      label: 'Создано',
+      data: activityItems.value.map((i) => i.created),
+      borderColor: '#1e88e5',
+      backgroundColor: 'rgba(30, 136, 229, 0.12)',
+      fill: true,
+      tension: 0.3,
+      pointRadius: activityItems.value.length > 31 ? 0 : 3,
+    },
+    {
+      label: 'Завершено',
+      data: activityItems.value.map((i) => i.completed),
+      borderColor: '#43a047',
+      backgroundColor: 'rgba(67, 160, 71, 0.12)',
+      fill: true,
+      tension: 0.3,
+      pointRadius: activityItems.value.length > 31 ? 0 : 3,
+    },
+  ],
+}));
+
+const activityOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: { mode: 'index', intersect: false },
+  plugins: { legend: { position: 'bottom' } },
+  scales: {
+    y: { beginAtZero: true, ticks: { precision: 0 } },
+    x: { ticks: { maxRotation: 0, autoSkip: true } },
+  },
+};
+
+// ------------------------------------------------------------------ помощники
+function openTask(id) {
+  router.push({ name: 'task-detail', params: { id } });
+}
+
+function meetingWhen(iso) {
+  const d = dayjs(iso);
+  if (d.isSame(dayjs(), 'day')) return `Сегодня ${d.format('HH:mm')}`;
+  if (d.isSame(dayjs().add(1, 'day'), 'day')) return `Завтра ${d.format('HH:mm')}`;
+  return d.format('dd, DD.MM HH:mm');
+}
+
+function reasonIcon(reason) {
+  return /просроч/i.test(reason)
+    ? { icon: 'mdi-alert-circle', color: 'error' }
+    : { icon: 'mdi-clock-alert-outline', color: 'warning' };
+}
+
+function daysUntil(date) {
+  return dayjs(date).diff(dayjs().startOf('day'), 'day');
+}
+
+function daysUntilText(date) {
+  const n = daysUntil(date);
+  if (n <= 0) return 'сегодня';
+  if (n === 1) return 'завтра';
+  return `через ${n} дн.`;
+}
+
+onMounted(loadAll);
 </script>
 
 <style scoped>
-.dashboard-container {
-  padding: 24px;
-  max-width: 1800px;
-  margin: 0 auto;
-}
-
-.dashboard-title {
-  font-size: 2.2rem;
-  font-weight: 600;
-  color: #1976d2;
-  margin-bottom: 24px;
-  text-align: center;
-  background: linear-gradient(to right, #1976d2, #2196f3);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.chart-box {
   position: relative;
-  padding-bottom: 8px;
+  height: 300px;
 }
-
-.dashboard-title::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100px;
-  height: 3px;
-  background: linear-gradient(to right, #1976d2, #2196f3);
-  border-radius: 3px;
-}
-
-.metric-card {
-  height: 100%;
-  border-radius: 12px;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  overflow: hidden;
-  position: relative;
-  border-left: 4px solid;
-}
-
-.metric-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-}
-
-.metric-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(to right, #1976d2, #2196f3);
-}
-
-.metric-0 { border-left-color: #42A5F5; }
-.metric-1 { border-left-color: #66BB6A; }
-.metric-2 { border-left-color: #FFA726; }
-.metric-3 { border-left-color: #7E57C2; }
-
-.metric-title {
-  font-size: 1rem;
-  font-weight: 500;
-  color: #546e7a;
-  margin-bottom: 8px;
-}
-
-.metric-value {
-  font-size: 1.8rem;
-  font-weight: 600;
-  color: #263238;
-  margin-bottom: 8px;
-}
-
-.metric-unit {
-  font-size: 1rem;
-  font-weight: 400;
-  color: #78909c;
-}
-
-.metric-change {
-  display: flex;
-  align-items: center;
-  font-size: 0.9rem;
-}
-
-.main-chart-card,
-.table-card {
-  border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
-  height: 100%;
-  overflow: hidden;
-}
-
-.main-chart-card:hover,
-.table-card:hover {
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
-}
-
-.chart-title {
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #263238;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #eee;
-}
-
-.period-select {
-  max-width: 150px;
-  margin-left: 12px;
-}
-
-.search-field {
-  max-width: 200px;
-}
-
-.snackbar-content {
-  display: flex;
-  align-items: center;
-}
-
-.snackbar-title {
-  font-weight: 600;
-  margin-bottom: 2px;
-}
-
-.snackbar-message {
-  font-size: 0.9rem;
-  opacity: 0.9;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.3s;
-}
-.fade-enter, .fade-leave-to {
-  opacity: 0;
-}
-
-@media (max-width: 1264px) {
-  .dashboard-container {
-    padding: 16px;
-  }
-  .dashboard-title {
-    font-size: 1.8rem;
-  }
-  .metric-value {
-    font-size: 1.5rem;
-  }
-}
-
-@media (max-width: 960px) {
-  .dashboard-title {
-    font-size: 1.6rem;
-  }
-  .metric-card {
-    margin-bottom: 16px;
-  }
-  .period-select {
-    max-width: 120px;
-  }
-}
-
-@media (max-width: 600px) {
-  .dashboard-title {
-    font-size: 1.4rem;
-    margin-bottom: 16px;
-  }
-  .chart-title {
-    font-size: 1.1rem;
-  }
-  .period-select,
-  .search-field {
-    max-width: 100%;
-    margin-left: 0;
-    margin-top: 8px;
-  }
+.clickable {
+  cursor: pointer;
 }
 </style>

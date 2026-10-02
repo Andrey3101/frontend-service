@@ -1,699 +1,350 @@
 <template>
-  <v-container class="clients-container">
-    <v-row>
-      <v-col>
-        <h1 class="clients-title">Клиенты</h1>
-        
-        <!-- Лента состояния операций -->
-        <v-snackbar
-          v-model="snackbar.show"
-          :timeout="snackbar.timeout"
-          :color="snackbar.color"
-          top
-          right
-        >
-          {{ snackbar.message }}
-          <template v-slot:action="{ attrs }">
-            <v-btn
-              icon
-              v-bind="attrs"
-              @click="snackbar.show = false"
-            >
-              <v-icon>mdi-close</v-icon>
-            </v-btn>
-          </template>
-        </v-snackbar>
-
-        <v-row class="filter-row" align="center">
-          <v-col cols="12" sm="6" md="4">
+  <div>
+    <v-card>
+      <v-card-text>
+        <v-row dense align="center" class="mb-2">
+          <v-col cols="12" md="6">
             <v-text-field
-              v-model="searchQuery"
-              label="Поиск по имени или email"
+              v-model="filters.search"
+              label="Поиск: имя, ИНН, email, телефон, контакт"
               prepend-inner-icon="mdi-magnify"
-              outlined
-              dense
               clearable
-              @input="debounceFilter"
-              :error-messages="fieldErrors.search"
-              class="search-field"
+              hide-details
+              density="compact"
             />
           </v-col>
           <v-col cols="12" sm="6" md="3">
-            <v-select
-              v-model="filter.amount"
-              :items="amountFilters"
-              label="Фильтр по сумме"
-              outlined
-              dense
-              clearable
-              @change="filterClients"
-              :error-messages="fieldErrors.filter"
-              class="filter-select"
-            />
+            <v-select v-model="filters.type" :items="TYPE_FILTER_ITEMS" label="Тип" hide-details density="compact" />
           </v-col>
-          <v-col cols="12" sm="6" md="3">
-            <v-btn 
-              color="primary" 
-              @click="openAddDialog" 
-              class="add-btn"
-              :loading="loading"
-            >
-              <v-icon left>mdi-plus</v-icon> Добавить клиента
-            </v-btn>
+          <v-col cols="12" sm="6" md="3" class="d-flex justify-end">
+            <v-btn color="primary" prepend-icon="mdi-account-plus" @click="openCreate">Новый клиент</v-btn>
           </v-col>
         </v-row>
 
-        <!-- Диалог подтверждения удаления -->
-        <v-dialog v-model="confirmDeleteDialog" max-width="400px" persistent>
-          <v-card class="dialog-card">
-            <v-card-title class="dialog-title">Подтверждение удаления</v-card-title>
-            <v-card-text>
-              Вы уверены, что хотите удалить клиента {{ clientToDelete?.name || '' }}?
-              <br><br>
-              <strong>Это действие нельзя отменить.</strong>
-            </v-card-text>
-            <v-card-actions>
-              <v-spacer></v-spacer>
-              <v-btn color="grey" text @click="confirmDeleteDialog = false">Отмена</v-btn>
-              <v-btn color="error" @click="confirmDelete" :loading="deleting">Удалить</v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-
-        <v-data-table
+        <v-data-table-server
+          v-model:page="page"
+          v-model:items-per-page="limit"
           :headers="headers"
-          :items="filteredClients"
+          :items="clients"
+          :items-length="total"
+          :items-per-page-options="[10, 20, 50, 100]"
           :loading="loading"
-          class="clients-table"
-          :items-per-page="10"
-          :footer-props="{ 'items-per-page-options': [5, 10, 20, -1] }"
+          loading-text="Загрузка…"
+          no-data-text="Клиентов нет"
+          item-value="id"
         >
-          <template v-slot:item.amount="{ item }">
-            <span>{{ item.amount !== null ? `${formatAmount(item.amount)} ₽` : '—' }}</span>
+          <template #[`item.name`]="{ item }">
+            <div class="font-weight-medium">{{ item.name }}</div>
+            <div v-if="item.contact_person" class="text-caption text-medium-emphasis">{{ item.contact_person }}</div>
           </template>
-
-          <template v-slot:item.actions="{ item }">
-            <v-tooltip top>
-              <template v-slot:activator="{ on }">
-                <v-btn 
-                  small 
-                  color="primary" 
-                  @click="openEditDialog(item)" 
-                  class="action-btn ma-1"
-                  v-on="on"
-                  :disabled="loading"
-                >
-                  <v-icon small left>mdi-pencil</v-icon>
-                  <span class="d-none d-sm-inline">Редактировать</span>
-                </v-btn>
-              </template>
-              <span>Редактировать клиента</span>
-            </v-tooltip>
-
-            <v-tooltip top>
-              <template v-slot:activator="{ on }">
-                <v-btn 
-                  small 
-                  color="error" 
-                  @click="initDeleteClient(item)" 
-                  class="action-btn ma-1"
-                  v-on="on"
-                  :disabled="loading"
-                >
-                  <v-icon small left>mdi-delete</v-icon>
-                  <span class="d-none d-sm-inline">Удалить</span>
-                </v-btn>
-              </template>
-              <span>Удалить клиента</span>
-            </v-tooltip>
+          <template #[`item.type`]="{ item }">
+            <v-chip size="small" variant="tonal">{{ typeTitle(item.type) }}</v-chip>
           </template>
-
-          <template v-slot:no-data>
-            <div class="no-data-message">
-              <v-icon large color="grey">mdi-account-question</v-icon>
-              <p>Нет данных о клиентах</p>
-              <v-btn color="primary" @click="fetchClients" :loading="loading">
-                <v-icon left>mdi-refresh</v-icon>
-                Обновить
-              </v-btn>
+          <template #[`item.inn`]="{ item }">
+            <div>{{ item.inn || '—' }}</div>
+            <div v-if="item.kpp" class="text-caption text-medium-emphasis">КПП {{ item.kpp }}</div>
+          </template>
+          <template #[`item.contacts`]="{ item }">
+            <div v-if="item.phone">{{ item.phone }}</div>
+            <div v-if="item.email" class="text-caption">
+              <a :href="`mailto:${item.email}`">{{ item.email }}</a>
+            </div>
+            <span v-if="!item.phone && !item.email">—</span>
+          </template>
+          <template #[`item.actions`]="{ item }">
+            <div class="d-flex justify-end text-no-wrap">
+              <v-btn
+                icon="mdi-chart-box-outline"
+                size="small"
+                variant="text"
+                color="primary"
+                aria-label="Анализ клиента"
+                :to="{ path: '/client-analysis', query: { client: item.id } }"
+              />
+              <v-btn icon="mdi-pencil" size="small" variant="text" aria-label="Изменить" @click="openEdit(item)" />
+              <v-btn
+                icon="mdi-delete-outline"
+                size="small"
+                variant="text"
+                color="error"
+                aria-label="Удалить"
+                @click="askDelete(item)"
+              />
             </div>
           </template>
-        </v-data-table>
-      </v-col>
-    </v-row>
+        </v-data-table-server>
+      </v-card-text>
+    </v-card>
 
-    <!-- Диалог добавления/редактирования -->
-    <v-dialog v-model="clientDialog" max-width="600px" persistent>
-      <v-card class="dialog-card">
-        <v-card-title class="dialog-title">
-          {{ editMode ? 'Редактировать клиента' : 'Добавить клиента' }}
-          <v-spacer />
-          <v-btn icon @click="closeDialog" class="close-btn" :disabled="saving">
-            <v-icon>mdi-close</v-icon>
-          </v-btn>
-        </v-card-title>
-        
+    <!-- Создание / редактирование -->
+    <v-dialog v-model="editDialog" max-width="720" persistent scrollable>
+      <v-card>
+        <v-card-title>{{ editingId ? 'Изменить клиента' : 'Новый клиент' }}</v-card-title>
+        <v-divider />
         <v-card-text>
-          <v-form v-model="formValid" ref="form">
-            <v-text-field
-              v-model="form.name"
-              label="Имя"
-              required
-              :rules="nameRules"
-              :error-messages="fieldErrors.name"
-              @input="clearFieldError('name')"
-              outlined
-              dense
-              class="form-field"
-            />
-            
-            <v-text-field
-              v-model="form.phone"
-              label="Телефон"
-              :rules="phoneRules"
-              :error-messages="fieldErrors.phone"
-              @input="clearFieldError('phone')"
-              outlined
-              dense
-              class="form-field"
-            />
-            
-            <v-text-field
-              v-model="form.email"
-              label="Email"
-              :rules="emailRules"
-              :error-messages="fieldErrors.email"
-              @input="clearFieldError('email')"
-              outlined
-              dense
-              class="form-field"
-            />
-            
-            <v-text-field
-              v-model="form.amount"
-              label="Сумма (₽)"
-              type="number"
-              :rules="amountRules"
-              :error-messages="fieldErrors.amount"
-              @input="clearFieldError('amount')"
-              outlined
-              dense
-              class="form-field"
-            />
-            
-            <v-textarea
-              v-model="form.description"
-              label="Описание"
-              :rules="descriptionRules"
-              :error-messages="fieldErrors.description"
-              @input="clearFieldError('description')"
-              outlined
-              rows="3"
-              class="form-field"
-            />
+          <v-form ref="formRef" @submit.prevent="save">
+            <v-row dense>
+              <v-col cols="12" sm="8">
+                <v-text-field
+                  v-model="form.name"
+                  :label="form.type === 'individual' ? 'ФИО *' : 'Наименование *'"
+                  :rules="[rules.required, rules.max255]"
+                />
+              </v-col>
+              <v-col cols="12" sm="4">
+                <v-select v-model="form.type" :items="TYPE_ITEMS" label="Тип" />
+              </v-col>
+              <v-col cols="12" sm="4">
+                <v-text-field
+                  v-model="form.inn"
+                  label="ИНН"
+                  :hint="innHint"
+                  persistent-hint
+                  inputmode="numeric"
+                  :rules="[rules.inn]"
+                />
+              </v-col>
+              <v-col v-if="form.type === 'company'" cols="12" sm="4">
+                <v-text-field v-model="form.kpp" label="КПП" inputmode="numeric" :rules="[rules.kpp]" />
+              </v-col>
+              <v-col v-if="form.type !== 'individual'" cols="12" sm="4">
+                <v-text-field
+                  v-model="form.ogrn"
+                  :label="form.type === 'ip' ? 'ОГРНИП' : 'ОГРН'"
+                  inputmode="numeric"
+                  :rules="[rules.ogrn]"
+                />
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field v-model="form.email" label="Email" type="email" :rules="[rules.email]" />
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field v-model="form.phone" label="Телефон" type="tel" :rules="[rules.max50]" />
+              </v-col>
+              <v-col cols="12">
+                <v-text-field v-model="form.contact_person" label="Контактное лицо" :rules="[rules.max255]" />
+              </v-col>
+              <v-col cols="12">
+                <v-textarea v-model="form.address" label="Адрес" rows="1" auto-grow />
+              </v-col>
+              <v-col cols="12">
+                <v-textarea v-model="form.notes" label="Заметки" rows="2" auto-grow />
+              </v-col>
+            </v-row>
           </v-form>
         </v-card-text>
-        
-        <v-card-actions class="dialog-actions">
-          <v-btn 
-            color="grey" 
-            text 
-            @click="closeDialog" 
-            :disabled="saving"
-          >
-            Отмена
-          </v-btn>
-          <v-btn 
-            color="primary" 
-            @click="saveClient" 
-            :disabled="!formValid || saving" 
-            :loading="saving"
-          >
-            Сохранить
-          </v-btn>
+        <v-divider />
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" :disabled="saving" @click="editDialog = false">Отмена</v-btn>
+          <v-btn color="primary" variant="flat" :loading="saving" @click="save">Сохранить</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
-  </v-container>
+
+    <!-- Подтверждение удаления -->
+    <v-dialog v-model="deleteDialog" max-width="440">
+      <v-card>
+        <v-card-title>Удалить клиента?</v-card-title>
+        <v-card-text v-if="toDelete">
+          «{{ toDelete.name }}» будет удалён. Клиента, по которому есть акты или счета, удалить нельзя.
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" :disabled="deleting" @click="deleteDialog = false">Отмена</v-btn>
+          <v-btn color="error" variant="flat" :loading="deleting" @click="confirmDelete">Удалить</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
 </template>
 
-<script>
-import { addClient, getClients, updateClient, deleteClient } from '@/api/index.js';
-import debounce from 'lodash/debounce';
+<script setup>
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { createClient, deleteClient, listClients, updateClient } from '@/api';
+import { useNotifyStore } from '@/stores/notify.js';
+import { debounce } from '@/utils/debounce.js';
 
-export default {
-  name: 'ClientsList',
-  data() {
-    return {
-      clients: [],
-      filteredClients: [],
-      loading: false,
-      saving: false,
-      deleting: false,
-      clientDialog: false,
-      confirmDeleteDialog: false,
-      editMode: false,
-      formValid: false,
-      searchQuery: '',
-      filter: { amount: null },
-      clientToDelete: null,
-      form: {
-        name: '',
-        phone: '',
-        email: '',
-        amount: null,
-        description: '',
-        client_id: null,
-      },
-      fieldErrors: {},
-      snackbar: {
-        show: false,
-        message: '',
-        color: 'success',
-        timeout: 5000
-      },
-      headers: [
-        { text: 'Имя', value: 'name', sortable: true },
-        { text: 'Телефон', value: 'phone', sortable: true },
-        { text: 'Email', value: 'email', sortable: true },
-        { text: 'Сумма', value: 'amount', sortable: true },
-        { text: 'Описание', value: 'description', sortable: false },
-        { text: 'Действия', value: 'actions', sortable: false, align: 'right' },
-      ],
-      amountFilters: [
-        { text: 'Все', value: null },
-        { text: 'До 10,000 ₽', value: '0-10000' },
-        { text: '10,000 - 50,000 ₽', value: '10000-50000' },
-        { text: 'Более 50,000 ₽', value: '50000+' },
-      ],
-      nameRules: [
-        v => !!v || 'Имя обязательно',
-        v => (v && v.length <= 100) || 'Максимум 100 символов'
-      ],
-      phoneRules: [
-        v => !v || /^[\d\s+\-()]+$/.test(v) || 'Некорректный номер телефона'
-      ],
-      emailRules: [
-        v => !v || /.+@.+\..+/.test(v) || 'Некорректный email'
-      ],
-      amountRules: [
-        v => !v || v >= 0 || 'Сумма не может быть отрицательной'
-      ],
-      descriptionRules: [
-        v => !v || v.length <= 500 || 'Максимум 500 символов'
-      ],
-      debounceFilter: null
-    };
-  },
-  created() {
-    this.debounceFilter = debounce(this.filterClients, 500);
-    this.fetchClients();
-  },
-  methods: {
-    async fetchClients() {
-      this.loading = true;
-      this.clearErrors();
-      
-      try {
-        const filters = {};
-        if (this.searchQuery) filters.search = this.searchQuery;
-        if (this.filter.amount) {
-          const [min, max] = this.filter.amount.split('-');
-          filters.amount_min = min || 0;
-          filters.amount_max = max || (this.filter.amount === '50000+' ? null : max);
-        }
-        
-        const response = await getClients(filters);
-        
-        if (response.error) {
-          throw new Error(response.error);
-        }
-        
-        this.clients = response.clients || [];
-        this.filteredClients = this.clients;
-        
-      } catch (error) {
-        this.handleError(
-          error,
-          'Не удалось загрузить клиентов',
-          'Произошла ошибка при загрузке списка клиентов. Пожалуйста, попробуйте позже.'
-        );
-      } finally {
-        this.loading = false;
-      }
-    },
-    
-    filterClients() {
-      this.fetchClients();
-    },
-    
-    openAddDialog() {
-      this.editMode = false;
-      this.form = { 
-        name: '', 
-        phone: '', 
-        email: '', 
-        amount: null, 
-        description: '', 
-        client_id: null 
-      };
-      this.clientDialog = true;
-      this.$nextTick(() => {
-        if (this.$refs.form) {
-          this.$refs.form.resetValidation();
-        }
-      });
-    },
-    
-    openEditDialog(client) {
-      this.editMode = true;
-      this.form = { 
-        ...client, 
-        amount: client.amount !== null ? client.amount : null 
-      };
-      this.clientDialog = true;
-      this.$nextTick(() => {
-        if (this.$refs.form) {
-          this.$refs.form.resetValidation();
-        }
-      });
-    },
-    
-    closeDialog() {
-      if (!this.saving) {
-        this.clientDialog = false;
-        this.clearErrors();
-      }
-    },
-    
-    initDeleteClient(client) {
-      this.clientToDelete = client;
-      this.confirmDeleteDialog = true;
-    },
-    
-    async confirmDelete() {
-      if (!this.clientToDelete) return;
-      
-      this.deleting = true;
-      try {
-        const response = await deleteClient(this.clientToDelete.client_id);
-        
-        if (response.error) {
-          throw new Error(response.error);
-        }
-        
-        this.showSnackbar('Клиент успешно удалён', 'success');
-        await this.fetchClients();
-        this.confirmDeleteDialog = false;
-        this.clientToDelete = null;
-        
-      } catch (error) {
-        this.handleError(
-          error,
-          'Не удалось удалить клиента',
-          'Произошла ошибка при удалении клиента. Пожалуйста, попробуйте позже.'
-        );
-      } finally {
-        this.deleting = false;
-      }
-    },
-    
-    async saveClient() {
-      if (!this.formValid) return;
-      
-      this.saving = true;
-      this.clearErrors();
-      
-      try {
-        let response;
-        
-        if (this.editMode) {
-          response = await updateClient(this.form.client_id, this.form);
-        } else {
-          response = await addClient(this.form);
-        }
-        
-        if (response.error) {
-          if (response.errors) {
-            this.fieldErrors = response.errors;
-            throw new Error('Проверьте правильность заполнения полей');
-          }
-          throw new Error(response.error);
-        }
-        
-        this.showSnackbar(
-          this.editMode ? 'Клиент успешно обновлён' : 'Клиент успешно добавлен',
-          'success'
-        );
-        
-        this.clientDialog = false;
-        await this.fetchClients();
-        
-      } catch (error) {
-        this.handleError(
-          error,
-          this.editMode ? 'Ошибка обновления клиента' : 'Ошибка добавления клиента',
-          'Произошла ошибка при сохранении данных клиента. Пожалуйста, проверьте введённые данные и попробуйте снова.'
-        );
-      } finally {
-        this.saving = false;
-      }
-    },
-    
-    formatAmount(amount) {
-      return new Intl.NumberFormat('ru-RU').format(amount);
-    },
-    
-    handleError(error, defaultMessage) {
-      console.error('Error:', error);
-      
-      let message = defaultMessage;
-      
-      if (error.response) {
-        switch(error.response.status) {
-          case 400:
-            message = 'Некорректные данные';
-            if (error.response.data?.errors) {
-              this.fieldErrors = error.response.data.errors;
-            }
-            break;
-          case 401:
-            message = 'Требуется авторизация';
-            this.$router.push('/login');
-            break;
-          case 403:
-            message = 'Доступ запрещен';
-            break;
-          case 404:
-            message = 'Данные не найдены';
-            break;
-          case 500:
-            message = 'Ошибка сервера';
-            break;
-          default:
-            message = error.response.data?.message || 
-                     error.response.data?.detail || 
-                     defaultMessage;
-        }
-      } else if (error.request) {
-        message = 'Проблемы с соединением';
-      } else {
-        message = error.message || defaultMessage;
-      }
-      
-      this.showSnackbar(message, 'error');
-    },
-    
-    showSnackbar(message, color = 'success') {
-      this.snackbar = {
-        show: true,
-        message,
-        color,
-        timeout: 5000
-      };
-    },
-    
-    clearErrors() {
-      this.fieldErrors = {};
-    },
-    
-    clearFieldError(field) {
-      if (this.fieldErrors[field]) {
-        delete this.fieldErrors[field];
-      }
-    }
+const notify = useNotifyStore();
+
+const TYPE_ITEMS = [
+  { title: 'Организация', value: 'company' },
+  { title: 'ИП', value: 'ip' },
+  { title: 'Физическое лицо', value: 'individual' },
+];
+const TYPE_FILTER_ITEMS = [{ title: 'Все', value: '' }, ...TYPE_ITEMS];
+
+function typeTitle(type) {
+  return TYPE_ITEMS.find((t) => t.value === type)?.title ?? type;
+}
+
+// ------------------------------------------------------------------ список
+const headers = [
+  { title: 'Клиент', key: 'name', sortable: false },
+  { title: 'Тип', key: 'type', sortable: false, width: 150 },
+  { title: 'ИНН', key: 'inn', sortable: false, width: 150 },
+  { title: 'Контакты', key: 'contacts', sortable: false },
+  { title: '', key: 'actions', sortable: false, align: 'end', width: 140 },
+];
+
+const filters = reactive({ search: '', type: '' });
+const clients = ref([]);
+const total = ref(0);
+const page = ref(1);
+const limit = ref(20);
+const loading = ref(false);
+
+let requestSeq = 0;
+async function load() {
+  const seq = ++requestSeq;
+  loading.value = true;
+  try {
+    const data = await listClients({
+      search: filters.search?.trim(),
+      type: filters.type,
+      page: page.value,
+      limit: limit.value,
+    });
+    if (seq !== requestSeq) return;
+    clients.value = data.items;
+    total.value = data.total;
+  } catch (err) {
+    if (seq === requestSeq) notify.error(err);
+  } finally {
+    if (seq === requestSeq) loading.value = false;
   }
+}
+
+function reloadFromFirstPage() {
+  if (page.value !== 1) page.value = 1;
+  else load();
+}
+
+watch([page, limit], load);
+watch(() => filters.type, reloadFromFirstPage);
+const debouncedReload = debounce(reloadFromFirstPage, 400);
+watch(() => filters.search, debouncedReload);
+// Отложенный вызов debounce после ухода со страницы дал бы лишний запрос.
+onUnmounted(() => debouncedReload.cancel());
+
+// ------------------------------------------------------------------ форма
+const editDialog = ref(false);
+const editingId = ref(null);
+const saving = ref(false);
+const formRef = ref(null);
+
+const FIELDS = ['name', 'type', 'inn', 'kpp', 'ogrn', 'email', 'phone', 'address', 'contact_person', 'notes'];
+
+function emptyForm() {
+  return {
+    name: '',
+    type: 'company',
+    inn: '',
+    kpp: '',
+    ogrn: '',
+    email: '',
+    phone: '',
+    address: '',
+    contact_person: '',
+    notes: '',
+  };
+}
+const form = reactive(emptyForm());
+
+const innHint = computed(() => (form.type === 'company' ? 'У организации 10 цифр' : 'У ИП и физлица 12 цифр'));
+
+const digits = (v) => String(v ?? '').trim();
+const rules = {
+  required: (v) => Boolean(v && String(v).trim()) || 'Обязательное поле',
+  max50: (v) => !v || String(v).length <= 50 || 'Не более 50 символов',
+  max255: (v) => !v || String(v).length <= 255 || 'Не более 255 символов',
+  inn: (v) => !digits(v) || /^(\d{10}|\d{12})$/.test(digits(v)) || 'ИНН — 10 или 12 цифр',
+  kpp: (v) => !digits(v) || /^\d{9}$/.test(digits(v)) || 'КПП — 9 цифр',
+  ogrn: (v) => !digits(v) || /^(\d{13}|\d{15})$/.test(digits(v)) || 'ОГРН — 13 цифр, ОГРНИП — 15 цифр',
+  email: (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).trim()) || 'Некорректный email',
 };
+
+// Смена типа: очистить неприменимые поля.
+watch(
+  () => form.type,
+  (type) => {
+    if (type !== 'company') form.kpp = '';
+    if (type === 'individual') form.ogrn = '';
+  },
+);
+
+function openCreate() {
+  editingId.value = null;
+  Object.assign(form, emptyForm());
+  editDialog.value = true;
+  formRef.value?.resetValidation();
+}
+
+/** @param {import('@/api/types.js').Client} client */
+function openEdit(client) {
+  editingId.value = client.id;
+  const values = emptyForm();
+  for (const key of FIELDS) values[key] = client[key] ?? values[key];
+  Object.assign(form, values);
+  editDialog.value = true;
+}
+
+function buildPayload() {
+  const payload = {};
+  for (const key of FIELDS) {
+    const value = form[key];
+    payload[key] = typeof value === 'string' ? value.trim() : value;
+  }
+  return payload;
+}
+
+async function save() {
+  const { valid } = await formRef.value.validate();
+  if (!valid) return;
+  saving.value = true;
+  try {
+    const payload = buildPayload();
+    if (editingId.value) {
+      await updateClient(editingId.value, payload);
+      notify.success('Клиент сохранён');
+    } else {
+      await createClient(payload);
+      notify.success('Клиент добавлен');
+    }
+    editDialog.value = false;
+    await load();
+  } catch (err) {
+    notify.error(err);
+  } finally {
+    saving.value = false;
+  }
+}
+
+// ------------------------------------------------------------------ удаление
+const deleteDialog = ref(false);
+const toDelete = ref(null);
+const deleting = ref(false);
+
+function askDelete(client) {
+  toDelete.value = client;
+  deleteDialog.value = true;
+}
+
+async function confirmDelete() {
+  if (!toDelete.value) return;
+  deleting.value = true;
+  try {
+    await deleteClient(toDelete.value.id);
+    notify.success('Клиент удалён');
+    deleteDialog.value = false;
+    if (clients.value.length === 1 && page.value > 1) page.value -= 1;
+    else await load();
+  } catch (err) {
+    notify.error(err); // 409 — есть акты/счета: текст приходит с сервера
+  } finally {
+    deleting.value = false;
+  }
+}
+
+onMounted(load);
 </script>
-
-<style scoped>
-.clients-container {
-  padding: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
-  background: #f5f7fa;
-  border-radius: 12px;
-}
-
-.clients-title {
-  font-size: 2rem;
-  font-weight: 500;
-  color: #1976d2;
-  margin-bottom: 20px;
-  text-align: center;
-}
-
-.filter-row {
-  margin-bottom: 20px;
-}
-
-.search-field,
-.filter-select {
-  background: #fff;
-  border-radius: 8px;
-}
-
-.add-btn {
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  text-transform: none;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-}
-
-.add-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.clients-table {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-}
-
-.clients-table :deep(.v-data-table-header th) {
-  background-color: #e3f2fd;
-  color: #0d47a1;
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-.clients-table :deep(tr:hover) {
-  background-color: #f5f7fa !important;
-}
-
-.action-btn {
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  text-transform: none;
-  border-radius: 6px;
-  transition: all 0.3s ease;
-}
-
-.action-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.no-data-message {
-  text-align: center;
-  padding: 40px 0;
-  color: #78909c;
-}
-
-.no-data-message p {
-  margin: 16px 0;
-  font-size: 1.1rem;
-}
-
-.dialog-card {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.dialog-title {
-  font-size: 1.25rem;
-  font-weight: 500;
-  color: #333;
-  background-color: #f5f7fa;
-  padding: 16px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.close-btn {
-  transition: all 0.3s ease;
-}
-
-.close-btn:hover {
-  transform: rotate(90deg);
-}
-
-.form-field {
-  margin-bottom: 16px;
-}
-
-.dialog-actions {
-  padding: 16px;
-  border-top: 1px solid #e0e0e0;
-}
-
-/* Анимации */
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.3s;
-}
-.fade-enter, .fade-leave-to {
-  opacity: 0;
-}
-
-/* Адаптивность */
-@media (max-width: 960px) {
-  .clients-container {
-    padding: 16px;
-  }
-  
-  .clients-title {
-    font-size: 1.5rem;
-  }
-  
-  .filter-row {
-    flex-direction: column;
-  }
-  
-  .search-field,
-  .filter-select,
-  .add-btn {
-    margin-bottom: 12px;
-    width: 100%;
-  }
-  
-  .action-btn {
-    width: 100%;
-    margin: 4px 0;
-    justify-content: flex-start;
-  }
-}
-
-@media (max-width: 600px) {
-  .clients-title {
-    font-size: 1.3rem;
-  }
-  
-  .clients-table :deep(.v-data-table-header th),
-  .clients-table :deep(td) {
-    font-size: 0.85rem;
-    padding: 8px 4px;
-  }
-  
-  .action-btn {
-    min-width: 36px;
-    padding: 0 8px;
-  }
-  
-  .action-btn span {
-    display: none;
-  }
-}
-</style>

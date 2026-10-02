@@ -1,324 +1,243 @@
 <template>
-  <v-container class="reports-detail-container">
-    <v-row>
-      <v-col>
-        <h1 class="detail-title">Детали отчёта</h1>
+  <div>
+    <div class="d-flex flex-wrap align-center ga-2 mb-4">
+      <v-btn variant="text" prepend-icon="mdi-arrow-left" to="/reports">К отчётам</v-btn>
+      <v-spacer />
+      <template v-if="report && !editing">
+        <v-btn variant="tonal" prepend-icon="mdi-pencil" @click="startEdit">Редактировать</v-btn>
+        <v-btn color="primary" variant="tonal" prepend-icon="mdi-file-pdf-box" :loading="pdfLoading" @click="downloadPdf">
+          Скачать PDF
+        </v-btn>
+        <v-btn color="error" variant="text" prepend-icon="mdi-delete-outline" @click="deleteDialog = true">Удалить</v-btn>
+      </template>
+    </div>
 
-        <v-progress-circular v-if="loading" indeterminate color="primary" size="50" class="loading-spinner" />
-        <v-alert v-else-if="error" type="error" dense class="error-alert">{{ error }}</v-alert>
+    <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
 
-        <v-card v-else elevation="4" class="detail-card animate__animated animate__fadeInUp">
-          <v-card-title class="card-title">
-            Отчёт #{{ report.id }}
-            <v-spacer />
-            <v-chip :color="statusColor(report.status)" small class="status-chip">
-              {{ report.status }}
-            </v-chip>
-          </v-card-title>
-          <v-card-text class="card-content">
+    <v-alert v-else-if="loadError" type="error" variant="tonal" class="mb-4">
+      {{ loadError }}
+      <template #append>
+        <v-btn variant="text" @click="load">Повторить</v-btn>
+      </template>
+    </v-alert>
+
+    <template v-if="report">
+      <!-- Просмотр -->
+      <v-card v-if="!editing">
+        <v-card-title class="text-wrap">{{ report.title }}</v-card-title>
+        <v-card-subtitle class="d-flex flex-wrap align-center ga-2 pb-2">
+          <v-chip size="small" variant="tonal" color="primary">{{ typeTitle(report.type) }}</v-chip>
+          <span>Период: {{ formatDate(report.period_from) }} — {{ formatDate(report.period_to) }}</span>
+          <span>· создан {{ formatDateTime(report.created_at) }}</span>
+          <span v-if="report.updated_at !== report.created_at">· изменён {{ formatDateTime(report.updated_at) }}</span>
+        </v-card-subtitle>
+        <v-divider />
+        <v-card-text>
+          <div v-if="report.content" class="markdown-body" v-html="renderMarkdown(report.content)" />
+          <div v-else class="text-medium-emphasis">Отчёт пуст</div>
+        </v-card-text>
+      </v-card>
+
+      <!-- Редактирование -->
+      <v-card v-else>
+        <v-card-title>Редактирование отчёта</v-card-title>
+        <v-card-text>
+          <v-form ref="formRef" @submit.prevent="save">
+            <v-text-field v-model="edit.title" label="Название *" :rules="[rules.required, rules.max255]" class="mb-2" />
+            <v-tabs v-if="!mdAndUp" v-model="editTab" density="compact" class="mb-2">
+              <v-tab value="source">Markdown</v-tab>
+              <v-tab value="preview">Предпросмотр</v-tab>
+            </v-tabs>
             <v-row>
-              <v-col cols="12" sm="6">
-                <p><strong>Название:</strong> {{ report.title || 'Не указано' }}</p>
-                <p><strong>Дата создания:</strong> {{ formatDate(report.created_at) }}</p>
+              <v-col v-if="mdAndUp || editTab === 'source'" cols="12" md="6">
+                <v-textarea
+                  v-model="edit.content"
+                  label="Текст (markdown)"
+                  rows="20"
+                  auto-grow
+                  class="md-source"
+                  hint="# заголовок, **жирный**, - список, | таблица |"
+                  persistent-hint
+                />
               </v-col>
-              <v-col cols="12" sm="6">
-                <p><strong>Статус:</strong> {{ report.status || 'Не определён' }}</p>
-                <p><strong>Автор:</strong> {{ report.author || 'Не указан' }}</p>
+              <v-col v-if="mdAndUp || editTab === 'preview'" cols="12" md="6">
+                <div class="text-caption text-medium-emphasis mb-1">Предпросмотр</div>
+                <v-sheet border rounded class="pa-4 preview">
+                  <div v-if="edit.content" class="markdown-body" v-html="renderMarkdown(edit.content)" />
+                  <div v-else class="text-medium-emphasis">Пусто</div>
+                </v-sheet>
               </v-col>
             </v-row>
-            <v-divider class="content-divider" />
-            <p class="report-body"><strong>Содержимое:</strong> {{ report.content || 'Отсутствует' }}</p>
-          </v-card-text>
-          <v-card-actions class="card-actions">
-            <v-btn color="primary" outlined @click="$router.push('/reports')" class="action-btn">
-              <v-icon left>mdi-arrow-left</v-icon> Назад
-            </v-btn>
-            <v-spacer />
-            <v-btn color="blue" text @click="exportToPDF" class="action-btn">
-              <v-icon left>mdi-file-pdf-box</v-icon> PDF
-            </v-btn>
-            <v-btn color="green" text @click="exportToExcel" class="action-btn">
-              <v-icon left>mdi-file-excel</v-icon> XLSX
-            </v-btn>
-            <v-btn color="blue" text @click="showEditModal = true" class="action-btn">
-              <v-icon left>mdi-pencil</v-icon> Редактировать
-            </v-btn>
-          </v-card-actions>
-        </v-card>
+          </v-form>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" :disabled="saving" @click="cancelEdit">Отмена</v-btn>
+          <v-btn color="primary" variant="flat" :disabled="!dirty" :loading="saving" @click="save">Сохранить</v-btn>
+        </v-card-actions>
+      </v-card>
+    </template>
 
-        <!-- Модальное окно редактирования -->
-        <edit-modal
-          v-model="showEditModal"
-          title="Редактировать отчёт"
-          :is-valid="!!editData.title"
-          @save="confirmSave"
-        >
-          <v-text-field
-            v-model="editData.title"
-            label="Название"
-            outlined
-            dense
-            class="input-field"
-          />
-          <v-select
-            v-model="editData.status"
-            :items="['Новый', 'В работе', 'Завершён']"
-            label="Статус"
-            outlined
-            dense
-            class="input-field"
-          />
-          <v-text-field
-            v-model="editData.author"
-            label="Автор"
-            outlined
-            dense
-            class="input-field"
-          />
-          <v-textarea
-            v-model="editData.content"
-            label="Содержимое"
-            outlined
-            dense
-            rows="4"
-            class="input-field"
-          />
-        </edit-modal>
-
-        <!-- Диалог подтверждения -->
-        <v-dialog v-model="showConfirmDialog" max-width="400">
-          <v-card>
-            <v-card-title class="headline">Подтверждение</v-card-title>
-            <v-card-text>Вы уверены, что хотите сохранить изменения в отчёте?</v-card-text>
-            <v-card-actions>
-              <v-spacer />
-              <v-btn color="grey" text @click="showConfirmDialog = false">Отмена</v-btn>
-              <v-btn color="primary" @click="saveReport">Сохранить</v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-      </v-col>
-    </v-row>
-  </v-container>
+    <v-dialog v-model="deleteDialog" max-width="420">
+      <v-card>
+        <v-card-title>Удалить отчёт?</v-card-title>
+        <v-card-text v-if="report">«{{ report.title }}» будет удалён без возможности восстановления.</v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" :disabled="deleting" @click="deleteDialog = false">Отмена</v-btn>
+          <v-btn color="error" variant="flat" :loading="deleting" @click="confirmDelete">Удалить</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </div>
 </template>
 
-<script>
-import { ref, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
-import { getReport, updateReport } from '../api';  // Импортируем исправленные функции
-import EditModal from './EditModal.vue';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import * as XLSX from 'xlsx';
-import dayjs from 'dayjs';
+<script setup>
+import { computed, reactive, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import { useDisplay } from 'vuetify';
+import { deleteReport, downloadReportPdf, errorMessage, getReport, updateReport } from '@/api';
+import { useNotifyStore } from '@/stores/notify.js';
+import { formatDate, formatDateTime } from '@/utils/format.js';
+import { renderMarkdown } from '@/utils/markdown.js';
 
-export default {
-  components: { EditModal },
-  setup() {
-    const route = useRoute();
-    const report = ref(null);
-    const loading = ref(true);
-    const error = ref(null);
-    const showEditModal = ref(false);
-    const showConfirmDialog = ref(false);
-    const editData = ref({});
+const props = defineProps({
+  id: { type: String, required: true },
+});
 
-    onMounted(async () => {
-      await fetchReport();
-    });
+const router = useRouter();
+const notify = useNotifyStore();
+const { mdAndUp } = useDisplay();
 
-    const fetchReport = async () => {
-      loading.value = true;
-      try {
-        const response = await getReport(route.params.id);  // Используем getReport
-        report.value = response;
-        editData.value = {
-          title: response.title,
-          status: response.status,
-          author: response.responsible,  // Приводим responsible к author
-          content: response.description  // Приводим description к content
-        };
-      } catch (err) {
-        error.value = err.response?.data?.detail || err.message || 'Не удалось загрузить отчёт';
-      } finally {
-        loading.value = false;
-      }
-    };
-
-    const formatDate = (date) => {
-      return date ? dayjs(date).format('DD.MM.YYYY HH:mm') : 'Не указано';
-    };
-
-    const statusColor = (status) => {
-      switch (status?.toLowerCase()) {
-        case 'новый': return 'blue';
-        case 'в работе': return 'orange';
-        case 'завершён': return 'green';
-        default: return 'grey';
-      }
-    };
-
-    const confirmSave = () => {
-      if (!editData.value.title) return;
-      showConfirmDialog.value = true;
-    };
-
-    const saveReport = async () => {
-      loading.value = true;
-      error.value = null;
-      try {
-        await updateReport(route.params.id, editData.value);  // Используем updateReport
-        await fetchReport();
-        showEditModal.value = false;
-        showConfirmDialog.value = false;
-      } catch (err) {
-        error.value = err.response?.data?.detail || err.message || 'Не удалось сохранить изменения';
-      } finally {
-        loading.value = false;
-      }
-    };
-
-    const exportToPDF = () => {
-      const doc = new jsPDF();
-      doc.setFont('helvetica');
-      doc.setFontSize(14);
-      doc.text(`Отчёт #${report.value.id}`, 10, 10);
-
-      doc.autoTable({
-        startY: 20,
-        head: [['Поле', 'Значение']],
-        body: [
-          ['Название', report.value.title || 'Не указано'],
-          ['Дата создания', formatDate(report.value.created_at)],
-          ['Статус', report.value.status || 'Не определён'],
-          ['Автор', report.value.responsible || 'Не указан'],  // Используем responsible как author
-          ['Содержимое', report.value.description || 'Отсутствует'],  // Используем description как content
-        ],
-        styles: { font: 'helvetica', fontSize: 10, cellPadding: 2, overflow: 'linebreak' },
-        headStyles: { fillColor: [25, 118, 210], textColor: [255, 255, 255] },
-        alternateRowStyles: { fillColor: [240, 244, 248] },
-        columnStyles: { 1: { cellWidth: 120 } },
-      });
-
-      doc.save(`report_${report.value.id}.pdf`);
-    };
-
-    const exportToExcel = () => {
-      const data = [{
-        'ID': report.value.id,
-        'Название': report.value.title || 'Не указано',
-        'Дата создания': formatDate(report.value.created_at),
-        'Статус': report.value.status || 'Не определён',
-        'Автор': report.value.responsible || 'Не указан',
-        'Содержимое': report.value.description || 'Отсутствует',
-      }];
-      const worksheet = XLSX.utils.json_to_sheet(data);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Report');
-      XLSX.writeFile(workbook, `report_${report.value.id}.xlsx`);
-    };
-
-    return { report, loading, error, showEditModal, showConfirmDialog, editData, formatDate, statusColor, confirmSave, saveReport, exportToPDF, exportToExcel };
-  },
+const TYPE_TITLES = {
+  tasks: 'Задачи',
+  finance: 'Финансы',
+  time: 'Учёт времени',
+  clients: 'Клиенты',
+  inventory: 'Склад',
 };
+function typeTitle(type) {
+  return TYPE_TITLES[type] ?? type;
+}
+
+const report = ref(null);
+const loading = ref(false);
+const loadError = ref('');
+
+let requestSeq = 0;
+async function load() {
+  const seq = ++requestSeq;
+  loading.value = true;
+  loadError.value = '';
+  try {
+    const data = await getReport(props.id);
+    if (seq !== requestSeq) return;
+    report.value = data;
+  } catch (err) {
+    if (seq !== requestSeq) return;
+    report.value = null;
+    loadError.value = errorMessage(err);
+  } finally {
+    if (seq === requestSeq) loading.value = false;
+  }
+}
+
+// ------------------------------------------------------------------ редактирование
+const editing = ref(false);
+const editTab = ref('source');
+const saving = ref(false);
+const formRef = ref(null);
+const edit = reactive({ title: '', content: '' });
+
+const rules = {
+  required: (v) => Boolean(v && String(v).trim()) || 'Обязательное поле',
+  max255: (v) => !v || String(v).trim().length <= 255 || 'Не более 255 символов',
+};
+
+const dirty = computed(
+  () =>
+    Boolean(report.value) &&
+    (edit.title.trim() !== report.value.title || edit.content !== (report.value.content ?? '')),
+);
+
+function startEdit() {
+  edit.title = report.value.title;
+  edit.content = report.value.content ?? '';
+  editTab.value = 'source';
+  editing.value = true;
+}
+
+function cancelEdit() {
+  editing.value = false;
+}
+
+async function save() {
+  const { valid } = await formRef.value.validate();
+  if (!valid) return;
+  saving.value = true;
+  try {
+    const payload = {};
+    if (edit.title.trim() !== report.value.title) payload.title = edit.title.trim();
+    if (edit.content !== (report.value.content ?? '')) payload.content = edit.content;
+    report.value = await updateReport(report.value.id, payload);
+    editing.value = false;
+    notify.success('Отчёт сохранён');
+  } catch (err) {
+    notify.error(err);
+  } finally {
+    saving.value = false;
+  }
+}
+
+// ------------------------------------------------------------------ PDF, удаление
+const pdfLoading = ref(false);
+async function downloadPdf() {
+  pdfLoading.value = true;
+  try {
+    const name = String(report.value.title || 'Отчёт').replace(/[\\/:*?"<>|\r\n]+/g, '_').slice(0, 120);
+    await downloadReportPdf(report.value.id, `${name}.pdf`);
+  } catch (err) {
+    notify.error(err);
+  } finally {
+    pdfLoading.value = false;
+  }
+}
+
+const deleteDialog = ref(false);
+const deleting = ref(false);
+async function confirmDelete() {
+  deleting.value = true;
+  try {
+    await deleteReport(report.value.id);
+    deleteDialog.value = false;
+    notify.success('Отчёт удалён');
+    router.replace('/reports');
+  } catch (err) {
+    notify.error(err);
+  } finally {
+    deleting.value = false;
+  }
+}
+
+watch(
+  () => props.id,
+  () => {
+    editing.value = false;
+    load();
+  },
+  { immediate: true },
+);
 </script>
 
 <style scoped>
-.reports-detail-container {
-  padding: 24px;
-  background: #f5f7fa;
-  min-height: 100vh;
+.md-source :deep(textarea) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
 }
-
-.detail-title {
-  font-family: 'Gilroy-ExtraBold', sans-serif;
-  font-size: 2.25rem;
-  color: #1976d2;
-  margin-bottom: 24px;
-  text-align: center;
-}
-
-.loading-spinner {
-  display: block;
-  margin: 40px auto;
-}
-
-.error-alert {
-  font-family: 'Gilroy-Regular', sans-serif;
-  border-radius: 8px;
-  margin: 20px 0;
-}
-
-.detail-card {
-  border-radius: 16px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  padding: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-}
-
-.card-title {
-  font-family: 'Gilroy-Bold', sans-serif;
-  font-size: 1.75rem;
-  color: #1976d2;
-  padding: 16px 24px;
-  border-bottom: 1px solid #e0e0e0;
-  display: flex;
-  align-items: center;
-}
-
-.status-chip {
-  font-family: 'Gilroy-Medium', sans-serif;
-  color: white;
-}
-
-.card-content p {
-  font-family: 'Gilroy-Regular', sans-serif;
-  font-size: 1.1rem;
-  color: #2c3e50;
-  margin: 12px 0;
-}
-
-.card-content strong {
-  font-family: 'Gilroy-Medium', sans-serif;
-  color: #34495e;
-}
-
-.content-divider {
-  margin: 16px 0;
-}
-
-.report-body {
-  background: #f0f4f8;
-  padding: 16px;
-  border-radius: 8px;
-  white-space: pre-wrap;
-}
-
-.card-actions {
-  padding: 16px 24px;
-  border-top: 1px solid #e0e0e0;
-}
-
-.action-btn {
-  font-family: 'Gilroy-Medium', sans-serif;
-  text-transform: none;
-  border-radius: 8px;
-  transition: transform 0.2s ease;
-}
-
-.action-btn:hover {
-  transform: translateY(-2px);
-}
-
-@media (max-width: 600px) {
-  .detail-title {
-    font-size: 1.75rem;
-  }
-  .card-title {
-    font-size: 1.5rem;
-  }
-  .card-content p {
-    font-size: 1rem;
-  }
+.preview {
+  min-height: 300px;
+  max-height: 70vh;
+  overflow: auto;
 }
 </style>
