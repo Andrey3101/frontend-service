@@ -20,7 +20,8 @@
 /** @typedef {{id: string, name: string, type: CompanyType, inn: string|null, created_at: string}} Company */
 /**
  * @typedef {{id: string, email: string, full_name: string, phone: string|null, position: string|null,
- *   role: Role, is_active: boolean, company: Company, telegram_linked: boolean, created_at: string}} User
+ *   role: Role, is_active: boolean, company: Company, telegram_linked: boolean,
+ *   pd_consent_at: string|null, created_at: string}} User   pd_consent_at — дата-время согласия на обработку ПДн
  */
 /** @typedef {{access_token: string, token_type: 'bearer', expires_in: number, user: User}} TokenResponse */
 /**
@@ -54,7 +55,7 @@
  */
 /**
  * @typedef {{id: string, title: string, date: string, type: 'deadline'|'birthday'|'holiday'|'payment'|'other',
- *   remind_days_before: number, description: string, created_at: string}} ImportantDate
+ *   remind_days_before: number, description: string, created_by: string, created_at: string}} ImportantDate
  */
 
 // ---------- documents-service ----------
@@ -68,8 +69,10 @@
 /**
  * @typedef {{id: string, number: string, date: string, client_id: string, client_name: string,
  *   items: DocItem[], total: number, vat_rate: number|null, status: DocStatus, notes: string,
- *   due_date: string|null, created_by: string, created_at: string, updated_at: string}} Document
- *   Акт или счёт (due_date — только у счёта).
+ *   due_date: string|null, seller_name: string, seller_inn: string, paid_at: string|null,
+ *   income_synced: boolean, created_by: string, created_at: string, updated_at: string}} Document
+ *   Акт или счёт (due_date — только у счёта). paid_at — дата оплаты (только у status='paid');
+ *   income_synced — доход по оплате выгружен в финансы (API.md, 12.1).
  */
 /**
  * @typedef {{id: string, title: string, type: 'tasks'|'finance'|'time'|'clients'|'inventory',
@@ -86,11 +89,15 @@
  */
 
 // ---------- financial-service ----------
+/** @typedef {'manual'|'bank_import'|'bot'|'document'} TransactionSource */
 /**
  * @typedef {{id: string, type: 'income'|'expense', amount: number, date: string, category: string,
  *   description: string, counterparty: string|null, counterparty_inn: string|null, client_id: string|null,
- *   source: 'manual'|'bank_import'|'bot', bank_account_id: string|null,
- *   payer_type: 'individual'|'legal'|null, created_by: string, created_at: string}} Transaction
+ *   source: TransactionSource, bank_account_id: string|null,
+ *   payer_type: 'individual'|'legal'|null, document_id: string|null, npd_receipt: string|null,
+ *   created_by: string, created_at: string}} Transaction
+ *   document_id — акт/счёт, из оплаты которого создана операция (source='document');
+ *   npd_receipt — номер чека «Мой налог» (только у доходов).
  */
 /**
  * @typedef {{id: string, bank_name: string, account_number: string, bik: string|null, currency: 'RUB',

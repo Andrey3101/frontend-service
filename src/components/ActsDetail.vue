@@ -5,6 +5,9 @@
         {{ kind === 'invoice' ? 'К счетам' : 'К актам' }}
       </v-btn>
       <v-spacer />
+      <v-btn v-if="doc" color="primary" variant="flat" prepend-icon="mdi-email-fast-outline" @click="sendDialog = true">
+        Отправить клиенту
+      </v-btn>
       <v-btn
         v-if="doc"
         color="primary"
@@ -32,6 +35,7 @@
           <v-card-title class="d-flex flex-wrap align-center ga-2">
             {{ meta.title }} № {{ doc.number }} от {{ formatDate(doc.date) }}
             <v-spacer />
+            <DocIncomeStatus :doc="doc" />
             <v-chip :color="statusColor(doc.status)" variant="tonal">{{ statusLabel(doc.status) }}</v-chip>
           </v-card-title>
           <v-card-text>
@@ -53,6 +57,19 @@
                 <div class="text-caption text-medium-emphasis">Оплатить до</div>
                 <div class="text-body-1" :class="{ 'text-error': overdue }">
                   {{ formatDate(doc.due_date) }}<span v-if="overdue"> — просрочен</span>
+                </div>
+              </v-col>
+              <v-col v-if="doc.status === 'paid'" cols="12" sm="6">
+                <div class="text-caption text-medium-emphasis">Дата оплаты</div>
+                <div class="d-flex align-center ga-1">
+                  <span class="text-body-1" data-testid="doc-paid-at">{{ doc.paid_at ? formatDate(doc.paid_at) : 'не указана' }}</span>
+                  <v-btn
+                    icon="mdi-calendar-edit"
+                    size="x-small"
+                    variant="text"
+                    aria-label="Изменить дату оплаты"
+                    @click="paidDialog = true"
+                  />
                 </div>
               </v-col>
             </v-row>
@@ -101,13 +118,18 @@
         <v-card>
           <v-card-title>Статус и заметки</v-card-title>
           <v-card-text>
-            <v-select v-model="edit.status" :items="STATUS_ITEMS" label="Статус" />
+            <v-select
+              :model-value="edit.status"
+              :items="STATUS_ITEMS"
+              label="Статус"
+              @update:model-value="onStatusSelect"
+            />
             <v-textarea v-model="edit.notes" label="Заметки" rows="4" auto-grow />
           </v-card-text>
           <v-card-actions>
             <v-btn variant="text" :disabled="!dirty || saving" @click="resetEdit">Сбросить</v-btn>
             <v-spacer />
-            <v-btn color="primary" variant="flat" :disabled="!dirty" :loading="saving" @click="save">
+            <v-btn color="primary" variant="flat" :disabled="!dirty" :loading="saving" @click="save()">
               Сохранить
             </v-btn>
           </v-card-actions>
@@ -117,6 +139,16 @@
         </div>
       </v-col>
     </v-row>
+
+    <DocSendDialog v-model="sendDialog" :doc="doc" :kind="kind" @sent="load" />
+    <DocPaidDialog
+      v-model="paidDialog"
+      :doc="doc"
+      :kind="kind"
+      :loading="saving"
+      @confirm="confirmPaid"
+      @cancel="edit.status = doc?.status ?? 'draft'"
+    />
   </div>
 </template>
 
@@ -133,6 +165,9 @@ import {
   updateAct,
   updateInvoice,
 } from '@/api';
+import DocIncomeStatus from '@/components/DocIncomeStatus.vue';
+import DocPaidDialog from '@/components/DocPaidDialog.vue';
+import DocSendDialog from '@/components/DocSendDialog.vue';
 import { useNotifyStore } from '@/stores/notify.js';
 import { formatDate, formatDateTime, formatMoney, formatNumber } from '@/utils/format.js';
 
@@ -215,18 +250,39 @@ async function load() {
 }
 
 const saving = ref(false);
-async function save() {
-  if (!doc.value) return;
+/**
+ * @param {{paid_at?: string}} [extra]
+ * @returns {Promise<boolean>}
+ */
+async function save(extra = {}) {
+  if (!doc.value) return false;
   saving.value = true;
   try {
-    doc.value = await meta.value.update(doc.value.id, { status: edit.status, notes: edit.notes ?? '' });
+    doc.value = await meta.value.update(doc.value.id, { status: edit.status, notes: edit.notes ?? '', ...extra });
     resetEdit();
     notify.success('Сохранено');
+    return true;
   } catch (err) {
     notify.error(err);
+    return false;
   } finally {
     saving.value = false;
   }
+}
+
+// ------------------------------------------------------------------ оплата и отправка
+const paidDialog = ref(false);
+const sendDialog = ref(false);
+
+/** Выбор «Оплачен» сразу спрашивает дату оплаты и сохраняет (API.md, 12.1). */
+function onStatusSelect(value) {
+  edit.status = value;
+  if (value === 'paid' && doc.value?.status !== 'paid') paidDialog.value = true;
+}
+
+async function confirmPaid(paidAt) {
+  edit.status = 'paid';
+  if (await save({ paid_at: paidAt })) paidDialog.value = false;
 }
 
 const pdfLoading = ref(false);

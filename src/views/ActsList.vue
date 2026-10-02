@@ -100,33 +100,59 @@
             <span :class="{ 'text-error': isOverdue(item) }">{{ formatDate(item.due_date) }}</span>
           </template>
           <template #[`item.status`]="{ item }">
-            <v-menu>
-              <template #activator="{ props: menuProps }">
-                <v-chip
-                  v-bind="menuProps"
-                  :color="statusColor(item.status)"
-                  size="small"
-                  variant="tonal"
-                  append-icon="mdi-menu-down"
-                  :disabled="statusSaving === item.id"
-                  @click.stop
-                >
-                  {{ statusLabel(item.status) }}
-                </v-chip>
-              </template>
-              <v-list density="compact">
-                <v-list-item
-                  v-for="s in STATUS_ITEMS"
-                  :key="s.value"
-                  :title="s.title"
-                  :active="s.value === item.status"
-                  @click="changeStatus(item, s.value)"
-                />
-              </v-list>
-            </v-menu>
+            <div class="d-flex align-center ga-1">
+              <v-menu>
+                <template #activator="{ props: menuProps }">
+                  <v-chip
+                    v-bind="menuProps"
+                    :color="statusColor(item.status)"
+                    size="small"
+                    variant="tonal"
+                    append-icon="mdi-menu-down"
+                    :disabled="statusSaving === item.id"
+                    @click.stop
+                  >
+                    {{ statusLabel(item.status) }}
+                  </v-chip>
+                </template>
+                <v-list density="compact">
+                  <v-list-item
+                    v-for="s in STATUS_ITEMS"
+                    :key="s.value"
+                    :title="s.title"
+                    :active="s.value === item.status"
+                    @click="changeStatus(item, s.value)"
+                  />
+                  <template v-if="item.status === 'paid'">
+                    <v-divider />
+                    <v-list-item
+                      prepend-icon="mdi-calendar-edit"
+                      title="Изменить дату оплаты"
+                      @click="openPaidDialog(item)"
+                    />
+                  </template>
+                </v-list>
+              </v-menu>
+              <DocIncomeStatus :doc="item" compact />
+            </div>
+            <div v-if="item.status === 'paid' && item.paid_at" class="text-caption text-medium-emphasis">
+              оплачен {{ formatDate(item.paid_at) }}
+            </div>
           </template>
           <template #[`item.actions`]="{ item }">
             <div class="d-flex justify-end text-no-wrap">
+              <v-tooltip text="Отправить клиенту" location="top">
+                <template #activator="{ props: tooltipProps }">
+                  <v-btn
+                    v-bind="tooltipProps"
+                    icon="mdi-email-fast-outline"
+                    size="small"
+                    variant="text"
+                    aria-label="Отправить клиенту"
+                    @click.stop="openSend(item)"
+                  />
+                </template>
+              </v-tooltip>
               <v-btn
                 icon="mdi-file-pdf-box"
                 size="small"
@@ -216,6 +242,16 @@
               </v-col>
               <v-col cols="12" sm="6" md="3">
                 <v-select v-model="form.vat" :items="vatItems" label="НДС" />
+              </v-col>
+              <v-col v-if="form.status === 'paid'" cols="12" sm="6" md="3">
+                <v-text-field
+                  v-model="form.paid_at"
+                  type="date"
+                  label="Дата оплаты"
+                  :rules="[rules.paidAt]"
+                  :hint="paidAtHint"
+                  persistent-hint
+                />
               </v-col>
             </v-row>
 
@@ -346,6 +382,19 @@
       </v-card>
     </v-dialog>
 
+    <!-- Отправка клиенту по e-mail -->
+    <DocSendDialog v-model="sendDialog" :doc="sendDoc" :kind="kind" @sent="load" />
+
+    <!-- Дата оплаты при переводе в «Оплачен» -->
+    <DocPaidDialog
+      v-model="paidDialog"
+      :doc="paidDoc"
+      :kind="kind"
+      :loading="statusSaving !== null"
+      @confirm="confirmPaid"
+      @cancel="paidDoc = null"
+    />
+
     <!-- Подтверждение удаления -->
     <v-dialog v-model="deleteDialog" max-width="420">
       <v-card>
@@ -382,6 +431,9 @@ import {
   updateAct,
   updateInvoice,
 } from '@/api';
+import DocIncomeStatus from '@/components/DocIncomeStatus.vue';
+import DocPaidDialog from '@/components/DocPaidDialog.vue';
+import DocSendDialog from '@/components/DocSendDialog.vue';
 import { useAuthStore } from '@/stores/auth.js';
 import { useNotifyStore } from '@/stores/notify.js';
 import { downloadCsv } from '@/utils/csv.js';
@@ -539,8 +591,8 @@ const headers = computed(() => {
   ];
   if (kind.value === 'invoice') list.push({ title: 'Оплатить до', key: 'due_date', sortable: false, width: 120 });
   list.push(
-    { title: 'Статус', key: 'status', sortable: false, width: 150 },
-    { title: '', key: 'actions', sortable: false, align: 'end', width: 140 },
+    { title: 'Статус', key: 'status', sortable: false, width: 190 },
+    { title: '', key: 'actions', sortable: false, align: 'end', width: 180 },
   );
   return list;
 });
@@ -618,19 +670,68 @@ function openDetail(doc) {
 // ------------------------------------------------------------------ смена статуса
 const statusSaving = ref(null);
 
-async function changeStatus(doc, status) {
-  if (doc.status === status) return;
+/**
+ * @param {import('@/api/types.js').Document} doc
+ * @param {import('@/api/types.js').DocStatus} status
+ * @param {{paid_at?: string}} [extra]
+ */
+async function applyStatus(doc, status, extra = {}) {
   statusSaving.value = doc.id;
   try {
-    const updated = await kindMeta.value.update(doc.id, { status });
+    const updated = await kindMeta.value.update(doc.id, { status, ...extra });
     Object.assign(doc, updated);
-    notify.success(`Статус: ${statusLabel(status)}`);
+    notify.success(
+      status === 'paid' && updated.paid_at
+        ? `Статус: ${statusLabel(status)} (${formatDate(updated.paid_at)})`
+        : `Статус: ${statusLabel(status)}`,
+    );
     if (filters.status && filters.status !== status) await load();
+    return true;
   } catch (err) {
     notify.error(err);
+    return false;
   } finally {
     statusSaving.value = null;
   }
+}
+
+function changeStatus(doc, status) {
+  if (doc.status === status) return;
+  // «Оплачен» — сначала спрашиваем дату оплаты (API.md, 12.1: по ней создаётся доход в финансах)
+  if (status === 'paid') {
+    openPaidDialog(doc);
+    return;
+  }
+  applyStatus(doc, status);
+}
+
+// ------------------------------------------------------------------ дата оплаты
+const paidDialog = ref(false);
+/** @type {import('vue').Ref<import('@/api/types.js').Document|null>} */
+const paidDoc = ref(null);
+
+function openPaidDialog(doc) {
+  paidDoc.value = doc;
+  paidDialog.value = true;
+}
+
+async function confirmPaid(paidAt) {
+  if (!paidDoc.value) return;
+  const ok = await applyStatus(paidDoc.value, 'paid', { paid_at: paidAt });
+  if (ok) {
+    paidDialog.value = false;
+    paidDoc.value = null;
+  }
+}
+
+// ------------------------------------------------------------------ отправка клиенту
+const sendDialog = ref(false);
+/** @type {import('vue').Ref<import('@/api/types.js').Document|null>} */
+const sendDoc = ref(null);
+
+function openSend(doc) {
+  sendDoc.value = doc;
+  sendDialog.value = true;
 }
 
 // ------------------------------------------------------------------ PDF и CSV
@@ -668,6 +769,7 @@ async function exportCsv() {
       { key: 'total', title: 'Сумма, ₽', format: (v) => round2(v) },
       { key: 'vat_rate', title: 'НДС', format: (v) => vatLabel(v) },
       { key: 'status', title: 'Статус', format: (v) => statusLabel(v) },
+      { key: 'paid_at', title: 'Дата оплаты', format: (v) => (v ? formatDate(v) : '') },
     ];
     if (kind.value === 'invoice') {
       columns.push({ key: 'due_date', title: 'Оплатить до', format: (v) => (v ? formatDate(v) : '') });
@@ -686,6 +788,8 @@ async function exportCsv() {
 const editDialog = ref(false);
 const editingId = ref(null);
 const editingNumber = ref('');
+/** Документ был оплачен до открытия формы (у старых документов даты оплаты может не быть). */
+const editingWasPaid = ref(false);
 const saving = ref(false);
 const formRef = ref(null);
 let rowKey = 0;
@@ -710,6 +814,7 @@ function emptyForm() {
     vat: NO_VAT,
     items: [emptyRow()],
     notes: '',
+    paid_at: dayjs().format(DATE),
     ...companyDefaults(),
   };
 }
@@ -744,12 +849,18 @@ const rules = {
   max500: (v) => !v || String(v).length <= 500 || 'Не более 500 символов',
   inn: (v) => !v || /^(\d{10}|\d{12})$/.test(String(v).trim()) || 'ИНН — 10 или 12 цифр',
   email: (v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).trim()) || 'Некорректный email',
+  paidAt: (v) => Boolean(v) || editingWasPaid.value || 'Укажите дату оплаты',
   dueDate: (v) => !v || !form.date || v >= form.date || 'Срок оплаты раньше даты счёта',
 };
+
+const paidAtHint = computed(() =>
+  form.paid_at ? 'Доход по этой дате попадёт в «Финансы»' : 'Без даты оплаты доход в «Финансы» не выгружается',
+);
 
 function openCreate() {
   editingId.value = null;
   editingNumber.value = '';
+  editingWasPaid.value = false;
   Object.assign(form, emptyForm());
   editDialog.value = true;
   formClients.loadOnce();
@@ -759,6 +870,7 @@ function openCreate() {
 function openEdit(doc) {
   editingId.value = doc.id;
   editingNumber.value = doc.number;
+  editingWasPaid.value = doc.status === 'paid';
   const defaults = companyDefaults();
   const hasSeller = Boolean(doc.seller_name || doc.seller_inn);
   formClients.pin({ id: doc.client_id, name: doc.client_name });
@@ -774,6 +886,8 @@ function openEdit(doc) {
       return { key: rowKey, name: i.name, quantity: String(i.quantity), unit: i.unit, price: String(i.price) };
     }),
     notes: doc.notes ?? '',
+    // У оплаченного до v2.1 документа даты нет — не подставляем «сегодня» молча (это создало бы доход)
+    paid_at: doc.status === 'paid' ? doc.paid_at ?? '' : dayjs().format(DATE),
     seller_name: hasSeller ? doc.seller_name ?? '' : defaults.seller_name,
     seller_inn: hasSeller ? doc.seller_inn ?? '' : defaults.seller_inn,
   });
@@ -800,6 +914,8 @@ function buildPayload() {
   const number = form.number?.trim();
   if (number) payload.number = number;
   if (kind.value === 'invoice') payload.due_date = form.due_date || null;
+  // Дата оплаты учитывается сервером только для статуса «Оплачен» (API.md, 12.1)
+  if (form.status === 'paid' && form.paid_at) payload.paid_at = form.paid_at;
   return payload;
 }
 

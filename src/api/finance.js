@@ -4,9 +4,13 @@ import { cleanParams, http } from './http.js';
 /**
  * @typedef {{type: 'income'|'expense', amount: number, date?: string, category?: string,
  *   description?: string, counterparty?: string|null, counterparty_inn?: string|null,
- *   client_id?: string|null, payer_type?: 'individual'|'legal'|null}} TransactionInput
+ *   client_id?: string|null, payer_type?: 'individual'|'legal'|null, npd_receipt?: string|null,
+ *   source?: 'manual'|'bot'}} TransactionInput
  *   amount > 0; date по умолчанию — сегодня; category по умолчанию «Прочие доходы/расходы»;
  *   payer_type важен для НПД (физлица 4%, юрлица/ИП 6%) — указывать для доходов.
+ *   npd_receipt — номер чека «Мой налог» (≤ 64), только для дохода (для расхода непустой → 422;
+ *   пустая строка = null). Операции с source='document' (из оплаченного акта/счёта) через PUT
+ *   меняют только category, description, npd_receipt; иначе и при DELETE → 409 (API.md, 12.1, 12.4).
  */
 
 // ---------------------------------------------------------------- транзакции
@@ -41,6 +45,7 @@ export async function createTransaction(data) {
 
 /**
  * PUT /api/finance/transactions/{id} — частичное обновление.
+ * Для source='document' — только category/description/npd_receipt, иначе 409.
  * @param {string} id
  * @param {Partial<TransactionInput>} data
  * @returns {Promise<import('./types.js').Transaction>}
@@ -50,7 +55,7 @@ export async function updateTransaction(id, data) {
 }
 
 /**
- * DELETE /api/finance/transactions/{id} — 204.
+ * DELETE /api/finance/transactions/{id} — 204. Для source='document' → 409.
  * @param {string} id
  * @returns {Promise<void>}
  */
@@ -63,7 +68,9 @@ export async function deleteTransaction(id) {
  * @param {{date_from?: string, date_to?: string}} [params] 'YYYY-MM-DD'
  * @returns {Promise<{income: number, expense: number, profit: number,
  *   by_category: {category: string, type: 'income'|'expense', amount: number}[],
- *   by_month: {month: string, income: number, expense: number}[]}>}  month — 'YYYY-MM'
+ *   by_month: {month: string, income: number, expense: number}[],
+ *   incomes_without_receipt: number}>}  month — 'YYYY-MM'; incomes_without_receipt — доходов
+ *   без номера чека НПД за период (только для self_employed, иначе 0)
  */
 export async function getFinanceSummary(params = {}) {
   return (await http.get('/finance/summary', { params: cleanParams(params) })).data;

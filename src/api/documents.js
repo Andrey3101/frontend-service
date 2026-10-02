@@ -10,8 +10,15 @@ import { cleanParams, downloadFile, http } from './http.js';
  */
 /**
  * @typedef {{client_id: string, date?: string, items: import('./types.js').DocItem[],
- *   status?: import('./types.js').DocStatus, notes?: string, vat_rate?: number|null, number?: string}} ActInput
+ *   status?: import('./types.js').DocStatus, notes?: string, vat_rate?: number|null, number?: string,
+ *   seller_name?: string, seller_inn?: string, paid_at?: string|null}} ActInput
  *   number по умолчанию — автонумерация «ГГГГ-NNN»; date по умолчанию — сегодня.
+ *   paid_at ('YYYY-MM-DD') учитывается только при status='paid' (по умолчанию — сегодня по МСК);
+ *   у неоплаченного документа сервер всегда возвращает paid_at=null (API.md, 12.1).
+ */
+/**
+ * @typedef {{to?: string, message?: string}} DocSendInput
+ *   to — e-mail получателя (по умолчанию email клиента; нет адреса → 422); message ≤ 2000 символов.
  */
 
 // ---------------------------------------------------------------- акты
@@ -72,6 +79,18 @@ export async function downloadActPdf(id, filename) {
   await downloadFile(`/acts/${id}/pdf`, filename);
 }
 
+/**
+ * POST /api/acts/{id}/send — отправить акт клиенту по e-mail (PDF вложением). 202.
+ * Черновик (draft) переводится в sent. 422 — нет/некорректный адрес; 503 — отправка писем
+ * не настроена администратором; 502 — не удалось отправить письмо (API.md, 12.2).
+ * @param {string} id
+ * @param {DocSendInput} [data]
+ * @returns {Promise<{sent_to: string}>}
+ */
+export async function sendAct(id, data = {}) {
+  return (await http.post(`/acts/${id}/send`, cleanParams(data))).data;
+}
+
 // ---------------------------------------------------------------- счета
 
 /**
@@ -128,4 +147,15 @@ export async function deleteInvoice(id) {
  */
 export async function downloadInvoicePdf(id, filename) {
   await downloadFile(`/invoices/${id}/pdf`, filename);
+}
+
+/**
+ * POST /api/invoices/{id}/send — отправить счёт клиенту по e-mail (PDF вложением). 202.
+ * Как sendAct: 422 / 503 / 502 (API.md, 12.2).
+ * @param {string} id
+ * @param {DocSendInput} [data]
+ * @returns {Promise<{sent_to: string}>}
+ */
+export async function sendInvoice(id, data = {}) {
+  return (await http.post(`/invoices/${id}/send`, cleanParams(data))).data;
 }

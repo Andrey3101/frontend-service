@@ -108,6 +108,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * Регистрация. В payload обязательно `pd_consent: true` — согласие на обработку ПДн,
+   * которое дал пользователь (чекбокс формы); стор его не подставляет. Без него — 422.
    * @param {Parameters<typeof authRegister>[0]} payload
    * @returns {Promise<import('@/api/types.js').User>}
    */

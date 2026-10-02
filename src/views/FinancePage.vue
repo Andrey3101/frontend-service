@@ -26,6 +26,18 @@
       </v-card-text>
     </v-card>
 
+    <!-- Самозанятый: доходы без чека НПД за период (API.md, 12.4) -->
+    <v-alert
+      v-if="isSelfEmployed && receiptsMissing > 0"
+      type="warning"
+      variant="tonal"
+      icon="mdi-receipt-text-remove-outline"
+      class="mb-4"
+      data-testid="npd-receipts-banner"
+    >
+      {{ receiptsBannerText }}
+    </v-alert>
+
     <!-- Сводка -->
     <v-row class="mb-2">
       <v-col v-for="card in summaryCards" :key="card.key" cols="12" sm="4">
@@ -37,6 +49,37 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <!-- Самозанятый: лимит дохода НПД за текущий год -->
+    <v-card v-if="isSelfEmployed" class="mb-4" :loading="limitLoading" data-testid="npd-limit">
+      <v-card-title class="d-flex align-center flex-wrap ga-2">
+        Лимит НПД
+        <v-spacer />
+        <span class="text-body-2 text-medium-emphasis">{{ currentYear }} год</span>
+      </v-card-title>
+      <v-card-text>
+        <v-alert v-if="limitError" type="error" variant="tonal" density="compact">{{ limitError }}</v-alert>
+        <template v-else-if="npdLimit">
+          <div class="d-flex flex-wrap justify-space-between ga-2 mb-2">
+            <span class="text-body-1">
+              Доходы: <span class="font-weight-bold">{{ formatMoney(npdLimit.income) }}</span>
+              из {{ formatMoney(NPD_LIMIT) }}
+            </span>
+            <span class="font-weight-medium" :class="`text-${npdLimit.color}`">{{ formatNumber(npdLimit.percent) }}%</span>
+          </div>
+          <v-progress-linear
+            :model-value="Math.min(npdLimit.percent, 100)"
+            :color="npdLimit.color"
+            height="10"
+            rounded
+            aria-label="Использование лимита НПД"
+          />
+          <div class="text-body-2 mt-2" :class="npdLimit.percent > 100 ? 'text-error' : 'text-medium-emphasis'">
+            {{ npdLimit.text }}
+          </div>
+        </template>
+      </v-card-text>
+    </v-card>
 
     <v-row>
       <v-col cols="12" lg="8">
@@ -189,10 +232,28 @@
               {{ item.type === 'income' ? '+' : '−' }}{{ formatMoney(item.amount) }}
             </span>
           </template>
-          <template #[`item.source`]="{ item }">{{ sourceLabel(item.source) }}</template>
+          <template #[`item.source`]="{ item }">
+            <v-chip
+              size="small"
+              variant="tonal"
+              :color="sourceMeta(item.source).color"
+              :prepend-icon="sourceMeta(item.source).icon"
+              :to="item.source === 'document' ? '/acts' : undefined"
+            >
+              {{ sourceMeta(item.source).title }}
+            </v-chip>
+          </template>
+          <template #[`item.npd_receipt`]="{ item }">
+            <template v-if="item.type === 'income'">
+              <span v-if="item.npd_receipt" class="text-no-wrap">{{ item.npd_receipt }}</span>
+              <v-chip v-else-if="isSelfEmployed" size="small" color="warning" variant="tonal">нет чека</v-chip>
+              <span v-else class="text-medium-emphasis">—</span>
+            </template>
+          </template>
           <template #[`item.actions`]="{ item }">
             <v-btn icon="mdi-pencil" size="small" variant="text" aria-label="Изменить" @click="openEdit(item)" />
             <v-btn
+              v-if="item.source !== 'document'"
               icon="mdi-delete-outline"
               size="small"
               variant="text"
@@ -210,8 +271,27 @@
       <v-card>
         <v-card-title>{{ editingId ? 'Изменить операцию' : 'Новая операция' }}</v-card-title>
         <v-card-text>
+          <v-alert
+            v-if="fromDocument"
+            type="info"
+            variant="tonal"
+            density="compact"
+            icon="mdi-file-document-outline"
+            class="mb-4"
+          >
+            Сумма и дата берутся из документа. Изменить их можно в
+            <router-link to="/acts">акте или счёте</router-link>.
+          </v-alert>
           <v-form ref="formRef" @submit.prevent="save">
-            <v-btn-toggle v-model="form.type" mandatory color="primary" variant="outlined" divided class="mb-4">
+            <v-btn-toggle
+              v-model="form.type"
+              mandatory
+              color="primary"
+              variant="outlined"
+              divided
+              class="mb-4"
+              :disabled="fromDocument"
+            >
               <v-btn value="income" prepend-icon="mdi-arrow-down-bold">Доход</v-btn>
               <v-btn value="expense" prepend-icon="mdi-arrow-up-bold">Расход</v-btn>
             </v-btn-toggle>
@@ -224,10 +304,17 @@
                   step="0.01"
                   label="Сумма, ₽ *"
                   :rules="[rules.positive]"
+                  :disabled="fromDocument"
                 />
               </v-col>
               <v-col cols="12" sm="6">
-                <v-text-field v-model="form.date" type="date" label="Дата *" :rules="[rules.required]" />
+                <v-text-field
+                  v-model="form.date"
+                  type="date"
+                  label="Дата *"
+                  :rules="[rules.required]"
+                  :disabled="fromDocument"
+                />
               </v-col>
               <v-col cols="12">
                 <v-combobox
@@ -247,16 +334,38 @@
                   clearable
                   :hint="isSelfEmployed ? 'Для НПД: физлица — 4%, юрлица и ИП — 6%' : ''"
                   persistent-hint
+                  :disabled="fromDocument"
+                />
+              </v-col>
+              <v-col v-if="form.type === 'income'" cols="12">
+                <v-text-field
+                  v-model="form.npd_receipt"
+                  label="Номер чека НПД (Мой налог)"
+                  prepend-inner-icon="mdi-receipt-text-outline"
+                  counter="64"
+                  :rules="[rules.max64]"
+                  :hint="isSelfEmployed ? 'Чек обязателен для каждого дохода' : ''"
+                  persistent-hint
                 />
               </v-col>
               <v-col cols="12">
                 <v-textarea v-model="form.description" label="Описание" rows="2" auto-grow :rules="[rules.max1000]" />
               </v-col>
               <v-col cols="12" sm="7">
-                <v-text-field v-model="form.counterparty" label="Контрагент" :rules="[rules.max255]" />
+                <v-text-field
+                  v-model="form.counterparty"
+                  label="Контрагент"
+                  :rules="[rules.max255]"
+                  :disabled="fromDocument"
+                />
               </v-col>
               <v-col cols="12" sm="5">
-                <v-text-field v-model="form.counterparty_inn" label="ИНН контрагента" :rules="[rules.inn]" />
+                <v-text-field
+                  v-model="form.counterparty_inn"
+                  label="ИНН контрагента"
+                  :rules="[rules.inn]"
+                  :disabled="fromDocument"
+                />
               </v-col>
             </v-row>
           </v-form>
@@ -306,7 +415,7 @@ import {
 import { useAuthStore } from '@/stores/auth.js';
 import { useNotifyStore } from '@/stores/notify.js';
 import { debounce } from '@/utils/debounce.js';
-import { formatDate, formatMoney } from '@/utils/format.js';
+import { formatDate, formatMoney, formatNumber } from '@/utils/format.js';
 const REGIME_LABELS = { npd: 'НПД', usn_income: 'УСН «Доходы»', usn_income_expense: 'УСН «Доходы − расходы»' };
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend);
@@ -384,6 +493,26 @@ function validPeriod() {
   return !period.from || !period.to || period.from <= period.to;
 }
 
+/** Доходов без номера чека НПД за период (для self_employed; иначе сервер отдаёт 0). */
+const receiptsMissing = computed(() => Number(summary.value?.incomes_without_receipt) || 0);
+
+/** 1 доход, 2 дохода, 5 доходов. */
+function pluralRu(n, one, few, many) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+const receiptsBannerText = computed(() => {
+  const n = receiptsMissing.value;
+  return (
+    `${n} ${pluralRu(n, 'доход', 'дохода', 'доходов')} без чека НПД за период — ` +
+    'сформируйте чеки в приложении «Мой налог» и внесите номера'
+  );
+});
+
 async function loadSummary() {
   if (!validPeriod()) return;
   summaryLoading.value = true;
@@ -414,7 +543,8 @@ const headers = [
   { title: 'Категория', key: 'category', sortable: false },
   { title: 'Описание', key: 'description', sortable: false },
   { title: 'Контрагент', key: 'counterparty', sortable: false },
-  { title: 'Источник', key: 'source', sortable: false, width: 120 },
+  { title: 'Источник', key: 'source', sortable: false, width: 150 },
+  { title: 'Чек', key: 'npd_receipt', sortable: false, width: 120 },
   { title: 'Сумма', key: 'amount', sortable: false, align: 'end', width: 150 },
   { title: '', key: 'actions', sortable: false, align: 'end', width: 100 },
 ];
@@ -438,9 +568,15 @@ const filterCategories = computed(() => {
   return [...new Set([...categories.value.income, ...categories.value.expense])];
 });
 
-const SOURCE_LABELS = { manual: 'Вручную', bank_import: 'Выписка', bot: 'Telegram' };
-function sourceLabel(source) {
-  return SOURCE_LABELS[source] || source;
+const SOURCE_META = {
+  manual: { title: 'Вручную', color: 'grey', icon: 'mdi-pencil-outline' },
+  bank_import: { title: 'Выписка', color: 'info', icon: 'mdi-bank-outline' },
+  bot: { title: 'Бот', color: 'secondary', icon: 'mdi-robot-outline' },
+  document: { title: 'Из документа', color: 'primary', icon: 'mdi-file-document-outline' },
+};
+/** @param {import('@/api/types.js').TransactionSource} source */
+function sourceMeta(source) {
+  return SOURCE_META[source] ?? { title: source || '—', color: 'grey', icon: undefined };
 }
 
 let requestSeq = 0;
@@ -505,6 +641,8 @@ watch(
 // ------------------------------------------------------------------ диалог
 const editDialog = ref(false);
 const editingId = ref(null);
+/** Операция создана из оплаченного акта/счёта: меняются только категория, описание и чек (API.md, 12.1). */
+const fromDocument = ref(false);
 const saving = ref(false);
 const formRef = ref(null);
 
@@ -518,6 +656,7 @@ function emptyForm() {
     counterparty: '',
     counterparty_inn: '',
     payer_type: null,
+    npd_receipt: '',
   };
 }
 const form = reactive(emptyForm());
@@ -533,6 +672,7 @@ const rules = {
   required: (v) => Boolean(v) || 'Обязательное поле',
   positive: (v) => (Number(v) > 0 && Number(v) <= 999999999999.99) || 'Введите сумму больше нуля',
   max100: (v) => !v || String(v).length <= 100 || 'Не более 100 символов',
+  max64: (v) => !v || String(v).trim().length <= 64 || 'Не более 64 символов',
   max255: (v) => !v || String(v).length <= 255 || 'Не более 255 символов',
   max1000: (v) => !v || String(v).length <= 1000 || 'Не более 1000 символов',
   inn: (v) => !v || /^(\d{10}|\d{12})$/.test(String(v).trim()) || 'ИНН — 10 или 12 цифр',
@@ -541,12 +681,16 @@ const rules = {
 watch(
   () => form.type,
   (type) => {
-    if (type !== 'income') form.payer_type = null;
+    if (type !== 'income') {
+      form.payer_type = null;
+      form.npd_receipt = ''; // чек НПД бывает только у дохода
+    }
   },
 );
 
 function openCreate() {
   editingId.value = null;
+  fromDocument.value = false;
   Object.assign(form, emptyForm());
   editDialog.value = true;
 }
@@ -554,6 +698,7 @@ function openCreate() {
 /** @param {import('@/api/types.js').Transaction} item */
 function openEdit(item) {
   editingId.value = item.id;
+  fromDocument.value = item.source === 'document';
   Object.assign(form, {
     type: item.type,
     amount: String(item.amount),
@@ -563,11 +708,21 @@ function openEdit(item) {
     counterparty: item.counterparty ?? '',
     counterparty_inn: item.counterparty_inn ?? '',
     payer_type: item.payer_type,
+    npd_receipt: item.npd_receipt ?? '',
   });
   editDialog.value = true;
 }
 
 function buildPayload() {
+  const receipt = form.type === 'income' ? form.npd_receipt?.trim() || null : null;
+  if (fromDocument.value) {
+    // Остальные поля задаёт документ; их изменение → 409
+    return {
+      category: form.category ? String(form.category).trim() : undefined,
+      description: form.description?.trim() ?? '',
+      npd_receipt: receipt,
+    };
+  }
   return {
     type: form.type,
     amount: Math.round(Number(form.amount) * 100) / 100,
@@ -577,6 +732,7 @@ function buildPayload() {
     counterparty: form.counterparty?.trim() || null,
     counterparty_inn: form.counterparty_inn?.trim() || null,
     payer_type: form.type === 'income' ? form.payer_type || null : null,
+    npd_receipt: receipt,
   };
 }
 
@@ -594,7 +750,7 @@ async function save() {
       notify.success('Операция добавлена');
     }
     editDialog.value = false;
-    await Promise.all([loadTransactions(), loadSummary(), loadTax()]);
+    await Promise.all([loadTransactions(), loadSummary(), loadTax(), loadNpdLimit()]);
   } catch (err) {
     notify.error(err);
   } finally {
@@ -624,7 +780,7 @@ async function confirmDelete() {
     } else {
       await loadTransactions();
     }
-    await Promise.all([loadSummary(), loadTax()]);
+    await Promise.all([loadSummary(), loadTax(), loadNpdLimit()]);
   } catch (err) {
     notify.error(err);
   } finally {
@@ -681,11 +837,48 @@ async function loadDeadlines() {
 
 watch([taxYear, taxQuarter], loadTax);
 
+// ------------------------------------------------------------------ лимит НПД (самозанятые)
+const NPD_LIMIT = 2400000;
+const limitIncome = ref(null);
+const limitLoading = ref(false);
+const limitError = ref('');
+
+const npdLimit = computed(() => {
+  if (limitIncome.value === null) return null;
+  const income = limitIncome.value;
+  const percent = Math.round((income / NPD_LIMIT) * 1000) / 10;
+  let color = 'primary';
+  if (percent > 100) color = 'error';
+  else if (percent >= 80) color = 'warning';
+  const rest = NPD_LIMIT - income;
+  const text =
+    rest >= 0
+      ? `Осталось ${formatMoney(rest)} до годового лимита`
+      : `Лимит превышен на ${formatMoney(-rest)} — применять НПД в этом году больше нельзя`;
+  return { income, percent, color, text };
+});
+
+async function loadNpdLimit() {
+  if (!isSelfEmployed.value) return;
+  limitLoading.value = true;
+  limitError.value = '';
+  try {
+    const estimate = await getTaxEstimate({ year: currentYear });
+    limitIncome.value = Number(estimate.income) || 0;
+  } catch (err) {
+    limitIncome.value = null;
+    limitError.value = errorMessage(err);
+  } finally {
+    limitLoading.value = false;
+  }
+}
+
 // ------------------------------------------------------------------ старт
 onMounted(() => {
   applyPreset('year'); // watcher периода загрузит сводку и операции
   loadCategories();
   loadTax();
+  loadNpdLimit();
   loadDeadlines();
 });
 </script>

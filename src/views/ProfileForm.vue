@@ -48,9 +48,12 @@
                 </v-col>
               </v-row>
               <div class="d-flex align-center">
-                <span class="text-caption text-medium-emphasis">
-                  В системе с {{ formatDate(auth.user?.created_at) }}
-                </span>
+                <div class="text-caption text-medium-emphasis">
+                  <div>В системе с {{ formatDate(auth.user?.created_at) }}</div>
+                  <div v-if="auth.user?.pd_consent_at" data-testid="pd-consent-at">
+                    Согласие на обработку ПДн: {{ formatDate(auth.user.pd_consent_at) }}
+                  </div>
+                </div>
                 <v-spacer />
                 <v-btn type="submit" color="primary" :loading="profileSaving" :disabled="!profileDirty">
                   Сохранить

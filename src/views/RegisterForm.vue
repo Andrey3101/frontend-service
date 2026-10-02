@@ -247,6 +247,8 @@ async function onSubmit() {
       company_name: form.companyName.trim(),
       company_type: form.companyType,
       inn: form.inn || undefined,
+      // 152-ФЗ (API.md, 12.6): без pd_consent: true бэкенд отвечает 422
+      pd_consent: form.consent === true,
     });
     router.replace('/dashboard');
   } catch (err) {

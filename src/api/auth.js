@@ -19,9 +19,10 @@ export async function authLogin(data) {
 
 /**
  * POST /api/auth/register — регистрация компании и владельца (роль owner, триал).
- * 409 — email занят.
+ * 409 — email занят; без `pd_consent: true` → 422 (согласие на обработку ПДн, API.md 12.6).
  * @param {{email: string, password: string, full_name: string, phone?: string,
- *   company_name: string, company_type: import('./types.js').CompanyType, inn?: string}} data
+ *   company_name: string, company_type: import('./types.js').CompanyType, inn?: string,
+ *   pd_consent: true}} data
  * @returns {Promise<import('./types.js').TokenResponse>}
  */
 export async function authRegister(data) {
